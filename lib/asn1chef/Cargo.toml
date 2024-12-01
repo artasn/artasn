@@ -1,0 +1,23 @@
+[package]
+name = "asn1chef"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.93"
+int-enum = "1.1.2"
+lazy_static = "1.5.0"
+num = { version = "0.4" }
+byteorder = "1.5.0"
+nom_locate = "4.2.0"
+varint-rs = "2.2.0"
+pest = "2.7.14"
+pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
+regex = "1.11.1"
+hex = "0.4"
+
+[build-dependencies]
+parsegen = { path = "../parsegen" }
+
+[lib]
+crate-type = ["rlib"]

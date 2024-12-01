@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "outDir": "out",
+    "lib": [
+      "es2016",
+      "WebWorker"
+    ],
+    "sourceMap": true
+  }
+}

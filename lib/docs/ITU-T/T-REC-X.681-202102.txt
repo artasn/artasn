@@ -1,0 +1,2074 @@
+I n t e r n a t i o n a l   T e l e c o m m u n i c a t i o n   U n i o n
+
+
+
+
+ITU-T                                                              X.681
+TELECOMMUNICATION                                                     (02/2021)
+STANDARDIZATION SECTOR
+OF ITU
+
+
+
+
+SERIES X: DATA NETWORKS, OPEN SYSTEM
+COMMUNICATIONS AND SECURITY
+OSI networking and system aspects – Abstract Syntax
+Notation One (ASN.1)
+
+
+Information technology – Abstract Syntax
+Notation One (ASN.1): Information object
+specification
+
+
+
+
+Recommendation ITU-T X.681
+                                           ITU-T X-SERIES RECOMMENDATIONS
+                   DATA NETWORKS, OPEN SYSTEM COMMUNICATIONS AND SECURITY
+
+    PUBLIC DATA NETWORKS
+      Services and facilities                                               X.1–X.19
+      Interfaces                                                            X.20–X.49
+      Transmission, signalling and switching                                X.50–X.89
+      Network aspects                                                       X.90–X.149
+      Maintenance                                                           X.150–X.179
+      Administrative arrangements                                           X.180–X.199
+    OPEN SYSTEMS INTERCONNECTION
+      Model and notation                                                    X.200–X.209
+      Service definitions                                                   X.210–X.219
+      Connection-mode protocol specifications                               X.220–X.229
+      Connectionless-mode protocol specifications                           X.230–X.239
+      PICS proformas                                                        X.240–X.259
+      Protocol Identification                                               X.260–X.269
+      Security Protocols                                                    X.270–X.279
+      Layer Managed Objects                                                 X.280–X.289
+      Conformance testing                                                   X.290–X.299
+    INTERWORKING BETWEEN NETWORKS
+      General                                                               X.300–X.349
+      Satellite data transmission systems                                   X.350–X.369
+      IP-based networks                                                     X.370–X.379
+    MESSAGE HANDLING SYSTEMS                                                X.400–X.499
+    DIRECTORY                                                               X.500–X.599
+    OSI NETWORKING AND SYSTEM ASPECTS
+      Networking                                                            X.600–X.629
+      Efficiency                                                            X.630–X.639
+      Quality of service                                                    X.640–X.649
+      Naming, Addressing and Registration                                   X.650–X.679
+      Abstract Syntax Notation One (ASN.1)                                  X.680–X.699
+    OSI MANAGEMENT
+      Systems management framework and architecture                         X.700–X.709
+      Management communication service and protocol                         X.710–X.719
+      Structure of management information                                   X.720–X.729
+      Management functions and ODMA functions                               X.730–X.799
+    SECURITY                                                                X.800–X.849
+    OSI APPLICATIONS
+      Commitment, concurrency and recovery                                  X.850–X.859
+      Transaction processing                                                X.860–X.879
+      Remote operations                                                     X.880–X.889
+      Generic applications of ASN.1                                         X.890–X.899
+    OPEN DISTRIBUTED PROCESSING                                             X.900–X.999
+    INFORMATION AND NETWORK SECURITY                                        X.1000–X.1099
+    SECURE APPLICATIONS AND SERVICES (1)                                    X.1100–X.1199
+    CYBERSPACE SECURITY                                                     X.1200–X.1299
+    SECURE APPLICATIONS AND SERVICES (2)                                    X.1300–X.1499
+    CYBERSECURITY INFORMATION EXCHANGE                                      X.1500–X.1599
+    CLOUD COMPUTING SECURITY                                                X.1600–X.1699
+    QUANTUM COMMUNICATION                                                   X.1700–X.1729
+    DATA SECURITY                                                           X.1750–X.1799
+    5G SECURITY                                                             X.1800–X.1819
+
+
+For further details, please refer to the list of ITU-T Recommendations.
+    INTERNATIONAL STANDARD ISO/IEC 8824-2
+    RECOMMENDATION ITU-T X.681
+
+                                              Information technology –
+                                        Abstract Syntax Notation One (ASN.1):
+                                           Information object specification
+
+
+
+
+    Summary
+    Recommendation ITU-T X.681 | ISO/IEC 8824-2 provides the ASN.1 notation which allows information object classes as
+    well as individual information objects and sets thereof to be defined and given reference names. An information object
+    class defines the form of a conceptual table (an information object set) with one column for each field in the information
+    object class, and with each complete row defining an information object.
+
+
+
+
+    History
+     Edition   Recommendation                            Approval    Study Group        Unique ID*
+      1.0      ITU-T X.681                              1994-07-01        7         11.1002/1000/3042
+      1.1         ITU-T X.681 (1994) Amd. 1             1995-04-10        7         11.1002/1000/3043
+      2.0      ITU-T X.681                              1997-12-12        7         11.1002/1000/4444
+      2.1         ITU-T X.681 (1997) Technical Cor. 1   1999-06-18        7         11.1002/1000/4702
+      2.2         ITU-T X.681 (1997) Amd. 1             1999-06-18        7         11.1002/1000/4701
+      2.3         ITU-T X.681 (1997) Amd. 2             2001-10-29        7         11.1002/1000/5564
+      3.0      ITU-T X.681                              2002-07-14       17         11.1002/1000/6086
+      3.1         ITU-T X.681 (2002) Amd. 1             2003-10-29       17         11.1002/1000/7020
+      3.2         ITU-T X.681 (2002) Technical Cor. 1   2006-06-13       17         11.1002/1000/8837
+      3.3         ITU-T X.681 (2002) Technical Cor. 2   2007-05-29       17         11.1002/1000/9106
+      4.0      ITU-T X.681                              2008-11-13       17         11.1002/1000/9605
+      4.1         ITU-T X.681 (2008) Cor. 1             2011-10-14       17         11.1002/1000/11377
+      5.0      ITU-T X.681                              2015-08-13       17         11.1002/1000/12480
+      5.1         ITU-T X.681 (2015) Cor. 1             2018-05-14       17         11.1002/1000/13599
+      6.0      ITU-T X.681                              2021-02-13       17         11.1002/1000/14469
+
+
+
+
+*  To access the Recommendation, type the URL http://handle.itu.int/ in the address field of your web browser, followed by the
+Recommendation's unique ID. For example, http://handle.itu.int/11.1002/1000/11830-en.
+
+
+                                                                                   Rec. ITU-T X.681 (02/2021)              i
+                                               FOREWORD
+The International Telecommunication Union (ITU) is the United Nations specialized agency in the field of
+telecommunications, information and communication technologies (ICTs). The ITU Telecommunication
+Standardization Sector (ITU-T) is a permanent organ of ITU. ITU-T is responsible for studying technical,
+operating and tariff questions and issuing Recommendations on them with a view to standardizing
+telecommunications on a worldwide basis.
+The World Telecommunication Standardization Assembly (WTSA), which meets every four years,
+establishes the topics for study by the ITU-T study groups which, in turn, produce Recommendations on
+these topics.
+The approval of ITU-T Recommendations is covered by the procedure laid down in WTSA Resolution 1.
+In some areas of information technology which fall within ITU-T's purview, the necessary standards are
+prepared on a collaborative basis with ISO and IEC.
+
+
+
+
+                                                   NOTE
+In this Recommendation, the expression "Administration" is used for conciseness to indicate both a
+telecommunication administration and a recognized operating agency.
+Compliance with this Recommendation is voluntary. However, the Recommendation may contain certain
+mandatory provisions (to ensure, e.g., interoperability or applicability) and compliance with the
+Recommendation is achieved when all of these mandatory provisions are met. The words "shall" or some
+other obligatory language such as "must" and the negative equivalents are used to express requirements. The
+use of such words does not suggest that compliance with the Recommendation is required of any party.
+
+
+
+
+                                  INTELLECTUAL PROPERTY RIGHTS
+ITU draws attention to the possibility that the practice or implementation of this Recommendation may
+involve the use of a claimed Intellectual Property Right. ITU takes no position concerning the evidence,
+validity or applicability of claimed Intellectual Property Rights, whether asserted by ITU members or others
+outside of the Recommendation development process.
+As of the date of approval of this Recommendation, ITU had not received notice of intellectual property,
+protected by patents/software copyrights, which may be required to implement this Recommendation.
+However, implementers are cautioned that this may not represent the latest information and are therefore
+strongly urged to consult the appropriate ITU-T databases available via the ITU-T website at
+http://www.itu.int/ITU-T/ipr/.
+
+
+
+
+                                                © ITU 2021
+All rights reserved. No part of this publication may be reproduced, by any means whatsoever, without the prior
+written permission of ITU.
+
+
+
+ii        Rec. ITU-T X.681 (02/2021)
+                                                                               CONTENTS
+                                                                                                                                                                                 Page
+Introduction ...............................................................................................................................................................       iv
+1         Scope ..............................................................................................................................................................      1
+2         Normative references .....................................................................................................................................                1
+          2.1  Identical Recommendations | International Standards ........................................................................                                         1
+3         Definitions ......................................................................................................................................................        1
+          3.1    Specification of basic notation ............................................................................................................                       1
+          3.2    Constraint specification .......................................................................................................................                   1
+          3.3    Parameterization of ASN.1 specification ............................................................................................                               1
+          3.4    Additional definitions..........................................................................................................................                   2
+4         Abbreviations .................................................................................................................................................           3
+5         Convention .....................................................................................................................................................          3
+6         Notation ..........................................................................................................................................................       3
+          6.1    Assignments ........................................................................................................................................               3
+          6.2    Types ...................................................................................................................................................          3
+          6.3    Values .................................................................................................................................................           4
+          6.4    Elements ..............................................................................................................................................            4
+7         ASN.1 lexical items ........................................................................................................................................              4
+          7.1  Information object class references .....................................................................................................                            4
+          7.2  Information object references..............................................................................................................                          4
+          7.3  Information object set references ........................................................................................................                           4
+          7.4  Type field references ...........................................................................................................................                    4
+          7.5  Value field references .........................................................................................................................                     4
+          7.6  Value set field references ....................................................................................................................                      5
+          7.7  Object field references ........................................................................................................................                     5
+          7.8  Object set field references ...................................................................................................................                      5
+          7.9  Word ...................................................................................................................................................             5
+          7.10 Additional keywords ...........................................................................................................................                      5
+8         Referencing definitions ..................................................................................................................................                5
+9         Information object class definition and assignment .......................................................................................                                6
+10        Syntax List......................................................................................................................................................         9
+11        Information object definition and assignment ................................................................................................                            12
+12        Information object set definition and assignment ...........................................................................................                             14
+13        Associated tables ............................................................................................................................................           15
+14        Notation for the object class field type ...........................................................................................................                     16
+15        Information from objects ................................................................................................................................                18
+Annex A – The TYPE-IDENTIFIER information object class .................................................................................                                           21
+Annex B – Abstract syntax definitions ......................................................................................................................                       22
+Annex C – The instance-of type ................................................................................................................................                    23
+Annex D – Examples .................................................................................................................................................               25
+      D.1 Example usage of simplified OPERATION class ...............................................................................                                              25
+      D.2 Example usage of "ObjectClassFieldType" ........................................................................................                                         26
+      D.3 Illustrate usage of objects and object sets............................................................................................                                  27
+Annex E – Tutorial annex on the ASN.1 model of object set extension....................................................................                                            28
+Annex F – Summary of the notation ..........................................................................................................................                       29
+
+
+
+
+                                                                                                                      Rec. ITU-T X.681 (02/2021)                                   iii
+Introduction
+An application designer frequently needs to design a protocol which will work with any of a number of instances of some
+class of information objects, where instances of the class may be defined by a variety of other bodies, and may be added
+to over time. Examples of such information object classes are the "operations" of Remote Operations Service (ROS) and
+the "attributes" of the OSI Directory.
+This Recommendation | International Standard provides notation which allows information object classes as well as
+individual information objects and information object sets thereof to be defined and given reference names.
+An information object class is characterized by the kinds of fields possessed by its instances. A field may contain:
+          –     an arbitrary type (a type field); or
+          –     a single value of a specified type (a fixed-type value field); or
+          –     a single value of a type specified in a (named) type field (a variable-type value field);
+          –     a non-empty set of values of a specified type (a fixed-type value set field); or
+          –     a non-empty set of values of a type specified in a (named) type field (a variable-type value set field); or
+          –     a single information object from a specified information object class (an object field);
+          –     an information object set from a specified information object class (an object set field).
+A fixed-type value field of an information object class may be selected to provide unique identification of information
+objects in that class. This is called the identifier field for that class. Values of the identifier field, if supplied, are required
+to be unique within any information object set that is defined for that class. They may, but need not, serve to
+unambiguously identify information objects of that class within some broader scope, particularly by the use of object
+identifier as the type of the identifier field.
+An information object class is defined by specifying:
+          –     the names of the fields;
+          –     for each field, the form of that field (type, fixed-type value, variable-type value, fixed-type value set,
+                variable-type value set, object, or object set);
+          –     optionality and default settings of fields;
+          –     which field, if any, is the identifier field.
+An individual information object in the class is defined by providing the necessary information for each field.
+The notation defined herein permits an ASN.1 type to be specified by reference to a field of some information object
+class – the object class field type. In Rec. ITU-T X.682 | ISO/IEC 8824-3, notation is provided to enable this type to be
+restricted by reference to some specific information object set.
+It can be useful to consider the definition of an information object class as defining the form of an underlying conceptual
+table (the associated table) with one column for each field, and with a completed row defining an information object. The
+form of the table (determined by the information object class specification) determines the sort of information to be
+collected and used to complete some protocol specification. The underlying conceptual table provides the link between
+those specifying information objects of that class and the protocol which needs that information to complete its
+specification. Typically, the actual information object set used to complete a particular protocol specification will be a
+parameter of that protocol (see Rec. ITU-T X.683 | ISO/IEC 8824-4).
+The "InformationFromObjects" notation referencing a specific object or object set (probably a parameter) can be used to
+extract information from cells of conceptual tables.
+This Recommendation | International Standard:
+          –     Specifies a notation for defining an information object class, and for identifying it with a reference name
+                (see clause 9).
+          –     Specifies a notation by which the definer of an information object class can provide a defined syntax for
+                the definition of information objects of that class; a default notation is provided for classes for which no
+                defined syntax has been defined (see clause 10).
+          –     Specifies a notation for defining an information object, and for assigning it to a reference name
+                (see clause 11), and provides analogous notation for an object set (see clause 12).
+          –     Defines the "associated table" for an object or object set of a class (see clause 13).
+
+
+
+
+iv            Rec. ITU-T X.681 (02/2021)
+          –    Specifies notation for the object class field type and its values (see clause 14).
+                   NOTE – These constructs enable an ASN.1 type to be specified using a named field of a named information object
+                   class. Constraints on that type to restrict it to values related to a specific information object set appear in
+                   Rec. ITU-T X.682 | ISO/IEC 8824-3.
+          –    Specifies notation for extracting information from objects (see clause 15).
+The set of information objects used in defining an object set may be partially or entirely unknown at the time of definition
+of an ASN.1 specification. Such cases occur, for example, in network management where the set of managed objects
+varies while the network manager is executing. This Recommendation | International Standard specifies the rules for
+inclusion of an extension marker in the definition of object sets to signal to implementers the intention of the designer
+that the contents of the object set is not fully defined in the ASN.1 specification. When an object set is defined with an
+extension marker, the implementer must provide means, possibly outside the scope of ASN.1, for dynamically adding
+objects to the object set and removing previously added objects from the object set.
+Annex A, which is an integral part of this Recommendation | International Standard, specifies the information object class
+whose object class reference is TYPE-IDENTIFIER. This is the simplest useful class, with just two fields, an identifier
+field of type object identifier, and a single type field which defines the ASN.1 type for carrying all information concerning
+any particular object in the class. It is defined herein because of the widespread use of information objects of this form.
+Annex B, which is an integral part of this Recommendation | International Standard, specifies the notation for defining an
+abstract syntax (composed of the set of values of a single ASN.1 type) by the definition of an appropriate information
+object.
+Annex C, which is an integral part of this Recommendation | International Standard, specifies the notation for the instance-
+of type (the INSTANCE OF notation).
+Annex D, which is not an integral part of this Recommendation | International Standard, provides examples on how to
+use the notation described in this Recommendation | International Standard.
+Annex E, which is not an integral part of this Recommendation | International Standard, provides a summary of the ASN.1
+model of object set extension.
+Annex F, which is not an integral part of this Recommendation | International Standard, provides a summary of the
+notation defined herein.
+
+
+
+
+                                                                                   Rec. ITU-T X.681 (02/2021)                   v
+                                                                                                   ISO/IEC 8824-2:2021 (E)
+
+INTERNATIONAL STANDARD
+ITU-T RECOMMENDATION
+
+
+                                        Information technology –
+                                  Abstract Syntax Notation One (ASN.1):
+                                     Information object specification
+
+1           Scope
+This Recommendation | International Standard is part of Abstract Syntax Notation One (ASN.1) and provides notation
+for specifying information object classes, information objects and information object sets.
+
+
+2           Normative references
+The following Recommendations and International Standards contain provisions which, through reference in this text,
+constitute provisions of this Recommendation | International Standard. At the time of publication, the editions indicated
+were valid. All Recommendations and Standards are subject to revision, and parties to agreements based on this
+Recommendation | International Standard are encouraged to investigate the possibility of applying the most recent edition
+of the Recommendations and Standards listed below. Members of IEC and ISO maintain registers of currently valid
+International Standards. The Telecommunication Standardization Bureau of the ITU maintains a list of currently valid
+ITU-T Recommendations.
+
+2.1         Identical Recommendations | International Standards
+            –    Recommendation ITU-T X.680 (2021) | ISO/IEC 8824-1: 2021, Information technology – Abstract Syntax
+                 Notation One (ASN.1): Specification of basic notation.
+            –    Recommendation ITU-T X.682 (2021) | ISO/IEC 8824-3:2021, Information technology – Abstract Syntax
+                 Notation One (ASN.1): Constraint specification.
+            –    Recommendation ITU-T X.683 (2021) | ISO/IEC 8824-4:2021, Information technology – Abstract Syntax
+                 Notation One (ASN.1): Parameterization of ASN.1 specifications.
+      NOTE – The references above shall be interpreted as references to the identified Recommendations | International Standards
+      together with all their published amendments and technical corrigenda.
+
+
+
+3           Definitions
+For the purposes of this Recommendation | International Standard, the following definitions apply.
+
+3.1         Specification of basic notation
+This Recommendation | International Standard uses the terms defined in Rec. ITU-T X.680 | ISO/IEC 8824-1.
+
+3.2         Constraint specification
+This Recommendation | International Standard uses the following term defined in Rec. ITU-T X.682 | ISO/IEC 8824-3:
+            –    table constraint.
+
+3.3         Parameterization of ASN.1 specification
+This Recommendation | International Standard uses the following terms defined in Rec. ITU-T X.683 | ISO/IEC 8824-4:
+            a)   parameterized type;
+            b)   parameterized value.
+
+
+
+
+                                                                                   Rec. ITU-T X.681 (02/2021)                 1
+ISO/IEC 8824-2:2021 (E)
+
+3.4         Additional definitions
+3.4.1     associated table: (For some information object or information object set) an abstract table, derivable from the
+object or object set by flattening the hierarchical structure resulting from the presence of link fields (see 3.4.15).
+      NOTE – An associated table can be used to determine the precise nature of some constraint (see Rec. ITU-T X.682 |
+      ISO/IEC 8824-3) which has been applied using an object set.
+
+3.4.2     default syntax: The notation which shall be used for defining information objects of classes whose definers
+have not provided a defined syntax (see example 11.10).
+3.4.3     defined syntax: A notation, provided by the definer of a class, which allows information objects of that class
+to be defined in a user-friendly manner.
+      NOTE – For example, the defined syntax for the class OPERATION might allow instances of the class to be defined by the word
+      ARGUMENT followed by &ArgumentType, then the word RESULT followed by the &ResultType, then the word CODE followed
+      by &operationCode (see example 11.11).
+
+3.4.4    extensible object set: An object set with an extension marker or which has been defined using set arithmetic
+with object sets that are extensible.
+3.4.5      field: A component of an information object class. Each field is a type field, a fixed-type value field, a variable-
+type value field, a fixed-type value set field, a variable-type value set field, an information object field or an information
+object set field.
+3.4.6     field name: A name which identifies a field of some class; either the class which specifies the field directly,
+in which case the name is a primitive field name, or a class which has a chain of link fields to that in which the field is
+actually specified (see 9.13 and 9.14).
+3.4.7     governing (class); governor: An information object class definition or reference which affects the
+interpretation of a part of the ASN.1 syntax, requiring it to reference or to specify information objects of the governing
+class.
+3.4.8      identifier field: A fixed-type value field of a class, selected to provide unique identification of information
+objects in that class. Values of the identifier field, if supplied, are required to be unambiguous within any information
+object set that is defined for that class. They may, but need not, serve to unambiguously identify information objects of
+that class within some broader scope.
+      NOTE 1 – The identifier field has a fixed ASN.1 type, and values of that type can be carried in protocol to identify information
+      objects within the class.
+      NOTE 2 – The scope within which the identifier is unambiguous is that of an information object set. It could, however, also be
+      made unambiguous within any given abstract syntax, or within an entire application context, or could even be global across all
+      classes and all application contexts by use of the object identifier type for the identifier field.
+
+3.4.9    information object: An instance of some information object class, being composed of a set of fields which
+conform to the field specifications of the class.
+      NOTE – For example, one specific instance of the information object class OPERATION (mentioned in the example in 3.4.10) might
+      be invertMatrix, which has an &ArgumentType field containing the type Matrix, a &ResultType field also containing the type
+      Matrix, and an &operationCode field containing the value 7 (see example in 10.13).
+
+3.4.10 information object class (class): A set of fields, forming a template for the definition of a potentially
+unbounded collection of information objects, the instances of the class.
+      NOTE – For example, an information object class OPERATION might be defined to correspond to the operation concept of Remote
+      Operations Service (ROS). Each of the various named field specifications would then correspond to some aspect which can vary
+      from one operation instance to another. Thus, there could be &ArgumentType, &ResultType, and &operationCode fields,
+      the first two specifying type fields and the third specifying a value field.
+
+3.4.11      information object field: A field which contains an information object of some specified class.
+3.4.12 information object set: A non-empty set of information objects, all defined using the same information object
+class reference name.
+      NOTE – For example, one information object set, MatrixOperations, of the class OPERATION (used in the example in 3.4.10)
+      might contain invertMatrix (mentioned in 3.4.9) together with other related operations, such as addMatrices,
+      multiplyMatrices, etc. Such an object set might be used in defining an abstract syntax that makes provision for the invocation
+      and result reporting of all of these operations (see example in 12.11).
+
+3.4.13      information object set field: A field which contains an information object set of some specified class.
+3.4.14 instance-of type: A type, defined by referencing an information object class which associates object identifiers
+with types.
+3.4.15      link field: An object or object set field.
+
+
+
+2             Rec. ITU-T X.681 (02/2021)
+                                                                                                           ISO/IEC 8824-2:2021 (E)
+
+3.4.16 object class field type: A type specified by reference to some field of an information object class.
+In Rec. ITU-T X.682 | ISO/IEC 8824-3, notation is provided to enable this type to be restricted by reference to an
+information object set of the class.
+3.4.17 primitive field name: The name specified directly in an information object class definition without use of a
+link field.
+3.4.18 recursive definition (of a reference name): A reference name for which resolution of the reference name, or
+of the governor of the definition of the reference name, requires resolution of the original reference name.
+      NOTE – Recursive definition of an information object class is permitted. Recursive definition of an information object or an
+      information object set is forbidden by 11.2 and 12.2 respectively.
+
+3.4.19 recursive instantiation (of a parameterized reference name): An instantiation of a reference name, where
+resolution of the actual parameters requires resolution of the original reference name.
+      NOTE – Recursive instantiation of an information object class (including an encoding structure) is permitted. Recursive
+      instantiation of an information object or an information object set is forbidden by 11.2 and 12.2 respectively.
+
+3.4.20       type field: A field which contains an arbitrary type.
+3.4.21 value field: A field which contains a value. Such a field is either of fixed-type or of variable-type. In the former
+case the type of the value is fixed by the field specification. In the latter case the type of the value is contained in some
+(specific) type field of the same information object.
+3.4.22 value set field: A field which contains a non-empty set of values of some type. Such a field is either of
+fixed-type or of variable-type. In the former case the type of the values is fixed by the field specification. In the latter case
+the type of the values is contained in some (specific) type field of the same information object.
+      NOTE – The set of values in a value set field for an information object constitutes a subtype of the specified type.
+
+
+
+4            Abbreviations
+For the purposes of this Recommendation | International Standard, the following abbreviation applies:
+             ASN.1      Abstract Syntax Notation One
+
+
+5            Convention
+This Recommendation | International Standard employs the notational convention defined in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, clause 5.
+
+
+6            Notation
+This clause summarizes the notation defined in this Recommendation | International Standard.
+
+6.1          Assignments
+The following notations which can be used as alternatives for "Assignment" (see Rec. ITU-T X.680 | ISO/IEC 8824-1,
+clause 13) are defined in this Recommendation | International Standard:
+             –    ObjectClassAssignment (see 9.1);
+             –    ObjectAssignment (see 11.1);
+             –    ObjectSetAssignment (see 12.1).
+
+6.2          Types
+6.2.1   The following notations which can be used as alternatives for "BuiltinType" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 17.2) are defined in this Recommendation | International Standard:
+             –    ObjectClassFieldType (see 14.1);
+             –    InstanceOfType (see Annex C).
+6.2.2   The following notations which can be used as alternatives for "ReferencedType" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 17.3) are defined in this Recommendation | International Standard:
+             –    TypeFromObject (see clause 15);
+
+
+                                                                                         Rec. ITU-T X.681 (02/2021)             3
+ISO/IEC 8824-2:2021 (E)
+
+            –     ValueSetFromObjects (see clause 15).
+
+6.3         Values
+6.3.1   The following notation which can be used as an alternative for "Value" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 17.7) is defined in this Recommendation | International Standard:
+            –     ObjectClassFieldValue (see 14.6);
+6.3.2   The following notation which can be used as an alternative for "BuiltinValue" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 17.9) is defined in this Recommendation | International Standard:
+            –     InstanceOfValue (see Annex C).
+6.3.3   The following notation which can be used as an alternative for "ReferencedValue" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 17.11) is defined in this Recommendation | International Standard:
+            –     ValueFromObject (see clause 15).
+
+6.4         Elements
+6.4.1   The following notation which can be used as an alternative for "Elements" (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 50.6) is defined in this Recommendation | International Standard:
+            –     ObjectSetElements (see 12.10).
+
+
+7           ASN.1 lexical items
+In addition to the lexical items specified in Rec. ITU-T X.680 | ISO/IEC 8824-1, clause 12, this Recommendation |
+International Standard makes use of the lexical items specified in the following subclauses. The general rules applicable
+to these lexical items are as defined in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.1. These new lexical items make use of
+the ASN.1 character set, as specified in Rec. ITU-T X.680 | ISO/IEC 8824-1, clause 11, and in addition the character
+ampersand ("&").
+      NOTE – The Note in Rec. ITU-T X.680 | ISO/IEC 8824-1, 11.1, also applies to the lexical items specified in 7.1 to 7.9 below.
+
+
+7.1         Information object class references
+Name of lexical item – objectclassreference
+An "objectclassreference" shall consist of a sequence of characters as specified for a "typereference" in
+Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.2, except that no lower-case letters shall be included.
+
+7.2         Information object references
+Name of lexical item – objectreference
+An "objectreference" shall consist of a sequence of characters as specified for a "valuereference" in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 12.4.
+
+7.3         Information object set references
+Name of lexical item – objectsetreference
+An "objectsetreference" shall consist of a sequence of characters as specified for a "typereference" in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 12.2.
+
+7.4         Type field references
+Name of lexical item – typefieldreference
+A "typefieldreference" shall consist of an ampersand ("&") immediately followed by a sequence of characters as specified
+for a "typereference" in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.2.
+
+7.5         Value field references
+Name of lexical item – valuefieldreference
+
+
+4               Rec. ITU-T X.681 (02/2021)
+                                                                                                ISO/IEC 8824-2:2021 (E)
+
+A "valuefieldreference" shall consist of an ampersand ("&") immediately followed by a sequence of characters as specified
+for a "valuereference" in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.4.
+
+7.6       Value set field references
+Name of lexical item – valuesetfieldreference
+A "valuesetfieldreference" shall consist of an ampersand ("&") immediately followed by a sequence of characters as
+specified for a "typereference" in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.2.
+
+7.7       Object field references
+Name of lexical item – objectfieldreference
+An "objectfieldreference" shall consist of an ampersand ("&") immediately followed by a sequence of characters as
+specified for an "objectreference" in 7.2.
+
+7.8       Object set field references
+Name of lexical item – objectsetfieldreference
+An "objectsetfieldreference" shall consist of an ampersand ("&") immediately followed by a sequence of characters as
+specified for an "objectsetreference" in 7.3.
+
+7.9       Word
+Name of lexical item – word
+A "word" shall consist of a sequence of characters as specified for a "typereference" in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, 12.2.1, except that no lower-case letters or digits shall be included.
+
+7.10      Additional keywords
+The names CLASS, INSTANCE, SYNTAX and UNIQUE are listed in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.38, as reserved
+words.
+
+
+8         Referencing definitions
+8.1       The constructs:
+               DefinedObjectClass ::=
+                   ExternalObjectClassReference
+               |   objectclassreference
+               |   UsefulObjectClassReference
+               DefinedObject ::=
+                   ExternalObjectReference
+               |   objectreference
+               DefinedObjectSet ::=
+                   ExternalObjectSetReference
+               |   objectsetreference
+are used to reference class, information object, and information object set definitions, respectively.
+8.2        References to information objects and information object sets have a governing class. It is a requirement that
+the referenced information object and the information objects in the referenced information object set shall be of the
+governing class or one obtained from it by simple reference assignment. There is no equivalent of "value mappings"
+(see Rec. ITU-T X.680 | ISO/IEC 8824-1, Annex C) specified for information objects, so the above statement means that
+the information object or information object set shall be defined using the same information object class reference as is
+used as the governor (or one obtained from it by simple reference assignment). Two identical (but textually distinct)
+instances of the information object class notation do not identify the same information object class for the purposes of
+this requirement.
+
+
+
+
+                                                                               Rec. ITU-T X.681 (02/2021)              5
+ISO/IEC 8824-2:2021 (E)
+
+8.3       Except as specified in Rec. ITU-T X.680 | ISO/IEC 8824-1, 13.16, the "objectclassreference",
+"objectreference", and "objectsetreference" alternatives shall only be used within the module in which a class or
+information object or information object set is assigned (see 9.1, 11.1 and 12.1) to that reference.
+The "ExternalObjectClassReference", "ExternalObjectReference", and "ExternalObjectSetReference" alternatives are
+defined as follows:
+                 ExternalObjectClassReference ::=
+                     modulereference
+                     "."
+                     objectclassreference
+                 ExternalObjectReference ::=
+                     modulereference
+                     "."
+                     objectreference
+                 ExternalObjectSetReference ::=
+                     modulereference
+                     "."
+                     objectsetreference
+These alternatives shall not be used unless the corresponding "objectclassreference", "objectreference", or
+"objectsetreference" has been assigned a class or information object or information object set (see 9.1, 11.1 and 12.1)
+within the module (different from the referencing module) identified by the corresponding "modulereference". It is that
+class or information object or information object set respectively which is referenced.
+8.4         The "UsefulObjectClassReference" alternative of "DefinedObjectClass" is defined as follows:
+                 UsefulObjectClassReference ::= TYPE-IDENTIFIER | ABSTRACT-SYNTAX
+of which the first alternative is specified in Annex A, and the second in Annex B.
+      NOTE – The names TYPE-IDENTIFIER and ABSTRACT-SYNTAX are listed in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.38, as
+      reserved words.
+
+
+
+9           Information object class definition and assignment
+9.1       The construct "ObjectClassAssignment" is used to assign an information object class to a reference name
+("objectclassreference"). This construct is one of the alternatives for "Assignment" in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, clause 13, and is defined as follows:
+                 ObjectClassAssignment ::=
+                     objectclassreference
+                     "::="
+                     ObjectClass
+9.2         The information object class is that defined by the construct "ObjectClass":
+                 ObjectClass ::=
+                     DefinedObjectClass
+                 |   ObjectClassDefn
+                 |   ParameterizedObjectClass
+If the "ObjectClass" is a:
+            a)   "DefinedObjectClass", then the class definition is the same as that of the class referred to;
+            b)   "ObjectClassDefn", then the class is defined as described in 9.3;
+            c)   "ParameterizedObjectClass", then the class is defined as described in Rec. ITU-T X.683 | ISO/IEC 8824-4,
+                 9.2.
+9.3         Every class is ultimately defined by an "ObjectClassDefn":
+                 ObjectClassDefn ::=
+                      CLASS
+                      "{" FieldSpec "," + "}"
+                      WithSyntaxSpec?
+                 WithSyntaxSpec ::= WITH SYNTAX SyntaxList
+
+
+6            Rec. ITU-T X.681 (02/2021)
+                                                                                                   ISO/IEC 8824-2:2021 (E)
+
+This notation allows the definer of a class to provide the named field specifications, each of which is a "FieldSpec", as
+defined in 9.4. Optionally, the definer can provide an information object definition syntax ("SyntaxList"), as defined
+in 10.5. The definer of the class may also specify semantics associated with the definition of the class.
+9.4       Each "FieldSpec" specifies and names one of the fields which shall or may be associated with instances of the
+class:
+               FieldSpec ::=
+                    TypeFieldSpec
+               |    FixedTypeValueFieldSpec
+               |    VariableTypeValueFieldSpec
+               |    FixedTypeValueSetFieldSpec
+               |    VariableTypeValueSetFieldSpec
+               |    ObjectFieldSpec
+               |    ObjectSetFieldSpec
+The various alternatives for "FieldSpec" are specified in the following subclauses.
+9.5       A "TypeFieldSpec" specifies that the field is a type field (see 3.4.20):
+               TypeFieldSpec ::=
+                   typefieldreference
+                   TypeOptionalitySpec?
+               TypeOptionalitySpec ::= OPTIONAL | DEFAULT Type
+The name of the field is "typefieldreference". If the "TypeOptionalitySpec" is absent, all information object definitions
+for that class are required to include a specification of a type for that field. If OPTIONAL is present, then the field can be
+left undefined. If DEFAULT is present, then the following "Type" provides the default setting for the field if it is omitted
+in a definition.
+9.6       A "FixedTypeValueFieldSpec" specifies that the field is a fixed-type value field (see 3.4.21):
+               FixedTypeValueFieldSpec ::=
+                   valuefieldreference
+                   Type
+                   UNIQUE ?
+                   ValueOptionalitySpec ?
+               ValueOptionalitySpec ::= OPTIONAL | DEFAULT Value
+The name of the field is "valuefieldreference". The "Type" construct specifies the type of the value contained in the field.
+The "ValueOptionalitySpec", if present, specifies that the value may be omitted in an information object definition, or, in
+the DEFAULT case, that omission produces the following "Value", which shall be of that type. The presence of the keyword
+UNIQUE specifies that this field is an identifier field as defined in 3.4.8 (see also Rec. ITU-T X.682 | ISO/IEC 8824-3,
+10.20). If the keyword is present, the "ValueOptionalitySpec" shall not be "DEFAULT Value".
+9.7       Where a value is assigned for an identifier field, that value is required to be unambiguous within any defined
+information object set.
+9.8       A "VariableTypeValueFieldSpec" specifies that the field is a variable-type value field (see 3.4.21):
+               VariableTypeValueFieldSpec ::=
+                   valuefieldreference
+                   FieldName
+                   ValueOptionalitySpec?
+The name of the field is "valuefieldreference". The "FieldName" (see 9.14), which is relative to the class being specified,
+shall be that of a type field; the type field which is either in the same information object as the value field, or is linked by
+the chain of object fields whose references appear in the "FieldName", will contain the type of the value. (All link fields
+whose field references appear in the "FieldName" shall be object fields.) The "ValueOptionalitySpec", if present, specifies
+that the value may be omitted in an information object definition, or, in the DEFAULT case, that omission produces the
+following "Value". The "ValueOptionalitySpec" shall be such that:
+          a)   if the type field denoted by the "FieldName" has a "TypeOptionalitySpec" of OPTIONAL, then the
+               "ValueOptionalitySpec" shall also be OPTIONAL; and
+          b)   if the "ValueOptionalitySpec" is "DEFAULT Value", then the type field denoted by the "FieldName" shall
+               have a "TypeOptionalitySpec" of "DEFAULT Type", and "Value" shall be a value of that type.
+
+
+
+                                                                                  Rec. ITU-T X.681 (02/2021)                  7
+ISO/IEC 8824-2:2021 (E)
+
+9.9         A "FixedTypeValueSetFieldSpec" specifies that the field is a fixed-type value set field (see 3.4.22):
+                 FixedTypeValueSetFieldSpec ::=
+                     valuesetfieldreference
+                     Type
+                     ValueSetOptionalitySpec ?
+                 ValueSetOptionalitySpec ::= OPTIONAL | DEFAULT ValueSet
+      NOTE – "ValueSet" is defined in Rec. ITU-T X.680 | ISO/IEC 8824-1, 16.6 and 16.7, and allows the explicit listing (in curly
+      braces) of the set of values, or the use of a "typereference" for a subtype of the "Type".
+
+The name of the field is "valuesetfieldreference". The "Type" construct specifies the type of the values contained in the
+field. The "ValueSetOptionalitySpec", if present, specifies that the field may be unspecified in information object
+definition, or, in the DEFAULT case, that omission produces the following "ValueSet", which shall be a subtype of that
+type.
+9.10        A "VariableTypeValueSetFieldSpec" specifies that the field is a variable-type value set field (see 3.4.22):
+                 VariableTypeValueSetFieldSpec ::=
+                     valuesetfieldreference
+                     FieldName
+                     ValueSetOptionalitySpec?
+The name of the field is "valuesetfieldreference". The "FieldName" (see 9.14), which is relative to the class being
+specified, shall be that of a type field; the type field which is either in the same information object as the value set field,
+or is linked by the chain of object fields whose references appear in the "FieldName", will contain the type of the values.
+(All link fields whose field references appear in the "FieldName" shall be object fields.) The "ValueSetOptionalitySpec",
+if present, specifies that the value set may be omitted in an information object definition, or, in the DEFAULT case, that
+omission produces the following "ValueSet". The "ValueSetOptionalitySpec" shall be such that:
+            a)   if the type field denoted by the "FieldName" has a "TypeOptionalitySpec" of OPTIONAL, then the
+                 "ValueSetOptionalitySpec" shall also be OPTIONAL; and
+            b)   if the "ValueSetOptionalitySpec" is "DEFAULT ValueSet", then the type field denoted by the "FieldName"
+                 shall have a "TypeOptionalitySpec" of "DEFAULT Type", and "ValueSet" shall be a subtype of that type.
+9.11        An "ObjectFieldSpec" specifies that the field is an information object field (see 3.4.11):
+                 ObjectFieldSpec ::=
+                     objectfieldreference
+                     DefinedObjectClass
+                     ObjectOptionalitySpec ?
+                 ObjectOptionalitySpec ::= OPTIONAL | DEFAULT Object
+The name of the field is "objectfieldreference". The "DefinedObjectClass" references the class of the object contained in
+the field (which may be the "ObjectClass" currently being defined). The "ObjectOptionalitySpec", if present, specifies
+that the field may be unspecified in an information object definition, or, in the DEFAULT case, that omission produces the
+following "Object" (see 11.3) which shall be of the "DefinedObjectClass".
+9.12        An "ObjectSetFieldSpec" specifies that the field is an information object set field (see 3.4.13):
+                 ObjectSetFieldSpec ::=
+                     objectsetfieldreference
+                     DefinedObjectClass
+                     ObjectSetOptionalitySpec ?
+                 ObjectSetOptionalitySpec ::= OPTIONAL | DEFAULT ObjectSet
+The name of the field is "objectsetfieldreference". The "DefinedObjectClass" references the class of the objects contained
+in the field. The "ObjectSetOptionalitySpec", if present, specifies that the field may be unspecified in an information
+object definition, or, in the DEFAULT case, that omission produces the following "ObjectSet" (see 12.3), all of whose
+objects shall be of "DefinedObjectClass".
+9.13        The construct "PrimitiveFieldName" is used to identify a field relative to the class containing its specification:
+                 PrimitiveFieldName ::=
+                     typefieldreference
+                 |   valuefieldreference
+                 |   valuesetfieldreference
+
+
+8             Rec. ITU-T X.681 (02/2021)
+                                                                                                         ISO/IEC 8824-2:2021 (E)
+
+                 |     objectfieldreference
+                 |     objectsetfieldreference
+The names of all of the fields specified in the class definition shall be distinct.
+9.14       The construct "FieldName" is used to identify a field relative to some class which either contains the field
+specification directly or which has a chain of link fields to the containing class. The chain is indicated by a list of
+"PrimitiveFieldName"s separated by periods.
+                 FieldName ::= PrimitiveFieldName "." +
+9.15        If there is any chain (of length one or more) of specifications of link fields (see 3.4.15) such that:
+            a)   the first is in the class which is being defined and is not the field being defined; and
+            b)   each subsequent one is a field of the class used in defining the previous; and
+            c)   the last is defined using the class which is being defined,
+then at least one of the field specifications shall have an "ObjectOptionalitySpec" or "ObjectSetOptionalitySpec"
+(as appropriate).
+     NOTE – This is to prevent recursive information object class definitions (which are in general permitted) with no finite
+     representation for an information object of that recursive class.
+
+
+9.16        Examples
+An expanded version of the information object class described informally as an example in 3.4.10 could be defined as
+follows:
+            OPERATION ::= CLASS
+            {
+               &ArgumentType       OPTIONAL,
+               &ResultType         OPTIONAL,
+               &Errors          ERROR OPTIONAL,
+               &Linked          OPERATION OPTIONAL,
+               &resultReturned     BOOLEAN DEFAULT TRUE,
+               &operationCode      INTEGER UNIQUE
+            }
+            ERROR ::= CLASS
+            {
+                 &ParameterType OPTIONAL,
+                 &errorCode             INTEGER UNIQUE
+            }
+     NOTE 1 – This example is based upon the operation and error concepts of the Remote Operations standard, but simplified for the
+     present purposes.
+     NOTE 2 – The fields specified for this class include two type fields (&ArgumentType and &ResultType), two object set fields
+     (&Errors and &Linked) and two value fields (&resultReturned and &operationCode) the latter being an identifier field.
+     NOTE 3 – Any information object set made up of OPERATIONs must be such that no two objects in the set have the same value for
+     the &operationCode field. (The same applies to object sets of ERRORs.)
+     NOTE 4 – The OPERATION information object class includes a chain of link fields as described in 9.15 above. The chain is of length
+     one and is formed by the &Linked field, which is specified (recursively) by means of OPERATION. However, this is quite valid,
+     because the field is designated OPTIONAL (see 9.15).
+     NOTE 5 – Neither of these examples includes a "WithSyntaxSpec". However, corresponding examples which do are provided
+     in 10.13.
+
+
+
+10          Syntax List
+10.1      It is frequently the case that a single specification defines an information object class, for which many other
+independent specifications separately define information objects. It can be appropriate for the definer of the class to
+provide a user-friendly notation for the definition of information objects in that class.
+10.2      This clause specifies a notation by which the specifier of an information object class defines the class-specific
+defined syntax for the specification of information objects of that class.
+10.3       The notation is the syntactic construct "SyntaxList", which occurs in the syntactic construct "ObjectClassDefn"
+(see 9.3).
+
+
+
+
+                                                                                       Rec. ITU-T X.681 (02/2021)                    9
+ISO/IEC 8824-2:2021 (E)
+
+10.4     A "SyntaxList" specifies the syntax for the definition of a single information object of the class being defined.
+The syntax appears as the "DefinedSyntax" in the following subclause.
+     NOTE – It is a property of this specification that the end of any syntactic construct defined by a "SyntaxList" (an instance of
+     "DefinedSyntax") can be determined by:
+            a)   ignoring ASN.1 comments;
+            b)   treating character string values as lexical tokens;
+            c)   expecting an initial "{", matching nested "{" and "}", and terminating on an unmatched "}".
+
+10.5      The "SyntaxList" specifies the sequence of "DefinedSyntaxToken" that is to appear in the "DefinedSyntax"
+(see 11.6):
+                 SyntaxList ::= "{" TokenOrGroupSpec empty + "}"
+                 TokenOrGroupSpec ::= RequiredToken | OptionalGroup
+                 OptionalGroup ::= "[" TokenOrGroupSpec empty + "]"
+                 RequiredToken ::=
+                    Literal
+                 |  PrimitiveFieldName
+     NOTE 1 – The writer of "SyntaxList" is not given the full power of BNF. Roughly, the notational power is equivalent to that
+     commonly used in specifying command line syntaxes for command interpreters. The list of possible "RequiredToken"s are given
+     in the order they are permitted; one or more consecutive tokens can be made optional by enclosing them in square brackets.
+     NOTE 2 – When parsing a "SyntaxList", any occurrence of "[[" (or "]]") is not interpreted as the lexical items "[[" (or "]]"
+     respectively) defined in Rec. ITU-T X.680 | ISO/IEC 8824-1, 12.23 and 12.24, but as two lexical items "[" and "[" (or "]" and "]"
+     respectively).
+
+10.6        A "word" token used as a "Literal" shall not be one of the following:
+                     ABSTRACT-SYNTAX
+                 BIT
+                 BOOLEAN
+                 CHARACTER
+                 CHOICE
+                 CONTAINING
+                 DATE
+                 DATE-TIME
+                 DURATION
+                 EMBEDDED
+                 END
+                 ENUMERATED
+                 EXTERNAL
+                 FALSE
+                 INSTANCE
+                 INTEGER
+                 MINUS-INFINITY
+                 NOT-A-NUMBER
+                 NULL
+                 OBJECT
+                 OCTET
+                 OID-IRI
+                 PLUS-INFINITY
+                 REAL
+                 RELATIVE-OID
+                 RELATIVE-OID-IRI
+                 SEQUENCE
+                 SET
+                 TIME
+                 TIME-OF-DAY
+                 TRUE
+                 TYPE-IDENTIFIER
+     NOTE – This list comprises only and all those ASN.1 reserved words which can appear as the first lexical item of a "Type",
+     "Value", "ValueSet", "Object" or "ObjectSet", and also the reserved word END. Use of other ASN.1 reserved words does not cause
+     ambiguity and is permitted. Where the defined syntax is used in an environment in which a "word" is also a "typereference" or
+     "objectsetreference", the use as a "word" takes precedence.
+
+
+
+
+10           Rec. ITU-T X.681 (02/2021)
+                                                                                                        ISO/IEC 8824-2:2021 (E)
+
+10.7      A "Literal" specifies the actual inclusion of that "Literal", which is either a "word" or a comma (","), at that
+position in the defined syntax:
+               Literal ::=
+                    word
+               |    ","
+10.8      Each "PrimitiveFieldName" specifies the inclusion (at that position in the new syntax) of a "Setting" (see 11.7)
+for the corresponding field.
+10.9      Each "PrimitiveFieldName" of the information object class shall appear precisely once.
+10.10    When, in the parse process, an "OptionalGroup" is encountered, and the following lexical item is syntactically
+acceptable as the first lexical item in the optional group, then that group is assumed to be present. If it is not syntactically
+acceptable as the first lexical item in the optional group, then that group is assumed to be absent.
+   NOTE – In order to avoid unexpected effects, designers should normally make the first lexical item in an optional group a "Literal".
+
+10.11     An instance of use of the "DefinedSyntax" is invalid unless it specifies all mandatory fields for the information
+object class.
+10.12     In order to ensure easy parsing of the new syntax and to prevent abuses, the following additional restrictions
+are placed on the definer of new syntax:
+          a)   Every "OptionalGroup" is required to have at least one "PrimitiveFieldName" or "OptionalGroup" within
+               it.
+                   NOTE 1 – This is to help prevent the apparent collection of information which is not reflected in any field of the
+                   information object.
+          b)   The use of "OptionalGroup"s shall be such that at no time in the parsing process can a "Setting" appear
+               that could potentially be a setting for more than one "FieldName".
+          c)   If an "OptionalGroup" starts with a "Literal", then the first token following the "OptionalGroup" shall also
+               be a "Literal" and shall be different from the first "Literal" of all immediately preceding "OptionalGroup"s,
+while the following restriction is placed upon the user of the "DefinedSyntax":
+          d)   Whenever a "Literal" is present in a "DefinedSyntax" that occurs in an "OptionalGroup" a "Setting" for a
+               "PrimitiveFieldName" in that "OptionalGroup" shall also be present.
+                   NOTE 2 – This is to help prevent the apparent collection of information which is not reflected in any field of the
+                   information object.
+                   NOTE 3 – The following example is a legal syntax but restriction d) prevents the user from writing LITERAL
+                   without following it by one or both of the optional groups:
+                                                           [LITERAL      [A &field]      [B &field2]]
+
+
+10.13     Examples
+The examples of class definitions from 9.16 above can be equipped with defined syntax to provide a "user-friendly" way
+of defining instances of the classes (this defined syntax is used in the example in 11.11):
+          OPERATION ::= CLASS
+          {
+             &ArgumentType                       OPTIONAL,
+             &ResultType                         OPTIONAL,
+             &Errors                             ERROR OPTIONAL,
+             &Linked                             OPERATION OPTIONAL,
+             &resultReturned                     BOOLEAN DEFAULT TRUE,
+             &operationCode                      INTEGER UNIQUE
+          }
+          WITH SYNTAX
+          {
+             [ARGUMENT                         &ArgumentType]
+             [RESULT                       &ResultType]
+             [RETURN RESULT                    &resultReturned]
+             [ERRORS                           &Errors]
+             [LINKED                       &Linked]
+             CODE                              &operationCode
+          }
+          ERROR ::= CLASS
+          {
+             &ParameterType                      OPTIONAL,
+
+
+                                                                                      Rec. ITU-T X.681 (02/2021)                   11
+ISO/IEC 8824-2:2021 (E)
+
+             &errorCode                       INTEGER UNIQUE
+          }
+          WITH SYNTAX
+          {
+             [PARAMETER                           &ParameterType]
+             CODE                             &errorCode
+          }
+
+
+
+11        Information object definition and assignment
+11.1      The syntactic construct "ObjectAssignment" is used to assign an information object of a specified class to a
+reference name ("objectreference"). This construct is one of the alternatives for "Assignment" in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, clause 13, and is defined as follows:
+                ObjectAssignment ::=
+                    objectreference
+                    DefinedObjectClass
+                    "::="
+                    Object
+11.2       There shall be no recursive definition (see 3.4.18) of an "objectreference", and there shall be no recursive
+instantiation (see 3.4.19) of an "objectreference".
+11.3      The information object, which shall be of the class referenced by "DefinedObjectClass", is that defined by the
+construct "Object":
+                Object ::=
+                    DefinedObject
+                |   ObjectDefn
+                |   ObjectFromObject
+                |   ParameterizedObject
+If the "Object" is a:
+          a)    "DefinedObject", then the object is the same as that referred to;
+          b)    "ObjectDefn", then the object is as specified in 11.4;
+          c)    "ObjectFromObject", then the object is as specified in clause 15;
+          d)    "ParameterizedObject", then the object is defined as specified in Rec. ITU-T X.683 | ISO/IEC 8824-4, 9.2.
+11.4      Every information object is ultimately defined by an "ObjectDefn":
+                ObjectDefn ::=
+                    DefaultSyntax
+                |   DefinedSyntax
+The "ObjectDefn" shall be "DefaultSyntax" (see 11.5) if the class definition does not include a "WithSyntaxSpec" and
+shall be "DefinedSyntax" (see 11.6) if it does include one.
+11.5      The "DefaultSyntax" construct is defined as follows:
+                DefaultSyntax ::= "{" FieldSetting "," * "}"
+                FieldSetting ::= PrimitiveFieldName Setting
+There shall be precisely one "FieldSetting" for each "FieldSpec" in the class definition which is not OPTIONAL and does
+not have a DEFAULT, and at most one "FieldSetting" for each other "FieldSpec". The "FieldSetting"s can appear in any
+order. The "PrimitiveFieldName" in each "FieldSetting" shall be the name of the corresponding "FieldSpec". The
+construct "Setting" is specified in 11.7.
+11.6      The "DefinedSyntax" construct is defined as follows:
+                DefinedSyntax ::= "{" DefinedSyntaxToken empty * "}"
+                DefinedSyntaxToken ::=
+                    Literal
+                |   Setting
+
+
+
+
+12          Rec. ITU-T X.681 (02/2021)
+                                                                                                         ISO/IEC 8824-2:2021 (E)
+
+The "SyntaxList" in the "WithSyntaxSpec" (see clause 10) determines the sequence of "DefinedSyntaxToken"s that are
+to appear in the "DefinedSyntax". The construct "Setting" is specified in 11.7; each occurrence specifies the setting for
+some field of the information object. The construct "Literal" is defined in 10.7; "Literal"s are present for human
+readability.
+11.7       A "Setting" specifies the setting of some field within an information object being defined:
+                   Setting ::=
+                        Type
+                   |    Value
+                   |    ValueSet
+                   |    Object
+                   |    ObjectSet
+If the field is:
+           a)      a type field, the "Type" alternative;
+           b)      a value field, the "Value" alternative;
+           c)      a value set field, the "ValueSet" alternative;
+           d)      an information object field, the "Object" alternative;
+           e)      an information object set field, the "ObjectSet" alternative,
+shall be selected.
+    NOTE – The setting is further restricted as described in the appropriate subclause of 9.5 to 9.12 above, and 11.8 to 11.9.
+
+11.8      A setting of a variable-type value field shall be a value of the type specified by the appropriate type field of the
+same or linked object (that is, the value notation for an open type is not employed).
+11.9      A setting of a variable-type value set field shall be a value set of the type specified by the appropriate type field
+of the same or linked object (that is, the value notation for an open type is not employed).
+
+11.10      Examples (Default Syntax)
+Given the information object class definitions of 9.16 above (which do not include a "WithSyntaxSpec") instances of the
+classes are defined using the "DefaultSyntax". For example (an expanded version of the example given in 3.4.9):
+           invertMatrix OPERATION ::=
+           {
+                &ArgumentType                     Matrix,
+                &ResultType                       Matrix,
+                &Errors                           {determinantIsZero},
+                &operationCode                    7
+           }
+           determinantIsZero ERROR ::=
+           {
+                &errorCode                        1
+           }
+
+
+11.11      Examples (Defined Syntax)
+In 10.13, the example classes are provided "WithSyntaxSpec" and thus, instances of the classes are defined using the
+"DefinedSyntax". The examples of 11.10 would be written thus:
+           invertMatrix OPERATION ::=
+           {
+                ARGUMENT                  Matrix
+                RESULT                    Matrix
+                ERRORS               {determinantIsZero}
+                CODE                      7
+           }
+           determinantIsZero ERROR ::=
+           {
+                CODE                              1
+           }
+
+
+
+
+                                                                                       Rec. ITU-T X.681 (02/2021)                13
+ISO/IEC 8824-2:2021 (E)
+
+12         Information object set definition and assignment
+12.1       The syntactic construct "ObjectSetAssignment" is used to assign a set of information objects of a specified class
+to a reference name ("objectsetreference"). This construct is one of the alternatives for "Assignment" in Rec. ITU-T X.680
+| ISO/IEC 8824-1, clause 13, and is defined as follows:
+                 ObjectSetAssignment ::=
+                     objectsetreference
+                     DefinedObjectClass
+                     "::="
+                     ObjectSet
+12.2       There shall be no recursive definition (see 3.4.18) of an "objectsetreference", and there shall be no recursive
+instantiation (see 3.4.19) of an "objectsetreference".
+12.3      The information object set, which shall be of the class referenced by "DefinedObjectClass", is defined by the
+construct "ObjectSet":
+                 ObjectSet ::= "{" ObjectSetSpec "}"
+                 ObjectSetSpec ::=
+                     RootElementSetSpec
+                 |   RootElementSetSpec "," "..."
+                 |   "..."
+                 |   "..." "," AdditionalElementSetSpec
+                 |   RootElementSetSpec "," "..." "," AdditionalElementSetSpec
+"RootElementSetSpec" and "AdditionalElementSetSpec" are specified in Rec. ITU-T X.680 | ISO/IEC 8824-1 and enable
+an information object set to be specified in terms of information objects or sets thereof of the governing class. There shall
+be at least one information object in the set unless the third alternative ("...") of "ObjectSetSpec" is specified. In the
+latter case, the presence of the ellipses is an indication that the object set is initially empty but will have objects
+dynamically added to it by the application program.
+     NOTE 1 – The elements that are referenced by "ObjectSetSpec" are the union of the elements referenced by the
+     "RootElementSetSpec" and "AdditionalElementSetSpec".
+     NOTE 2 – Unlike extensible types such as SET or SEQUENCE, or extensible subtype constraints, which are static in respect to the
+     set of "understood" values being set for each version of the ASN.1 specification, an extensible object set can grow and contract
+     dynamically within a given version. Indeed, it may expand and contract within a given instance of use of an application program
+     as it dynamically defines or undefines objects (see Annex E for further discussion).
+
+12.4     The result of set arithmetic involving information object sets that are extensible is specified in
+Rec. ITU-T X.680 | ISO/IEC 8824-1, clause 50.
+12.5     If an extensible information object set, A, is referenced in the definition of another object set, B, its extension
+marker and its extensions are inherited by B.
+12.6      If a "ValueSetFromObjects" (see clause 15) is defined using an extensible information object set, the resulting
+value set does not inherit the extension marker from that information object set.
+12.7      If a type is constrained by a table constraint (see Rec. ITU-T X.682 | ISO/IEC 8824-3, 10.3) and the object set
+referenced in the table constraint is extensible, the type does not inherit the extension marker from the object set. If the
+type is meant to be extensible, then an extension marker shall be explicitly added to its "ElementSetSpecs".
+12.8      If a type is constrained by an information object set that is not extensible, then a conforming implementation
+shall support all the information objects in that set, and shall not generate encodings using information objects not in the
+set.
+12.9      If a type is constrained by an information object set that is extensible, then a conforming implementation may
+choose to support an information object in either the root or the extensions as a local decision on each instance of the
+constrained type. It shall not generate encodings using other information objects with values for any UNIQUE field which
+are those of objects in either the root or the extensions of the extensible information object set, but may otherwise generate
+encodings for any information object of the required class.
+     NOTE – In order to avoid clashes with possible future extensions or with extensions added by other implementations, the freedom
+     to add arbitrary encodings should only be exercised if there is a UNIQUE field of type OBJECT IDENTIFIER and the encoding
+     contains a value of that object identifier that has been allocated for such use.
+
+12.10      The notation for "ObjectSetElements" is as follows:
+                 ObjectSetElements ::=
+                     Object
+
+
+14           Rec. ITU-T X.681 (02/2021)
+                                                                                                           ISO/IEC 8824-2:2021 (E)
+
+                |     DefinedObjectSet
+                |     ObjectSetFromObjects
+                |     ParameterizedObjectSet
+The elements specified by this notation are determined by which alternative is employed, as follows:
+          a)    If the "Object" alternative is used, then only the object so designated is specified. That object shall be of
+                the governing class.
+          b)    If any of the remaining alternatives is used, then all of the objects of the set so designated are specified.
+                The objects shall be of the governing class. If the "DefinedObjectSet" alternative is used, the object set is
+                that referred to. If the "ObjectSetFromObjects" alternative is used then the object set is as specified
+                in clause 15. If the "ParameterizedObjectSet" alternative is used, then the object set is as specified in
+                Rec. ITU-T X.683 | ISO/IEC 8824-4, 9.2.
+
+12.11     Example
+The information object set described informally in the Note in 3.4.12 can be specified as follows:
+          MatrixOperations OPERATION ::=
+          {
+              invertMatrix
+          |   addMatrices
+          |   subtractMatrices
+          |   multiplyMatrices
+          }
+
+
+
+13        Associated tables
+13.1      Every information object or information object set can be viewed as a table: its associated table. Each cell of
+the associated table corresponds to the setting of some field of an information object, or is empty. The set of columns of
+the associated table is determined by the class to which the object or objects belong; the set of rows, however, is
+determined by the object or objects involved.
+13.2      Given the definition of a class, the set of columns is determined as follows:
+          a)    There is one column for each field specification in the class definition. Each such column is named by the
+                corresponding "PrimitiveFieldName".
+          b)    There is an additional set of columns corresponding to each link field specification. This set of columns is
+                that determined by the application of these rules for the governing class of the link field, except that their
+                names are prefixed by the "PrimitiveFieldName" of the link field, and a period (".").
+               NOTE – These rules are recursive, and are such that if a class is directly or indirectly self-referential the set of columns
+               is not finite. This is not prohibited.
+
+13.3      Given an information object of some class, the associated table is that which would result from applying 13.4
+to the object set containing just that object.
+13.4      Given an information object set of some class, the set of rows in the associated table are those which would
+result from performing the following recursive procedure:
+          a)    Start with one row for each object in the object set. In each such row, the cells in the columns named by
+                "PrimitiveFieldName"s will correspond to the setting of the appropriate field in the object, while all other
+                cells will be empty.
+          b)    For each link field appearing in some row in the set:
+                1)    Generate the (subordinate) associated table of the contents of the link field.
+                2)    Next, replace the row in which the link field appears by a collection of rows, one for each row of the
+                      subordinate associated table. Each of the rows in this collection is the same as that being replaced,
+                      except that the cells from the selected row of the subordinate associated table are used to fill the
+                      corresponding cells, hitherto empty, whose "FieldName"s are prefixed by the link field's
+                      "PrimitiveFieldName".
+                            NOTE – These rules are recursive, and are such that if an information object is directly or indirectly
+                            self-referential, the procedure will not terminate. This is not prohibited. In practice it is only necessary to
+                            know the contents of cells with names of a finite length, and a bounded procedure can be devised for this.
+
+
+
+
+                                                                                         Rec. ITU-T X.681 (02/2021)                    15
+ISO/IEC 8824-2:2021 (E)
+
+13.5      Examples of valid "FieldName"s
+The following "FieldName"s are among those which are valid for the associated table for information objects or
+information object sets of class OPERATION (as defined in 10.13):
+              &ArgumentType
+          &Errors.&Parameter
+          &Errors.&errorCode
+          &Linked.&ArgumentType
+          &Linked.&Linked.&operationCode
+          &Linked.&Linked.&Linked.&Linked.&Linked.&Errors.&errorCode
+
+Because the class OPERATION is self-referential (through the &Linked field), the number of columns is not finite.
+
+
+14        Notation for the object class field type
+The type that is referenced by this notation depends on the category of the field name. For the different categories of field
+names, 14.2 to 14.5 specify the type that is referenced.
+14.1      The notation for an object class field type (see 3.4.16) shall be "ObjectClassFieldType":
+               ObjectClassFieldType ::=
+                   DefinedObjectClass
+                   "."
+                   FieldName
+where the "FieldName" is as specified in 9.14 relative to the class identified by the "DefinedObjectClass".
+14.2      For a type field, the notation defines an open type, that is, one whose set of values is the complete set of all
+possible values that can be specified using ASN.1. The specification of constraints using a corresponding information
+object set (see Rec. ITU-T X.682 | ISO/IEC 8824-3) may restrict this type to a specific type. The following constraints
+on the use of this notation apply when the "FieldName" references a type field:
+          a)   This notation shall not be used directly or indirectly in the definition of the type of a value or value set
+               field of an information object class.
+          b)   This notation has an indeterminate tag and thus cannot be used where a tag distinct from that of some other
+               type is required.
+                   NOTE 1 – This restriction can normally be avoided by (explicitly) tagging the type.
+                   NOTE 2 – Notwithstanding the statement in Rec. ITU-T X.680 | ISO/IEC 8824-1, 52.7.3, that the conceptually
+                   added element for an extension marker has a tag that is distinct from the tag of all known ASN.1 types, the open
+                   type shall not be used where it is required to have a tag that is distinct from that of the conceptually added element.
+          c)   This notation shall not be implicitly tagged.
+                   NOTE 3 – The reason for this is that when this open type is restricted to a particular type that type may be a choice
+                   type.
+          d)   Encoding rules are required to encode the value assigned to a component defined in this way in such a way
+               that a receiver can successfully determine the abstract values corresponding to all other parts of the
+               construction in which the component is embedded without any knowledge of the actual type of this
+               component.
+                   NOTE 4 – This "Type" construct will commonly be constrained by use of an information object set and the
+                   "AtNotation", as specified in Rec. ITU-T X.682 | ISO/IEC 8824-3, clause 10. Users of ASN.1 are, however,
+                   cautioned that use of this notation without the application of a constraint can lead to ambiguity in implementation
+                   requirements, and should normally be avoided.
+
+14.3       For a fixed-type value or a fixed type value set field, the notation denotes the "Type" that appears in the
+specification of that field in the definition of the information object class. With particular choices of names for objects,
+identifiers, or valuereferences, a "SimpleTableConstraint" (see Rec. ITU-T X.682 | ISO/IEC 8824-3, clause 10.3),
+following this production, can also be a valid "SingleValue" subtype constraint (see Rec. ITU-T X.680 | ISO/IEC 8824-1,
+clause 51.2). In this case it shall be interpreted as the "SimpleTableConstraint".
+14.4      For a variable-type value or a variable-type value set field, the notation defines an open type. Its use is subject
+to the same restrictions as specified in 14.2.
+14.5      This notation is not permitted if the field is an object field or an object set field.
+
+
+
+
+16         Rec. ITU-T X.681 (02/2021)
+                                                                                                 ISO/IEC 8824-2:2021 (E)
+
+14.6  The notation for defining a value of this type shall be "ObjectClassFieldValue", or when used in an
+"XMLTypedValue", an "XMLObjectClassFieldValue":
+              ObjectClassFieldValue ::=
+                  OpenTypeFieldVal
+              |   FixedTypeFieldVal
+              OpenTypeFieldVal ::= Type ":" Value
+              FixedTypeFieldVal ::= BuiltinValue | ReferencedValue
+              XMLObjectClassFieldValue ::=
+                XMLOpenTypeFieldVal
+              | XMLFixedTypeFieldVal
+              XMLOpenTypeFieldVal ::= XMLTypedValue | xmlhstring
+              XMLFixedTypeFieldVal ::= XMLBuiltinValue
+14.7      For a fixed-type value or value set field defined by an "ObjectClassFieldType", the "FixedTypeFieldVal" or
+"XMLFixedTypeFieldVal" shall be used, and shall be a value of the "Type" specified in the definition of the information
+object class.
+14.8     For a type field or a variable-type value or value set field defined by an "ObjectClassFieldType", the
+"OpenTypeFieldVal" shall be used in any "Value". The "Type" in the "OpenTypeFieldVal" shall be any ASN.1 type, and
+the "Value" shall be any value of that type.
+14.9  For a type field or a variable-type value or value set field defined by an "ObjectClassFieldType", the
+"XMLOpenTypeFieldVal" shall be used in any "XMLValue".
+14.9.1 When used in an ASN.1 module, the type identified by the "XMLTypedValue" shall be any ASN.1 type (but see
+Rec. ITU-T X.680 | ISO/IEC 8824-1, 14.3) and the "XMLValue" in the "XMLTypedValue" shall be any value of that
+type.
+   NOTE – When the notation is used as specified in Rec. ITU-T X.693 | ISO/IEC 8825-4, 8.5, the type of the "XMLTypedValue" in
+   an "XMLOpenTypeFieldVal" is identified by the protocol (for example, by a component relation constraint), the
+   "NonParameterizedTypeName" in the "XMLTypedValue" is derived from this, and the "XMLValue" is a value of this type.
+
+14.9.2 The "xmlhstring" alternative of "XMLOpenTypeFieldVal" shall not be used in an ASN.1 module. This
+alternative can be used only as specified in Rec. ITU-T X.693 | ISO/IEC 8825-4, 8.5, when the type is identified by the
+protocol and the "xmlhstring" is the hexadecimal value for the encoding of that type, using some (unspecified) encoding
+rules.
+14.10     The character sequence in the "xmlasn1typename" item for the XML value notation (for an
+"ObjectClassFieldType") which is a "XMLFixedTypeFieldVal" shall be the character sequence for the "Type" specified
+in the information object class. The XML value notation for sequence-of and set-of (see Rec. ITU-T X.680 |
+ISO/IEC 8824-1, Table 5) shall be determined by the "Type" specified in the information object class.
+14.11    The character sequence in the "xmlasn1typename" item for the XML value notation (for an
+"ObjectClassFieldType") which is an "XMLOpenTypeFieldVal" shall be "OPEN_TYPE". The XML value notation for
+sequence-of and set-of (see Rec. ITU-T X.680 | ISO/IEC 8824-1, Table 5) shall be "XMLDelimitedItemList".
+14.12     For an "XMLOpenTypeFieldVal", if the "Type" specified in the information object (after ignoring any tags) is
+a "typereference" or an "ExternalTypeReference", then the "NonParameterizedTypeName" shall be that "typereference"
+or "ExternalTypeReference", otherwise it shall be the "xmlasn1typename" specified in Rec. ITU-T X.680 |
+ISO/IEC 8824-1, Table 4, corresponding to the built-in type specified in the information object, after application of the
+subclauses of Rec. ITU-T X.680 | ISO/IEC 8824-1, 26.10, if applicable.
+
+14.13    Example usage of "ObjectClassFieldType"
+Each of the following examples is based on the example in 10.13 and shows (a) a possible "ObjectClassFieldType",
+(b) the type to which the example type (a) is equivalent (when used unconstrained), and (c) the notation for an example
+value of that type.
+         1    (a) OPERATION.&operationCode
+              (b) INTEGER
+              (c) 7
+         2    (a) OPERATION.&ArgumentType
+              (b) open type
+              (c) Matrix:
+
+
+                                                                                Rec. ITU-T X.681 (02/2021)                 17
+ISO/IEC 8824-2:2021 (E)
+                      {{1, 0, 0, 0},
+                       {0, 1, 0, 0},
+                       {0, 0, 1, 0},
+                       {0, 0, 0, 1}}
+           3     (a) OPERATION.&Linked.&Linked.&Errors.&errorCode
+                 (b) INTEGER
+                 (c) 1
+           4     (a) OPERATION.&Linked.&ArgumentType
+                 (b) open type
+                 (c) UniversalString:{planckConstant, " and ", hamiltonOperator}
+
+
+15         Information from objects
+15.1      Information from the column of the associated table for an object or an object set can be referenced by the
+various cases of the "InformationFromObjects" notation:
+                 InformationFromObjects ::=
+                     ValueFromObject
+                 |   ValueSetFromObjects
+                 |   TypeFromObject
+                 |   ObjectFromObject
+                 |   ObjectSetFromObjects
+                 ValueFromObject ::=
+                     ReferencedObjects
+                     "."
+                     FieldName
+                 ValueSetFromObjects ::=
+                     ReferencedObjects
+                     "."
+                     FieldName
+                 TypeFromObject ::=
+                     ReferencedObjects
+                     "."
+                     FieldName
+                 ObjectFromObject ::=
+                     ReferencedObjects
+                     "."
+                     FieldName
+                 ObjectSetFromObjects ::=
+                     ReferencedObjects
+                     "."
+                     FieldName
+                 ReferencedObjects ::=
+                     DefinedObject
+                 |   ParameterizedObject
+                 |   DefinedObjectSet
+                 |   ParameterizedObjectSet
+     NOTE – The production "InformationFromObjects" is provided to aid understanding and for use in the English text. It is not
+     referenced elsewhere in this Recommendation | International Standard.
+
+15.2     This notation references the total contents of the referenced column of the associated table for the
+"ReferencedObjects".
+15.3      Depending on the form of the "ReferencedObjects" and the "FieldName", this notation can denote a value, a
+value set, a type, an object, or an object set. These five cases are denoted by the constructs "ValueFromObject",
+"ValueSetFromObjects", "TypeFromObject", "ObjectFromObject", and "ObjectSetFromObjects" respectively. Each of
+these constructs is a special case of "InformationFromObjects".
+
+
+
+
+18             Rec. ITU-T X.681 (02/2021)
+                                                                                                 ISO/IEC 8824-2:2021 (E)
+
+15.4       The "InformationFromObjects" production can be divided into two parts. The first part is formed by deleting
+the final (or only) "PrimitiveFieldName" and its preceding period. If the first part denotes an object or an object set,
+then 15.5 to 15.13 apply. Otherwise, the notation is illegal. The second part is the final (or only) "PrimitiveFieldName".
+   NOTE – (Tutorial) Given the following definition:
+                   obj.&a.&b.&c.&d
+   the first part in the definition is obj.&a.&b.&c and the second part is &d.
+
+15.5      The first column of Table 1 indicates the first part defined in 15.4. The second column indicates the second part
+defined in 15.4. The third column indicates which (if any) of the five cases of "InformationFromObjects" (listed in 15.3)
+applies.
+
+                               Table 1 – Permissable cases of "InformationFromObjects"
+
+           The first part of                         The second part of
+                                                                                                    Construct
+      InformationFromObjects                      InformationFromObjects
+
+                                                     fixed-type value field                    "ValueFromObject"
+                                                    variable-type value field                  "ValueFromObject"
+                                                   fixed-type value set field                "ValueSetFromObjects"
+                object                            variable-type value set field                   not permitted
+                                                           type field                           "TypeFromObject"
+                                                          object field                         "ObjectFromObject"
+                                                         object set field                    "ObjectSetFromObject"
+                                                     fixed-type value field                  "ValueSetFromObjects"
+                                                    variable-type value field                     not permitted
+                                                   fixed-type value set field                "ValueSetFromObjects"
+              object set                          variable-type value set field                   not permitted
+                                                           type field                             not permitted
+                                                          object field                       "ObjectSetFromObjects"
+                                                         object set field                    "ObjectSetFromObjects"
+
+15.6       For a "TypeFromObject" and a "ValueSetFromObjects", the XML value notation for sequence-of and set-of
+(see Rec. ITU-T X.680 | ISO/IEC 8824-1, Table 5) and the "xmlasn1typename" (if required) shall be determined by the
+"Type" specified in the information object(s), after application of the subclauses of Rec. ITU-T X.680 | ISO/IEC 8824-1,
+26.10, if applicable.
+15.7     If the first part references an object and the second part references a fixed-type value set field, the
+"ValueSetFromObjects" is equivalent to a type with a SimpleTableConstraint. The type is
+"<ClassName>.<FieldName>" where "<ClassName>" is the Information Object Class of the object, and
+"<FieldName>" is the field referenced by the second part. The SimpleTableConstraint consists of an object set
+containing only the object referenced by the first part. The object set is not extensible.
+15.8        If the first part references an object set and the second part references a fixed-type value field or a fixed-type
+value set field, the "ValueSetFromObjects" is equivalent to a type with a "SimpleTableConstraint". The type is
+"<ClassName>.<FieldName>" where "<ClassName>" is the information object class of the object set referenced by the
+first part, and "<FieldName>" is the field referenced by the second part. The "SimpleTableConstraint" consists of the
+object set referenced by the first part.
+15.9      A "ValueSetFromObjects" can be defined using an information object set that is initially empty but extensible.
+Such an information object set shall have at least one object in it whenever a value set defined in terms of it is used by an
+application. The one or more objects present in the information object set shall be sufficient to satisfy the requirements
+of Rec. ITU-T X.682 | ISO/IEC 8824-3, 10.6.
+15.10    If object sets are involved and the final "PrimitiveFieldName" identifies an object set field, then
+"ObjectSetFromObjects" is the union of the selected object sets.
+15.11      As shown in Table 1, the notation is not permitted if an object set is involved and the final "PrimitiveFieldName"
+identifies a variable-type value or value set field or a type field.
+
+
+
+
+                                                                                  Rec. ITU-T X.681 (02/2021)               19
+ISO/IEC 8824-2:2021 (E)
+
+15.12      Use of the "ObjectSetFromObjects" notation when all cells in the column being referenced are empty denotes
+an empty inextensible object set. Empty inextensible object sets are allowed in general (such as in set arithmetic) but
+shall not be used directly in a table constraint.
+     NOTE – Subclause 15.13 implies that a "ValueSetFromObjects" may not be extracted from an empty inextensible object set.
+15.13       Use of the "InformationFromObjects" notation (except when it is an "ObjectSetFromObjects") is not permitted
+if all cells in the column being referenced are empty, except when it is used to directly define a field of an information
+object which is OPTIONAL (or DEFAULT), which results in the field becoming empty (or default).
+
+
+15.14      Example information from objects
+Given the definitions in the examples of 11.10, 11.11 and 12.11, the following constructs (in the left column) are valid,
+and can be used as equivalent to the expression in the right column.
+
+                                                     "ValueFromObject"
+
+               invertMatrix.&operationCode                                                    7
+
+               determinantIsZero.&errorCode                                                   1
+
+
+                                                     "TypeFromObject"
+
+                invertMatrix.&ArgumentType                                                 Matrix
+
+
+                                                   "ValueSetFromObjects"
+
+            invertMatrix.&Errors.&errorCode                                                { 1 }
+
+            MatrixOperations.&operationCode                                           {7 | and others }
+
+
+                                                  "ObjectSetFromObjects"
+
+                    invertMatrix.&Errors                                          {determinantIsZero}
+
+                 MatrixOperations.&Errors                                 {determinantIsZero | and others }
+
+
+
+
+20           Rec. ITU-T X.681 (02/2021)
+                                                                                                      ISO/IEC 8824-2:2021 (E)
+
+                                                           Annex A
+
+                              The TYPE-IDENTIFIER information object class
+                  (This annex forms an integral part of this Recommendation | International Standard.)
+
+
+A.1       This annex specifies a useful information object class, with class reference TYPE-IDENTIFIER.
+   NOTE – This information object class is the simplest useful class, having just two fields, an identifier field of type OBJECT
+   IDENTIFIER, and a type field which defines the ASN.1 type for carrying all information concerning any particular object in the
+   class. It is defined in this Recommendation | International Standard because of the widespread use of information objects of this
+   form.
+
+A.2       The TYPE-IDENTIFIER information object class is defined as:
+          TYPE-IDENTIFIER ::= CLASS
+          {
+             &id OBJECT IDENTIFIER UNIQUE,
+             &Type
+          }
+          WITH SYNTAX {&Type IDENTIFIED BY &id}
+
+A.3       This class is defined as a "useful" information object class, and is available in any module without the necessity
+for importing it.
+
+A.4       Example
+The body of a Message Handling System (MHS) communication can be defined as:
+          MHS-BODY-CLASS ::= TYPE-IDENTIFIER
+          g4FaxBody MHS-BODY-CLASS ::=
+              {BIT STRING IDENTIFIED BY {mhsbody 3}}
+
+A protocol designer would typically define a component to carry an MHS-BODY-CLASS by specifying the type INSTANCE
+OF MHS-BODY-CLASS defined in C.10.
+
+
+
+
+                                                                                    Rec. ITU-T X.681 (02/2021)                  21
+ISO/IEC 8824-2:2021 (E)
+
+                                                             Annex B
+
+                                                Abstract syntax definitions
+                     (This annex forms an integral part of this Recommendation | International Standard.)
+
+
+B.1         This annex specifies a useful information object class, ABSTRACT-SYNTAX, for defining abstract syntaxes.
+      NOTE – It is recommended that an instance of this information object class be defined whenever an abstract syntax is defined as
+      the values of a single ASN.1 type.
+
+B.2         The ABSTRACT-SYNTAX information object class is defined as:
+            ABSTRACT-SYNTAX ::= CLASS
+            {
+               &id      OBJECT IDENTIFIER UNIQUE,
+               &Type,
+               &property   BIT STRING {handles-invalid-encodings(0)} DEFAULT {}
+            }
+            WITH SYNTAX {
+               &Type IDENTIFIED BY &id [HAS PROPERTY &property]
+            }
+
+The &id field of each ABSTRACT-SYNTAX is the abstract syntax name, while the &Type field contains the single ASN.1
+type whose values make up the abstract syntax. The property handles-invalid-encodings indicates that the invalid
+encodings are not to be treated as an error during the decoding process, and the decision on how to treat such invalid
+encodings is left up to the application.
+B.3     This information object class is defined as being "useful" because it is of general utility, and is available in any
+module without the necessity for importing it.
+
+B.4         Example
+If an ASN.1 type has been defined called XXX-PDU, then an abstract syntax can be specified which contains all the values
+of XXX-PDU by the notation:
+            xxx-Abstract-Syntax ABSTRACT-SYNTAX ::=
+                 { XXX-PDU IDENTIFIED BY {xxx 5} }
+
+See Rec. ITU-T X.680 | ISO/IEC 8824-1, G.4, for a detailed example of use of the ABSTRACT-SYNTAX information object
+class.
+B.5       It will frequently be the case that an abstract syntax will be defined in terms of a parameterized type (as defined
+in Rec. ITU-T X.683 | ISO/IEC 8824-4), for example with parameters providing bounds on some components of the
+protocol. Such parameters, subject to restrictions specified in Rec. ITU-T X.683 | ISO/IEC 8824-4, clause 10, may be
+resolved at the time of abstract syntax definition, or may be carried forward as parameters of the abstract syntax.
+
+
+
+
+22            Rec. ITU-T X.681 (02/2021)
+                                                                                                        ISO/IEC 8824-2:2021 (E)
+
+                                                             Annex C
+
+                                                    The instance-of type
+                    (This annex forms an integral part of this Recommendation | International Standard.)
+
+
+C.1        This annex specifies type and value notation for the instance-of types (see 3.4.14). Such types are capable of
+carrying any value from any information object in an information object class defined to be of class TYPE-IDENTIFIER
+(see Annex A) using an information object class assignment (the information object class reference is specified as part of
+this notation).
+C.2       The "InstanceOfType" notation is referenced in Rec. ITU-T X.680 | ISO/IEC 8824-1, 17.2, as one of the
+notations that produce a "Type", and is defined as:
+                 InstanceOfType ::= INSTANCE OF DefinedObjectClass
+    NOTE – Rec. ITU-T X.682 | ISO/IEC 8824-3, clause 10, specifies the way in which this type can be constrained by applying a
+    "table constraint", restricting the values of the type to those representing some specific information object set of the class.
+
+C.3       This notation specifies a type which carries the &id field (an OBJECT IDENTIFIER) and a value of the &Type
+field from any instance of the "DefinedObjectClass".
+    NOTE – This construct will normally be constrained by an object set which will usually be (but is not necessarily) a dummy
+    reference name as defined in Rec. ITU-T X.683 | ISO/IEC 8824-4, 8.3-8.11, with the actual object set defined elsewhere.
+
+C.4         All instance-of types have a tag which is universal class, number 8.
+    NOTE – This is the same universal tag as for external type, and use of the instance-of type can be bit-compatible with the external
+    type when the basic encoding rules for ASN.1 are in use.
+
+C.5       The instance-of type has an associated sequence type which is used for defining values and subtypes of the
+instance-of type.
+    NOTE – Where this type is constrained by the constraint notation of Rec. ITU-T X.682 | ISO/IEC 8824-3, the associated sequence
+    type is also constrained. The constraints on the associated sequence type resulting from a constraint on the instance-of type are
+    specified in Rec. ITU-T X.682 | ISO/IEC 8824-3, Annex A.
+
+C.6         The associated sequence type is assumed to be defined within an environment in which EXPLICIT TAGS is in
+force.
+C.7         The associated sequence type shall be:
+            SEQUENCE {
+            type-id    <DefinedObjectClass>.&id,
+            value          [0] <DefinedObjectClass>.&Type
+}
+
+where "<DefinedObjectClass>" is replaced by the particular "DefinedObjectClass" used in the "InstanceOfType"
+notation.
+C.8       The value notation "InstanceOfValue" and "XMLInstanceOfValue" for an "InstanceOfType" notation shall be
+the value notation for the associated sequence type.
+                 InstanceOfValue ::= Value
+                 XMLInstanceOfValue ::= XMLValue
+C.9    The XML value notation for sequence-of and set-of (see Rec. ITU-T X.680 | ISO/IEC 8824-1, Table 5) shall
+be "XMLDelimitedItemList".
+
+C.10        Example
+An example, building on the example given in A.4, is as follows:
+The type:
+            INSTANCE OF MHS-BODY-CLASS
+
+
+
+
+                                                                                      Rec. ITU-T X.681 (02/2021)                   23
+ISO/IEC 8824-2:2021 (E)
+
+has an associated sequence type of:
+         SEQUENCE
+         {
+            type-id     MHS-BODY-CLASS.&id,
+            value       [0] MHS-BODY-CLASS.&Type
+         }
+
+An example of the application of a table constraint to this type can be found in Rec. ITU-T X.682 | ISO/IEC 8824-3,
+Annex A.
+
+
+
+
+24         Rec. ITU-T X.681 (02/2021)
+                                                                                             ISO/IEC 8824-2:2021 (E)
+
+                                                       Annex D
+
+                                                      Examples
+              (This annex does not form an integral part of this Recommendation | International Standard.)
+
+D.1       Example usage of simplified OPERATION class
+Given the following simple definition of the OPERATION and ERROR information object classes:
+          OPERATION ::= CLASS
+          {
+             &ArgumentType                   OPTIONAL,
+             &ResultType                     OPTIONAL,
+             &Errors                         ERROR OPTIONAL,
+             &Linked                         OPERATION OPTIONAL,
+             &resultReturned                 BOOLEAN DEFAULT TRUE,
+             &operationCode                  INTEGER UNIQUE
+          }
+          WITH SYNTAX
+          {
+             [ARGUMENT                       &ArgumentType]
+             [RESULT                         &ResultType]
+             [RETURN RESULT                  &resultReturned]
+             [ERRORS                         &Errors]
+             [LINKED                         &Linked]
+             CODE                            &operationCode
+          }
+          ERROR ::= CLASS
+          {
+             &ParameterType                  OPTIONAL,
+             &errorCode                      INTEGER UNIQUE
+          }
+          WITH SYNTAX
+          {
+             [PARAMETER                          &ParameterType]
+             CODE                            &errorCode
+          }
+
+We can define the following object set that contains two OPERATION objects:
+          My-Operations OPERATION ::= { operationA | operationB }
+          operationA OPERATION ::= {
+               ARGUMENT INTEGER
+               ERRORS { { PARAMETER INTEGER CODE 1000 } | { CODE 1001 } }
+               CODE           1
+          }
+          operationB OPERATION ::= {
+               ARGUMENT IA5String
+               RESULT BOOLEAN
+               ERRORS { { CODE 1002 } | { PARAMETER IA5String CODE 1003 } }
+               CODE        2
+          }
+
+Extraction of the set of the ERROR objects from the object set above is done as follows:
+          My-OperationErrors ERROR ::= { My-Operations.&Errors }
+
+The resulting object set is:
+          My-OperationErrors ERROR ::= {
+              { PARAMETER INTEGER CODE 1000 } |
+              { CODE 1001 } |
+              { CODE 1002 } |
+              { PARAMETER IA5String CODE 1003 }
+          }
+
+
+
+
+                                                                              Rec. ITU-T X.681 (02/2021)         25
+ISO/IEC 8824-2:2021 (E)
+
+Extraction of the set of error codes of the errors of the operations is done as follows:
+          My-OperationErrorCodes INTEGER ::= { My-Operations.&Errors.&errorCode }
+
+The resulting value set is:
+          My-OperationErrorCodes INTEGER ::= { 1000 | 1001 | 1002 | 1003 }
+
+
+D.2       Example usage of "ObjectClassFieldType"
+The "ObjectClassFieldType" can be used in specification of types, for example:
+         -- "ObjectClassFieldType"s are extracted from this class.
+         -- Only the first five fields can be used in the extraction.
+          EXAMPLE-CLASS ::= CLASS {
+             &TypeField                                            OPTIONAL,
+             &fixedTypeValueField                                  INTEGER OPTIONAL,
+             &variableTypeValueField                               &TypeField OPTIONAL,
+             &FixedTypeValueSetField                               INTEGER OPTIONAL,
+             &VariableTypeValueSetField                            &TypeField OPTIONAL,
+             &objectField                                          SIMPLE-CLASS OPTIONAL,
+             &ObjectSetField                                       SIMPLE-CLASS OPTIONAL
+          }
+          WITH SYNTAX {
+             [TYPE-FIELD                                           &TypeField]
+             [FIXED-TYPE-VALUE-FIELD                               &fixedTypeValueField]
+             [VARIABLE-TYPE-VALUE-FIELD                            &variableTypeValueField]
+             [FIXED-TYPE-VALUE-SET-FIELD                           &FixedTypeValueSetField]
+             [VARIABLE-TYPE-VALUE-SET-FIELD                        &VariableTypeValueSetField]
+             [OBJECT-FIELD                                         &objectField]
+             [OBJECT-SET-FIELD                                     &ObjectSetField]
+          }
+          SIMPLE-CLASS ::= CLASS {
+              &value INTEGER
+          }
+          WITH SYNTAX {
+             &value
+          }
+          -- This type contains components which are specified using
+          -- "ObjectClassFieldType" notation. In case of type fields and
+          -- variable-type value and value set fields the resulting
+          -- component type is an open type. In case of fixed-type value and
+          -- value set fields the resulting component type is "INTEGER".
+          -- NOTE – Constraints are omitted from all the following uses of
+          -- "ObjectClassFieldType"; you normally will use constraints when
+          -- referencing an "ObjectClassFieldType".
+          ExampleType ::= SEQUENCE {
+              openTypeComponent1 EXAMPLE-CLASS.&TypeField,
+              integerComponent1   EXAMPLE-CLASS.&fixedTypeValueField,
+              openTypeComponent2 EXAMPLE-CLASS.&variableTypeValueField,
+              integerComponent2   EXAMPLE-CLASS.&FixedTypeValueSetField,
+              openTypeComponent3 EXAMPLE-CLASS.&VariableTypeValueSetField
+          }
+          exampleValue ExampleType ::= {
+              openTypeComponent1 BOOLEAN : TRUE,
+              integerComponent1      123,
+              openTypeComponent2 IA5String : "abcdef",
+              integerComponent2      456,
+              openTypeComponent3 BIT STRING : '0101010101'B
+          }
+
+
+
+
+26         Rec. ITU-T X.681 (02/2021)
+                                                                                           ISO/IEC 8824-2:2021 (E)
+
+D.3      Illustrate usage of objects and object sets
+The following uses the object class defined in D.2:
+         objectA EXAMPLE-CLASS ::= {
+              FIXED-TYPE-VALUE-FIELD                                   123
+              FIXED-TYPE-VALUE-SET-FIELD                               {1|2|3}
+              OBJECT-FIELD                                 {1}
+              OBJECT-SET-FIELD                                   {{2}|{3}}
+         }
+         objectB EXAMPLE-CLASS ::= {
+              TYPE-FIELD                                   IA5String
+              FIXED-TYPE-VALUE-FIELD                                  456
+              VARIABLE-TYPE-VALUE-FIELD                               "abc"
+              VARIABLE-TYPE-VALUE-SET-FIELD                      { "d" | "e" | "f" }
+         }
+         -- The following object set contains two defined objects and one
+         -- builtin object.
+         ObjectSet EXAMPLE-CLASS ::= {
+             objectA |
+             objectB |
+             {
+                   TYPE-FIELD                                    INTEGER
+                   FIXED-TYPE-VALUE-FIELD                                789
+                   VARIABLE-TYPE-VALUE-SET-FIELD                 {4|5|6}
+             }
+         }
+         -- The following definitions extract information from the objects and
+         -- the object set.
+         integerValue INTEGER ::= objectA.&fixedTypeValueField
+         stringValue IA5String ::= objectB.&variableTypeValueField
+         IntegerValueSetFromObjectA INTEGER ::= { objectA.&FixedTypeValueSetField }
+         StringType ::= objectB.&TypeField
+         objectFromObjectA SIMPLE-CLASS ::= objectA.&objectField
+         ObjectSetFromObjectA SIMPLE-CLASS ::= { objectA.&ObjectSetField }
+         SetOfValuesInObjectSet INTEGER ::= { ObjectSet.&fixedTypeValueField }
+         SetOfValueSetsInObjectSet INTEGER ::= { ObjectSet.&FixedTypeValueSetField }
+         SetOfObjectsInObjectSet SIMPLE-CLASS ::= { ObjectSet.&objectField }
+         SetOfObjectSetsInObjectSet SIMPLE-CLASS ::= { ObjectSet.&ObjectSetField }
+
+
+
+
+                                                                               Rec. ITU-T X.681 (02/2021)      27
+ISO/IEC 8824-2:2021 (E)
+
+                                                          Annex E
+
+                        Tutorial annex on the ASN.1 model of object set extension
+              (This annex does not form an integral part of this Recommendation | International Standard.)
+
+
+E.1       An ASN.1 specification can define information object sets and such object sets can be marked extensible by
+means of an extension marker or by the inclusion of extensible object sets using set arithmetic. Use of an extension marker
+with object sets differs from such use with types in that it specifies that an application can dynamically add/remove objects
+to/from the object set in an instance of communication.
+E.2         Table and component relation constraints which are not satisfied are not in themselves considered errors if the
+constraining object set is extensible. In such cases, it is not an error if a value of a UNIQUE field is not found in the object
+set, but if it is found, then it is an error if the constraint is not satisfied.
+
+
+
+
+28          Rec. ITU-T X.681 (02/2021)
+                                                                                            ISO/IEC 8824-2:2021 (E)
+
+                                                       Annex F
+
+                                            Summary of the notation
+             (This annex does not form an integral part of this Recommendation | International Standard.)
+
+
+The following lexical items are defined in clause 7:
+                   objectclassreference
+               objectreference
+               objectsetreference
+               typefieldreference
+               valuefieldreference
+               valuesetfieldreference
+               objectfieldreference
+               objectsetfieldreference
+               word
+               CLASS
+               INSTANCE
+               SYNTAX
+               UNIQUE
+
+The following lexical items are defined in Rec. ITU-T X.680 | ISO/IEC 8824-1 and used in this Recommendation |
+International Standard:
+                   empty
+               modulereference
+               xmlasn1typename
+               "::="
+               "{"
+               "}"
+               ","
+               "."
+               "["
+               "]"
+               ":"
+               DEFAULT
+               OF
+               OPTIONAL
+               WITH
+
+The following productions are defined in Rec. ITU-T X.680 | ISO/IEC 8824-1 and are used in this Recommendation |
+International Standard:
+                   BuiltinValue
+               ElementSetSpec
+               NonParameterizedTypeName
+               ReferencedValue
+               Type
+               Value
+               ValueSet
+               XMLBuiltinValue
+               XMLTypedValue
+               XMLValue
+The following productions are defined in Rec. ITU-T X.683 | ISO/IEC 8824-4 and are used in this Recommendation |
+International Standard:
+                   ParameterizedObjectClass
+               ParameterizedObjectSet
+               ParameterizedObject
+The following productions are defined in this Recommendation | International Standard:
+               DefinedObjectClass ::=
+                       ExternalObjectClassReference | objectclassreference | UsefulObjectClassReference
+
+
+                                                                            Rec. ITU-T X.681 (02/2021)          29
+ISO/IEC 8824-2:2021 (E)
+
+            ExternalObjectClassReference ::= modulereference "." objectclassreference
+            UsefulObjectClassReference ::=
+                TYPE-IDENTIFIER
+            |   ABSTRACT-SYNTAX
+
+            ObjectClassAssignment ::= objectclassreference "::=" ObjectClass
+            ObjectClass ::= DefinedObjectClass | ObjectClassDefn | ParameterizedObjectClass
+            ObjectClassDefn ::= CLASS "{" FieldSpec "," + "}" WithSyntaxSpec?
+            FieldSpec ::=
+                     TypeFieldSpec
+                 |   FixedTypeValueFieldSpec
+                 |   VariableTypeValueFieldSpec
+                 |   FixedTypeValueSetFieldSpec
+                 |   VariableTypeValueSetFieldSpec
+                 |   ObjectFieldSpec
+                 |   ObjectSetFieldSpec
+            PrimitiveFieldName ::=
+                     typefieldreference
+                |    valuefieldreference
+                |    valuesetfieldreference
+                |    objectfieldreference
+                |    objectsetfieldreference
+            FieldName ::= PrimitiveFieldName "." +
+            TypeFieldSpec ::= typefieldreference TypeOptionalitySpec?
+            TypeOptionalitySpec ::= OPTIONAL | DEFAULT Type
+            FixedTypeValueFieldSpec ::= valuefieldreference Type UNIQUE ? ValueOptionalitySpec ?
+            ValueOptionalitySpec ::= OPTIONAL | DEFAULT Value
+            VariableTypeValueFieldSpec ::= valuefieldreference FieldName ValueOptionalitySpec ?
+            FixedTypeValueSetFieldSpec ::= valuesetfieldreference Type ValueSetOptionalitySpec ?
+            ValueSetOptionalitySpec ::= OPTIONAL | DEFAULT ValueSet
+            VariableTypeValueSetFieldSpec ::= valuesetfieldreference FieldName ValueSetOptionalitySpec?
+            ObjectFieldSpec ::= objectfieldreference DefinedObjectClass ObjectOptionalitySpec?
+            ObjectOptionalitySpec ::= OPTIONAL | DEFAULT Object
+            ObjectSetFieldSpec ::= objectsetfieldreference DefinedObjectClass ObjectSetOptionalitySpec ?
+            ObjectSetOptionalitySpec ::= OPTIONAL | DEFAULT ObjectSet
+            WithSyntaxSpec ::= WITH SYNTAX SyntaxList
+            SyntaxList ::= "{" TokenOrGroupSpec empty + "}"
+            TokenOrGroupSpec ::= RequiredToken | OptionalGroup
+            OptionalGroup ::= "[" TokenOrGroupSpec empty + "]"
+            RequiredToken ::= Literal | PrimitiveFieldName
+            Literal ::= word | ","
+            DefinedObject ::= ExternalObjectReference | objectreference
+            ExternalObjectReference ::= modulereference "." objectreference
+            ObjectAssignment ::= objectreference DefinedObjectClass "::=" Object
+            Object ::= DefinedObject | ObjectDefn | ObjectFromObject | ParameterizedObject
+            ObjectDefn ::= DefaultSyntax | DefinedSyntax
+
+30       Rec. ITU-T X.681 (02/2021)
+                                                                        ISO/IEC 8824-2:2021 (E)
+
+DefaultSyntax ::= "{" FieldSetting "," * "}"
+FieldSetting ::= PrimitiveFieldName Setting
+DefinedSyntax ::= "{" DefinedSyntaxToken empty * "}"
+DefinedSyntaxToken ::= Literal | Setting
+Setting ::= Type | Value | ValueSet | Object | ObjectSet
+DefinedObjectSet ::= ExternalObjectSetReference | objectsetreference
+ExternalObjectSetReference ::= modulereference "." objectsetreference
+ObjectSetAssignment ::= objectsetreference DefinedObjectClass "::=" ObjectSet
+ObjectSet ::= "{" ObjectSetSpec "}"
+ObjectSetSpec ::=
+    RootElementSetSpec
+|   RootElementSetSpec "," "..."
+|   "..."
+|   "..." "," AdditionalElementSetSpec
+|   RootElementSetSpec "," "..." "," AdditionalElementSetSpec
+ObjectSetElements ::=
+    Object | DefinedObjectSet | ObjectSetFromObjects | ParameterizedObjectSet
+ObjectClassFieldType ::= DefinedObjectClass "." FieldName
+ObjectClassFieldValue ::= OpenTypeFieldVal | FixedTypeFieldVal
+OpenTypeFieldVal ::= Type ":" Value
+FixedTypeFieldVal ::= BuiltinValue | ReferencedValue
+XMLObjectClassFieldValue ::=
+  XMLOpenTypeFieldVal
+| XMLFixedTypeFieldVal
+XMLOpenTypeFieldVal ::= XMLTypedValue | xmlhstring
+XMLFixedTypeFieldVal ::= XMLBuiltinValue
+InformationFromObjects ::= ValueFromObject | ValueSetFromObjects |
+    TypeFromObject | ObjectFromObject | ObjectSetFromObjects
+ReferencedObjects ::=
+    DefinedObject | ParameterizedObject |
+    DefinedObjectSet | ParameterizedObjectSet
+ValueFromObject ::= ReferencedObjects "." FieldName
+ValueSetFromObjects ::= ReferencedObjects "." FieldName
+TypeFromObject ::= ReferencedObjects "." FieldName
+ObjectFromObject ::= ReferencedObjects "." FieldName
+ObjectSetFromObjects ::= ReferencedObjects "." FieldName
+InstanceOfType ::= INSTANCE OF DefinedObjectClass
+InstanceOfValue ::= Value
+XMLInstanceOfValue ::= XMLValue
+
+
+
+
+                                                           Rec. ITU-T X.681 (02/2021)       31
+                    SERIES OF ITU-T RECOMMENDATIONS
+
+Series A   Organization of the work of ITU-T
+
+Series D   Tariff and accounting principles and international telecommunication/ICT economic and
+           policy issues
+
+Series E   Overall network operation, telephone service, service operation and human factors
+
+Series F   Non-telephone telecommunication services
+
+Series G   Transmission systems and media, digital systems and networks
+
+Series H   Audiovisual and multimedia systems
+
+Series I   Integrated services digital network
+
+Series J   Cable networks and transmission of television, sound programme and other multimedia
+           signals
+
+Series K   Protection against interference
+
+Series L   Environment and ICTs, climate change, e-waste, energy efficiency; construction, installation
+           and protection of cables and other elements of outside plant
+
+Series M   Telecommunication management, including TMN and network maintenance
+
+Series N   Maintenance: international sound programme and television transmission circuits
+
+Series O   Specifications of measuring equipment
+
+Series P   Telephone transmission quality, telephone installations, local line networks
+
+Series Q   Switching and signalling, and associated measurements and tests
+
+Series R   Telegraph transmission
+
+Series S   Telegraph services terminal equipment
+
+Series T   Terminals for telematic services
+
+Series U   Telegraph switching
+
+Series V   Data communication over the telephone network
+
+Series X   Data networks, open system communications and security
+
+Series Y   Global information infrastructure, Internet protocol aspects, next-generation networks,
+           Internet of Things and smart cities
+
+Series Z   Languages and general software aspects for telecommunication systems
+
+
+
+
+                                                                                  Printed in Switzerland
+                                                                                          Geneva, 2021
+

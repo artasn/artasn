@@ -1,0 +1,474 @@
+extern TypeReference
+extern ValueReference
+extern Number
+extern StringLiteral
+
+rule Program {
+    captures {
+        modules = repeated: Module
+    }
+    persist
+    soi
+    optional repeated {
+        modules = Module
+    }
+    eoi
+    return modules
+}
+
+rule Module {
+    captures {
+        name = TypeReference
+        id = optional: DefinitiveOid
+        tag_default = optional: TagDefault
+        extension_default = optional: ExtensionDefault 
+        body = ModuleBody
+    }
+    name = TypeReference
+    persist
+    id = optional DefinitiveOid
+    keyword DEFINITIONS
+    tag_default = optional TagDefault
+    extension_default = optional ExtensionDefault
+    operator ::=
+    keyword BEGIN
+    body = ModuleBody
+    keyword END
+}
+
+rule DefinitiveOid {
+    captures {
+        components = repeated: DefinitiveOidComponent
+    }
+    operator {
+    persist
+    repeated {
+        components = DefinitiveOidComponent
+    }
+    operator }
+    return components
+}
+
+variant DefinitiveOidComponent = NamedNumber | ValueReference | Number;
+
+rule NamedNumber {
+    captures {
+        name = ValueReference
+        num = Number
+    }
+    name = ValueReference
+    operator (
+    persist
+    num = Number
+    operator )
+}
+
+rule NamedNumberList {
+    captures {
+        nums = repeated: NamedNumber
+    }
+    operator {
+    nums = NamedNumber
+    persist
+    optional repeated {
+        operator ,
+        nums = NamedNumber
+    }
+    operator }
+    return nums
+}
+
+rule TagDefault {
+    captures {
+        kind = TagDefaultKind
+    }
+    kind = TagDefaultKind
+    persist
+    keyword TAGS
+    return kind
+}
+
+variant TagDefaultKind = TagDefaultExplicit {
+    keyword EXPLICIT
+} | TagDefaultImplicit {
+    keyword IMPLICIT
+} | TagDefaultAutomatic {
+    keyword AUTOMATIC
+};
+
+variant ExtensionDefault = ExtensibilityImplied {
+    keyword EXTENSIBILITY
+    keyword IMPLIED
+};
+
+rule ModuleBody {
+    captures {
+        exports = optional: Exports
+        imports = optional: Imports
+        assignments = repeated: Assignment
+    }
+    persist
+    exports = optional Exports
+    imports = optional Imports
+    repeated {
+        assignments = Assignment
+    }
+}
+
+rule Exports {
+    captures {
+        kind = ExportsKind
+    }
+    keyword EXPORTS
+    persist
+    kind = ExportsKind
+    operator ;
+    return kind
+}
+
+variant ExportsKind = All {
+    keyword ALL
+} | SymbolList;
+
+rule Imports {
+    captures {
+        symbols_from_module = repeated: SymbolsFromModule
+    }
+    keyword IMPORTS
+    persist
+    repeated {
+        symbols_from_module = SymbolsFromModule
+    }
+    operator ;
+    return symbols_from_module
+}
+
+rule SymbolsFromModule {
+    captures {
+        symbols = SymbolList
+        module = GlobalModuleReference
+    }
+    symbols = SymbolList
+    keyword FROM
+    persist
+    module = GlobalModuleReference
+}
+
+rule GlobalModuleReference {
+    captures {
+        name = TypeReference
+        id = optional: DefinitiveOid
+    }
+    name = TypeReference
+    optional {
+        id = DefinitiveOid
+    }
+}
+
+variant Oid = ObjectIdentifierValue | DefinedValue;
+
+rule ObjectIdentifierValue {
+    captures {
+        components = repeated: ObjectIdentifierComponent
+    }
+    operator {
+    components = ObjectIdentifierComponent
+    persist
+    optional repeated {
+        components = ObjectIdentifierComponent
+    }
+    operator }
+}
+
+variant ObjectIdentifierComponent = NamedNumber | DefinedValue | ValueReference | Number;
+
+rule DefinedValue {
+    captures {
+        external_module = optional: TypeReference
+        value = ValueReference
+    }
+    optional {
+        external_module = TypeReference
+        operator .
+    }
+    value = ValueReference 
+}
+
+
+rule SymbolList {
+    captures {
+        symbols = repeated: Symbol
+    }
+    symbols = Symbol
+    persist
+    optional repeated {
+        operator ,
+        symbols = Symbol
+    }
+    return symbols
+}
+
+variant Symbol = ParameterizedReference | Reference;
+
+rule ParameterizedReference {
+    captures {
+        reference = Reference
+    }
+    reference = Reference
+    operator {
+    persist
+    operator }
+}
+
+variant Reference = TypeReference | ValueReference;
+
+variant Assignment = TypeAssignment | ValueAssignment;
+
+rule TypeAssignment {
+    captures {
+        name = TypeReference
+        ty = Type
+    }
+    name = TypeReference
+    operator ::=
+    persist
+    ty = Type
+}
+
+variant Constant = Number | DefinedValue;
+
+variant RangeBound = Min {
+    keyword MIN
+} | Max {
+    keyword MAX
+} | Constant;
+
+rule Range {
+    captures {
+        lower = RangeBound
+        upper = RangeBound
+    }
+    lower = RangeBound
+    operator ..
+    persist
+    upper = RangeBound
+}
+
+variant Constraint = Extensible {
+    operator ...
+} | Range | Constant;
+
+rule Constraints {
+    captures {
+        constraints = repeated: Constraint
+    }
+    operator (
+    constraints = Constraint
+    persist
+    optional repeated {
+        operator ,
+        constraints = Constraint
+    }
+    operator )
+}
+
+rule Integer {
+    captures {
+        value_constraints = optional: Constraints
+        named_values = optional: NamedNumberList
+    }
+    keyword INTEGER
+    persist
+    optional {
+        value_constraints = Constraints
+    }
+    optional {
+        named_values = NamedNumberList
+    }
+}
+
+rule SizeConstraints {
+    captures {
+        constraints = Constraints
+    }
+    operator (
+    keyword SIZE
+    persist
+    constraints = Constraints
+    operator )
+    return constraints
+}
+
+rule BitString {
+    captures {
+        size_constraints = optional: SizeConstraints
+        named_bits = optional: NamedNumberList
+    }
+    keyword BIT
+    keyword STRING
+    persist
+    optional {
+        size_constraints = SizeConstraints
+    }
+    optional {
+        named_bits = NamedNumberList
+    }
+}
+
+rule OctetString {
+    captures {
+        size_constraints = optional: SizeConstraints
+    }
+    keyword OCTET
+    keyword STRING
+    persist
+    optional {
+        size_constraints = SizeConstraints
+    }
+}
+
+rule Sequence {
+    captures {
+        components = repeated: StructureComponent
+    }
+    keyword SEQUENCE
+    persist
+    operator {
+    optional {
+        components = StructureComponent
+    }
+    optional repeated {
+        operator ,
+        components = StructureComponent
+    }
+    operator }
+}
+
+rule StructureComponent {
+    captures {
+        name = ValueReference
+        ty = Type
+        default = optional: Value
+    }
+    name = ValueReference
+    ty = Type
+    persist
+    optional {
+        keyword DEFAULT
+        default = Value
+    }
+}
+
+variant BuiltinType = BitString | OctetString | Integer | Sequence | ObjectIdentifier {
+    keyword OBJECT
+    keyword IDENTIFIER
+};
+
+variant Class = Universal {
+    keyword UNIVERSAL
+} | Application {
+    keyword APPLICATION
+} | Private {
+    keyword PRIVATE
+};
+
+rule Tag {
+    captures {
+        class = optional: Class
+        class_number = Number
+    }
+    operator [
+    persist
+    optional {
+        class = Class
+    }
+    class_number = Number
+    operator ]
+}
+
+variant TagKind = TagKindImplicit {
+    keyword IMPLICIT
+} | TagKindExplicit {
+    keyword EXPLICIT
+};
+
+rule TaggedType {
+    captures {
+        tag = Tag
+        kind = optional: TagKind
+        ty = boxed BuiltinType
+    }
+    tag = Tag
+    persist
+    optional {
+        kind = TagKind
+    }
+    ty = BuiltinType
+}
+
+variant Type = TaggedType | BuiltinType | TypeReference;
+
+rule ValueAssignment {
+    captures {
+        name = ValueReference
+        ty = Type
+        value = Value
+    }
+    name = ValueReference
+    ty = Type
+    persist
+    operator ::=
+    value = Value
+}
+
+rule SequenceValue {
+    captures {
+        components = repeated: SequenceValueComponent
+    }
+    operator {
+    components = SequenceValueComponent
+    optional repeated {
+        operator ,
+        components = SequenceValueComponent
+    }
+    operator }
+}
+
+rule SequenceValueComponent {
+    captures {
+        name = ValueReference
+        value = Value
+    }
+    name = ValueReference
+    value = Value
+}
+
+rule ChoiceValue {
+    captures {
+        alternative = ValueReference
+        value = boxed Value
+    }
+    alternative = ValueReference
+    operator :
+    persist
+    value = Value
+}
+
+rule Negative {
+    operator -
+}
+
+rule IntegerValue {
+    captures {
+        sign = optional: Negative
+        value = Number
+    }
+    optional {
+        sign = Negative
+    }
+    value = Number
+}
+
+variant BuiltinValue = StringLiteral | IntegerValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
+
+variant Value = BuiltinValue | ValueReference;

@@ -1,0 +1,40 @@
+{
+  "name": "webfs-extension",
+  "displayName": "WebFS",
+  "description": "Peristent filesystem for VSCode Web",
+  "version": "1.0.0",
+  "publisher": "asn1chef",
+  "license": "MIT",
+  "scripts": {
+    "build": "webpack-cli --mode production"
+  },
+  "private": true,
+  "contributes": {
+    "configurationDefaults": {
+      "files.autoSave": "off"
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onFileSystem:webfs",
+    "onDebug"
+  ],
+  "browser": "./dist/extension",
+  "dependencies": {
+    "webfs": "../webfs"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.92.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "engines": {
+    "vscode": "1.92.0"
+  },
+  "enabledApiProposals": [
+    "fileSearchProvider",
+    "textSearchProvider"
+  ]
+}

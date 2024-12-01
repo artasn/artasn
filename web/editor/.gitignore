@@ -1,0 +1,17 @@
+logs
+*.log
+npm-debug.log*
+.DS_Store
+
+coverage
+node_modules
+build
+dist
+cache
+public/static
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+src/wasm

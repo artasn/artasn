@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "asn1chef",
+    "cli",
+    "parsegen",
+]
+resolver = "2"

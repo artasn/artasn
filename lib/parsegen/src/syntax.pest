@@ -1,0 +1,73 @@
+WHITESPACE = _{ "\t" | " " }
+COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+
+syntax = _{ SOI ~ (definition ~ NEWLINE*)+ ~ EOI }
+
+definition = _{ extern_definition | rule_definition | variant_definition }
+
+extern_definition = { "extern" ~ ident } 
+
+rule_definition = {
+    "rule" ~ ident ~ "{" ~ NEWLINE+ ~ 
+    (statement ~ NEWLINE+)+ ~
+    "}"
+}
+
+variant_definition = {
+    "variant" ~ ident ~ "=" ~
+    variant ~ 
+    ("|" ~ variant)* ~ 
+    ";"
+}
+
+variant = _{ named_variant | ident }
+
+named_variant = { ident  ~ "{" ~ NEWLINE+ ~ (statement ~ NEWLINE*)+ ~ "}" }
+
+statement = _{
+    block_statement |
+    captures_statement | 
+    soi_statement |
+    eoi_statement |
+    persist_statement |
+    var_statement |
+    return_statement | 
+    keyword_statement | 
+    operator_statement |
+    repeated_statement | 
+    optional_statement |
+    def_statement
+}
+
+captures_statement = {
+    "captures" ~ "{" ~ NEWLINE ~
+    (capture ~ NEWLINE)+ ~
+    "}"
+}
+boxed = { "boxed" }
+capture = {
+    ident ~ "=" ~ (capture_type ~ ":")? ~ boxed? ~ ident
+}
+capture_type = {
+    "optional" | "repeated"
+}
+
+block_statement = { "{" ~ NEWLINE ~ (statement ~ NEWLINE+)+ ~ "}"}
+soi_statement = { "soi" }
+eoi_statement = { "eoi" }
+persist_statement = { "persist" }
+var_statement = { ident ~ "=" ~ statement }
+return_statement = { "return" ~ ident }
+keyword_statement = { "keyword" ~ ident ~ (" " ~ ident)* }
+operator_statement = { "operator" ~ operator }
+repeated_statement = {
+    optional? ~
+    "repeated" ~ 
+    statement
+}
+optional_statement = { optional ~ statement }
+def_statement = { ident }
+
+ident = @{ (ASCII_ALPHANUMERIC | "_")+ }
+operator = { (!NEWLINE ~ ANY)+ }
+optional = { "optional" }

@@ -1,0 +1,26 @@
+CycleB { joint-iso-itu-t baizerlabs(1337) cycle(1) module(1) b(66) } DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+IMPORTS ID, root-id, leaf-id FROM CycleA { joint-iso-itu-t baizerlabs(1337) cycle(1) module(1) a(65) };
+
+intermediate-id ID ::= { root-id intermediate(69) }
+
+FileHeader ::= SEQUENCE {
+    magic OCTET STRING (SIZE(8)) DEFAULT defaultMagic,
+    version INTEGER,
+    dataFormat ID,
+    data OCTET STRING
+}
+
+defaultMagic OCTET STRING ::= '41534E3143484546'H
+currentVersion INTEGER ::= 3
+
+simpleHeader FileHeader ::= {
+	magic defaultMagic,
+	version currentVersion,
+	dataFormat leaf-id,
+	data '48656C6C6F2C20776F726C6421'H
+}
+
+END

@@ -1,0 +1,72 @@
+{
+  "name": "asn1-extension",
+  "displayName": "ASN.1",
+  "description": "ASN.1 language support for VSCode Web",
+  "icon": "./icons/ASN1-128x128.png",
+  "version": "1.0.0",
+  "publisher": "asn1chef",
+  "license": "MIT",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "asn1",
+        "aliases": [
+          "ASN.1",
+          "asn.1",
+          "ASN1",
+          "asn1"
+        ],
+        "extensions": [
+          ".asn",
+          ".asn1"
+        ],
+        "configuration": "./config/asn1.language-config.json",
+        "icon": {
+          "light": "./icons/ASN1-light.png",
+          "dark": "./icons/ASN1-light.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "asn1",
+        "scopeName": "source.asn1",
+        "path": "./config/asn1.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.asn1.codeblock",
+        "path": "./config/asn1.codeblock.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.asn": "asn1"
+        }
+      }
+    ]
+  },
+  "keywords": [
+    "ASN",
+    "ASN.1",
+    "BER",
+    "DER"
+  ],
+  "scripts": {
+    "build": "webpack-cli --mode production"
+  },
+  "private": true,
+  "browser": "./dist/extension",
+  "devDependencies": {
+    "@types/vscode": "1.92.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "engines": {
+    "vscode": "1.92.0"
+  }
+}

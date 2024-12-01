@@ -1,0 +1,24 @@
+[package]
+name = "libweb"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+asn1chef = { path = "../../lib/asn1chef"  }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+hex = "0.4.3"
+js-sys = "0.3.77"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.4"
+wasm-bindgen = "0.2.84"
+wee_alloc = "0.4.5"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.34"
+
+[lib]
+name = "libasn1chef"
+crate-type = ["cdylib", "staticlib"]

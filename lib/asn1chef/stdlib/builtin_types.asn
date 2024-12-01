@@ -1,0 +1,13 @@
+asn1chef
+DEFINITIONS IMPLICIT TAGS ::=
+BEGIN
+
+EXPORTS ALL;
+
+REAL ::= SEQUENCE (
+    mantissa INTEGER,
+    base INTEGER (2, 10),
+    exponent INTEGER
+)
+
+END
