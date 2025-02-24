@@ -40,6 +40,18 @@ impl TokenStream {
     pub fn cursor(&self) -> usize {
         self.tokenizer.cursor()
     }
+
+    pub fn as_tokens(&mut self) -> Result<Vec<Token>> {
+        let mut tokens = Vec::new();
+        loop {
+            let token = self.tokenizer.tokenize_next()?;
+            if token.kind == TokenKind::EOI {
+                tokens.push(token);
+                return Ok(tokens);
+            }
+            tokens.push(token);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +302,13 @@ impl<T> AstElement<T> {
     {
         AstElement::new(mapper(self.element), self.loc)
     }
+
+    pub const fn as_ref(&self) -> AstElement<&T> {
+        AstElement {
+            element: &self.element,
+            loc: self.loc,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -358,12 +377,30 @@ macro_rules! optional_ok {
     }};
 }
 
+// macro_rules! optional {
+//     ($parse_result:expr) => {{
+//         let parse_result = $parse_result;
+//         match parse_result {
+//             ParseResult::Ok(element) => Some(element),
+//             ParseResult::Fail(_) => None,
+//             ParseResult::Error(err) => return ParseResult::Error(err),
+//         }
+//     }};
+// }
+
 macro_rules! optional {
-    ($parse_result:expr) => {{
+    ($parse_result:expr, $context:expr) => {{
+        let cursor = $context.tokens.cursor();
         let parse_result = $parse_result;
         match parse_result {
             ParseResult::Ok(element) => Some(element),
-            ParseResult::Fail(_) => None,
+            ParseResult::Fail(err) => {
+                if err.kind.is_token_err() {
+                    return ParseResult::Error(err);
+                }
+                $context.tokens.set_cursor(cursor);
+                None
+            }
             ParseResult::Error(err) => return ParseResult::Error(err),
         }
     }};

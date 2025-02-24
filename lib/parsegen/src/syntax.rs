@@ -93,7 +93,7 @@ impl SyntaxParser {
                 } else {
                     let inner_expr = self.build_expression(inner_pair);
                     Expr {
-                        code: format!("optional!({})", inner_expr.code),
+                        code: format!("optional!({}, ParseContext::new(context.tokens))", inner_expr.code),
                         optional: true,
                     }
                 };

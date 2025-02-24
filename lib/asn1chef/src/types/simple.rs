@@ -1,4 +1,6 @@
-use crate::values::valref;
+use crate::{compiler::parser::AstElement, values::valref};
+
+use super::Constraints;
 
 #[derive(Debug, Clone)]
 pub struct IntegerType {
@@ -8,8 +10,8 @@ pub struct IntegerType {
 
 #[derive(Debug, Clone)]
 pub struct NamedNumber {
-    pub name: String,
-    pub value: valref!(Integer),
+    pub name: AstElement<String>,
+    pub value: AstElement<valref!(Integer)>,
 }
 
 #[derive(Debug, Clone)]
@@ -23,36 +25,10 @@ pub struct OctetStringType {
     pub size_constraints: Option<Constraints>,
 }
 
-pub type Constraints = Vec<Constraint>;
-
-#[derive(Debug, Clone)]
-pub enum Constraint {
-    Constant(valref!(Integer)),
-    Range(Range),
-}
-
-#[derive(Debug, Clone)]
-pub struct Range {
-    pub lower: RangeLowerBound,
-    pub upper: RangeUpperBound,
-}
-
-#[derive(Debug, Clone)]
-pub enum RangeLowerBound {
-    Constant(valref!(Integer)),
-    Min,
-}
-
-#[derive(Debug, Clone)]
-pub enum RangeUpperBound {
-    Constant(valref!(Integer)),
-    Max,
-}
-
 pub type EnumeratedType = Vec<EnumerationItem>;
 
 #[derive(Debug, Clone)]
 pub struct EnumerationItem {
-    pub name: String,
-    pub value: Option<valref!(Integer)>,
+    pub name: AstElement<String>,
+    pub value: Option<AstElement<valref!(Integer)>>,
 }

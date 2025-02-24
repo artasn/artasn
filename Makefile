@@ -14,7 +14,7 @@ clean:
 
 build: build-cli build-editor
 
-.PHONY: .install-cargo .install-wasm .install-wasm-pack test-parsegen build-cli build-libweb build-webfs build-asn1-extension build-editor dev-editor
+.PHONY: .install-cargo .install-wasm .install-wasm-pack test-parsegen build-cli build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor
 
 .install-cargo:
 	$(shell which cargo > /dev/null || (echo "Rust and Cargo are required to build $(PROG). Visit https://rustup.rs/ to do so") && exit 1)
@@ -60,6 +60,12 @@ build-asn1-extension:
 	mkdir -p ../editor/public/static/extensions/asn1 && \
 	cp -r package.json package.nls.json config icons dist ../editor/public/static/extensions/asn1/
 
+build-vscode-web:
+	cd web/vscode-web && \
+	yarn && \
+	yarn build && \
+	cd ../..
+
 build-editor: build-libweb build-webfs build-asn1-extension
 	export NODE_OPTIONS=--openssl-legacy-provider && \
 	cd web/editor && \
@@ -80,4 +86,6 @@ dev-editor: build-editor
 	yarn dev
 
 test-parsegen:
-	$(CARGO) test --package parsegen --release -- --nocapture
+	cd lib && \
+	$(CARGO) test --package parsegen --release -- --nocapture && \
+	cd ..

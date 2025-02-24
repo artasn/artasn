@@ -39,7 +39,7 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str) 
     composite_module
         .items
         .push(syn::Item::Use(syn::parse_quote!(
-            use std::fmt::Write;
+            use std::fmt::{Display, Write};
         )));
     for mut gen_file in gen_files {
         // all module-level attributes are combined

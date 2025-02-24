@@ -3,8 +3,8 @@ use std::panic;
 use asn1chef::{
     compiler::{CompileError, Compiler},
     module,
-    types::{TagType, TaggedType, Type, TypeReference},
-    values::{Oid, Value, ValueReference},
+    types::{TagType, TaggedType, Type, TypeReference, TypeResolve},
+    values::{Oid, Value, ValueReference, ValueResolve},
 };
 use js_sys::{Array, Object, Reflect};
 use serde::Serialize;
@@ -162,11 +162,11 @@ fn serialize_type(ty: &Type) -> JsValue {
             let components = Array::new();
             for component in &sequence.components {
                 let obj = Object::new();
-                Reflect::set(&obj, &"name".into(), &(&component.name).into()).unwrap();
+                Reflect::set(&obj, &"name".into(), &(&component.name.element).into()).unwrap();
                 Reflect::set(
                     &obj,
                     &"componentType".into(),
-                    &serialize_typereference(&component.component_type),
+                    &serialize_typereference(&component.component_type.element),
                 )
                 .unwrap();
                 Reflect::set(&obj, &"optional".into(), &component.optional.into()).unwrap();
@@ -174,7 +174,7 @@ fn serialize_type(ty: &Type) -> JsValue {
                     Reflect::set(
                         &obj,
                         &"defaultValue".into(),
-                        &serialize_valuereference(default_value),
+                        &serialize_valuereference(&default_value.element),
                     )
                     .unwrap();
                 }
@@ -215,7 +215,12 @@ fn serialize_value(value: &Value) -> JsValue {
             Reflect::set(&obj, &"value".into(), &bigint.into()).unwrap();
         }
         Value::OctetString(octet_string) => {
-            Reflect::set(&obj, &"value".into(), &hex::encode_upper(octet_string).into()).unwrap();
+            Reflect::set(
+                &obj,
+                &"value".into(),
+                &hex::encode_upper(octet_string).into(),
+            )
+            .unwrap();
         }
         Value::ObjectIdentifier(oid) => {
             let oid = oid.resolve_oid().expect("resolve oid");
@@ -225,11 +230,11 @@ fn serialize_value(value: &Value) -> JsValue {
             let components = Array::new();
             for component in &sequence.components {
                 let obj = Object::new();
-                Reflect::set(&obj, &"name".into(), &(&component.name).into()).unwrap();
+                Reflect::set(&obj, &"name".into(), &(&component.name.element).into()).unwrap();
                 Reflect::set(
                     &obj,
                     &"value".into(),
-                    &serialize_valuereference(&component.value),
+                    &serialize_valuereference(&component.value.element),
                 )
                 .unwrap();
                 components.push(&obj.into());
@@ -281,11 +286,16 @@ pub fn compiler_remove_source(libweb_ptr: *mut LibWeb, path: String) -> JsValue 
 #[wasm_bindgen]
 pub fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
     let libweb = unsafe { Box::from_raw(libweb_ptr) };
-    let result = libweb.compiler.compile();
+    let errors = libweb.compiler.compile();
     let _ = Box::into_raw(libweb);
-    match result {
-        Ok(()) => JsValue::null(),
-        Err(err) => serde_wasm_bindgen::to_value(&JsCompileError::new(err)).unwrap(),
+    if errors.len() == 0 {
+        JsValue::null()
+    } else {
+        let array = Array::new();
+        for err in errors {
+            array.push(&serde_wasm_bindgen::to_value(&JsCompileError::new(err)).unwrap());
+        }
+        array.into()
     }
 }
 
@@ -294,7 +304,7 @@ pub fn context_list_modules() -> JsValue {
     let modules = Compiler::get_context().list_modules();
     let definitions = modules
         .into_iter()
-        .map(|module| ModuleIdentifier::new(&module.id))
+        .map(|module| ModuleIdentifier::new(&module.oid))
         .collect::<Vec<ModuleIdentifier>>();
     serde_wasm_bindgen::to_value(&definitions).unwrap()
 }
@@ -306,7 +316,7 @@ pub fn context_list_types() -> JsValue {
         types.push(
             &TypeDefinition {
                 ident: QualifiedIdentifier::new(&ident),
-                ty: serialize_typereference(ty),
+                ty: serialize_typereference(&ty.element),
             }
             .serialize(),
         );
@@ -321,8 +331,8 @@ pub fn context_list_values() -> JsValue {
         types.push(
             &ValueDefinition {
                 ident: QualifiedIdentifier::new(&ident),
-                ty: serialize_typereference(&val.ty),
-                value: serialize_valuereference(&val.value),
+                ty: serialize_typereference(&val.ty.element),
+                value: serialize_valuereference(&val.value.element),
             }
             .serialize(),
         );
@@ -331,8 +341,18 @@ pub fn context_list_values() -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn context_der_encode(libweb_ptr: *mut LibWeb, module_name: String, oid: Option<String>, value_name: String) -> String {
-    let oid = oid.map(|oid| Oid(oid.split(".").map(|node| node.parse::<u64>().unwrap()).collect()));
+pub fn context_der_encode(
+    libweb_ptr: *mut LibWeb,
+    module_name: String,
+    oid: Option<String>,
+    value_name: String,
+) -> String {
+    let oid = oid.map(|oid| {
+        Oid(oid
+            .split(".")
+            .map(|node| node.parse::<u64>().unwrap())
+            .collect())
+    });
     let ident = module::QualifiedIdentifier {
         module: module::ModuleIdentifier {
             name: module_name,
@@ -342,26 +362,24 @@ pub fn context_der_encode(libweb_ptr: *mut LibWeb, module_name: String, oid: Opt
     };
     if let Some(value_decl) = Compiler::get_context().lookup_value(&ident) {
         match value_decl.ty.resolve() {
-            Ok(ty) => {
-                match value_decl.value.resolve() {
-                    Ok(value) => {
-                        let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
-                        libweb.buffer.clear();
-                        match value.der_encode(&mut libweb.buffer, ty, None) {
-                            Ok(()) => {
-                                let mut reverse = Vec::with_capacity(libweb.buffer.len());
-                                for b in libweb.buffer.iter().rev() {
-                                    reverse.push(*b);
-                                }
-                                hex::encode_upper(&reverse)
-                            },
-                            Err(err) => err.to_string(),
+            Ok(ty) => match value_decl.value.resolve() {
+                Ok(value) => {
+                    let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
+                    libweb.buffer.clear();
+                    match value.der_encode(&mut libweb.buffer, ty, None) {
+                        Ok(()) => {
+                            let mut reverse = Vec::with_capacity(libweb.buffer.len());
+                            for b in libweb.buffer.iter().rev() {
+                                reverse.push(*b);
+                            }
+                            hex::encode_upper(&reverse)
                         }
+                        Err(err) => err.kind.to_string(),
                     }
-                    Err(err) => err.to_string(),
                 }
-            }
-            Err(err) => err.to_string(),
+                Err(err) => err.kind.to_string(),
+            },
+            Err(err) => err.kind.to_string(),
         }
     } else {
         "no such value".to_string()

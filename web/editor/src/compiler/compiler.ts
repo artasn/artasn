@@ -32,23 +32,23 @@ export type CompileResult = {
 export async function getDeclarations(): Promise<CompileResult> {
     const fs = await webfs.getWebFS();
 
-    const errors: CompileError[] = [];
+    const syntaxErrors: CompileError[] = [];
     for (const path of fs.listAll()) {
         if (path.endsWith('.asn')) {
             const data = await fs.readFile(path);
             const error = await client.addSourceFile(path, textDecoder.decode(data));
             if (error !== null) {
-                errors.push(error);
+                syntaxErrors.push(error);
             }
         }
     }
-    if (errors.length > 0) {
-        return { kind: 'error', errors };
+    if (syntaxErrors.length > 0) {
+        return { kind: 'error', errors: syntaxErrors };
     }
 
-    const error = await client.compile();
-    if (error !== null) {
-        return { kind: 'error', errors: [error] };
+    const errors = await client.compile();
+    if (errors !== null) {
+        return { kind: 'error', errors };
     }
 
     return {

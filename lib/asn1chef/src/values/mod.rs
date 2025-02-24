@@ -1,11 +1,13 @@
 mod simple;
 
-use anyhow::{anyhow, Result};
 use num::BigUint;
 pub use simple::*;
 
 use crate::{
-    compiler::{context, encode},
+    compiler::{
+        context, encode,
+        parser::{AstElement, Error, ErrorKind, Result},
+    },
     module::QualifiedIdentifier,
     types::*,
 };
@@ -81,7 +83,7 @@ impl Value {
                     while le_bytes[msb_index] == prefix {
                         msb_index -= 1;
                     }
-                    buf.extend_from_slice(&le_bytes[..msb_index+1]);
+                    buf.extend_from_slice(&le_bytes[..msb_index + 1]);
                     if num > 0 && le_bytes[msb_index] & SIGN_MASK == SIGN_MASK {
                         // if the number is positive and the leftmost bit of the msb is 1, add a padding byte of zeroes
                         // this ensures the sign bit is a zero
@@ -106,7 +108,7 @@ impl Value {
                     let value = component.value.resolve()?;
                     let value_ty = ty_components
                         .iter()
-                        .find(|ty_component| ty_component.name == component.name)
+                        .find(|ty_component| ty_component.name.element == component.name.element)
                         .unwrap()
                         .component_type
                         .resolve()?;
@@ -119,20 +121,26 @@ impl Value {
         let end_len = buf.len();
         if tagged_type.kind == TagKind::Explicit {
             encode::write_vlq((end_len - start_len) as u64, buf);
-            Tag::default().ber_encode(buf, TagContext {
-                is_outer_explicit: false,
-                structure_component_index,
-                ty: &tagged_type.ty,
-            });
+            Tag::default().ber_encode(
+                buf,
+                TagContext {
+                    is_outer_explicit: false,
+                    structure_component_index,
+                    ty: &tagged_type.ty,
+                },
+            );
         }
 
         let end_len = buf.len();
         encode::write_vlq((end_len - start_len) as u64, buf);
-        tagged_type.tag.ber_encode(buf, TagContext {
-            is_outer_explicit: tagged_type.kind == TagKind::Explicit,
-            structure_component_index,
-            ty: &tagged_type.ty,
-        });
+        tagged_type.tag.ber_encode(
+            buf,
+            TagContext {
+                is_outer_explicit: tagged_type.kind == TagKind::Explicit,
+                structure_component_index,
+                ty: &tagged_type.ty,
+            },
+        );
 
         Ok(())
     }
@@ -237,32 +245,51 @@ pub enum ValueReference<const TYPE_TAG: u8> {
 impl<const TYPE_TAG: u8> ValueReference<TYPE_TAG> {
     /// Casts `&'a self` to `&'a ValueReference<{ TagType::Any as u8 }>`.
     ///
+    /// See [`ValueReference::as_type`] for implementation details.
+    pub fn as_any(&self) -> &ValueReference<{ TagType::Any as u8 }> {
+        self.as_type()
+    }
+
+    /// Casts `&'a self` to `&'a ValueReference<NEW_TAG>`.
+    ///
     /// The returned reference is identical to `&self` (including pointing to the same memory),
     /// except for the modified compile-time `<const TAG_TYPE: u8>` generic parameter.
-    pub fn as_any(&self) -> &ValueReference<{ TagType::Any as u8 }> {
+    pub fn as_type<const NEW_TAG: u8>(&self) -> &ValueReference<NEW_TAG> {
         // since the `<TYPE_TAG>` generic parameter type is only present at compile-time,
         // we can safely transmute a &ValueReference<X> -> &ValueReference<Y>,
         // because the runtime memory representations of both these types are identical
         unsafe { std::mem::transmute(self) }
     }
+}
 
-    pub fn resolve(&self) -> Result<&Value> {
-        let mut valref = self.as_any();
+pub trait ValueResolve {
+    fn resolve(&self) -> Result<&Value>;
+}
+
+impl<const TYPE_TAG: u8> ValueResolve for AstElement<ValueReference<TYPE_TAG>> {
+    fn resolve(&self) -> Result<&Value> {
+        let mut valref = self.as_ref().map(|valref| valref.as_any());
         let value = loop {
-            match valref {
-                ValueReference::<{ TagType::Any as u8 }>::Value(ref value) => break value,
-                ValueReference::<{ TagType::Any as u8 }>::Reference(ref ident) => {
-                    valref = &context()
+            match &valref.element {
+                ValueReference::<{ TagType::Any as u8 }>::Value(value) => break value,
+                ValueReference::<{ TagType::Any as u8 }>::Reference(ident) => {
+                    valref = context()
                         .lookup_value(ident)
-                        .ok_or_else(|| anyhow!("undefined reference to type '{ident}'"))?
-                        .value;
+                        .ok_or_else(|| Error {
+                            kind: ErrorKind::Ast(format!("undefined reference to type '{ident}")),
+                            loc: self.loc,
+                        })?
+                        .value.as_ref();
                 }
             }
         };
         let tag_type = value.tag_type();
         let ref_type = TagType::try_from(TYPE_TAG).unwrap();
         if !TagType::compare(tag_type, ref_type) {
-            return Err(anyhow!("expecting {}, got {}", ref_type, tag_type,));
+            return Err(Error {
+                kind: ErrorKind::Ast(format!("expecting {}, got {}", ref_type, tag_type)),
+                loc: self.loc,
+            });
         }
         Ok(value)
     }

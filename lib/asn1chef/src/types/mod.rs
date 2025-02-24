@@ -1,6 +1,5 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
-use anyhow::{anyhow, Result};
 use int_enum::IntEnum;
 
 mod simple;
@@ -12,9 +11,16 @@ pub use structured::*;
 mod character_strings;
 use character_strings::*;
 
+mod constraints;
+pub use constraints::*;
+
 use crate::{
-    compiler::{context, encode},
+    compiler::{
+        context, encode,
+        parser::{AstElement, Error, ErrorKind, Result},
+    },
     module::QualifiedIdentifier,
+    values::{valref, Value, ValueResolve},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -248,11 +254,75 @@ impl Type {
             _ => TypeForm::Primitive,
         }
     }
+
+    pub fn ensure_satisfied_by_value(&self, valref: &AstElement<valref!()>) -> Result<()> {
+        let value = valref.resolve()?;
+        if self.tag_type().unwrap() != value.tag_type() {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "expecting {} but found {}",
+                    self.tag_type().unwrap(),
+                    value.tag_type()
+                )),
+                loc: valref.loc,
+            });
+        }
+
+        let (constraints, item) = match (self, value) {
+            (Self::BitString(bit_string), Value::BitString(value)) => {
+                (bit_string.size_constraints.as_ref(), value.bits() as i64)
+            }
+            (Self::OctetString(octet_string), Value::OctetString(value)) => {
+                (octet_string.size_constraints.as_ref(), value.len() as i64)
+            }
+            (Self::Integer(integer), Value::Integer(value)) => {
+                (integer.value_constraints.as_ref(), *value)
+            }
+            _ => (None, 0),
+        };
+        if let Some(constraints) = constraints {
+            if !constraints.includes_value(item)? {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "value does not satisfy {} constraints of type",
+                        constraints.kind.to_string(),
+                    )),
+                    loc: valref.loc,
+                });
+            }
+        }
+
+        match (self, value) {
+            (Self::Sequence(seq), Value::Sequence(value)) => {
+                if seq.components.len() != value.components.len() {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "SEQUENCE type has {} components, provided value has {}",
+                            seq.components.len(),
+                            value.components.len()
+                        )),
+                        loc: valref.loc,
+                    });
+                }
+
+                for i in 0..seq.components.len() {
+                    let seq_component = &seq.components[i];
+                    let val_component = &value.components[i];
+
+                    let seq_ty = seq_component.component_type.resolve()?;
+                    seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
 }
 
-impl ToString for Type {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             Type::Boolean => "BOOLEAN",
             Type::Integer(_) => "INTEGER",
             Type::BitString(_) => "BIT STRING",
@@ -268,8 +338,7 @@ impl ToString for Type {
             Type::Choice(_) => "CHOICE",
             Type::NumericString(_) => "NUMERIC STRING",
             Type::PrintableString(_) => "PRINTABLE STRING",
-        }
-        .to_string()
+        })
     }
 }
 
@@ -300,29 +369,6 @@ impl<const TYPE_TAG: u8> TypeReference<TYPE_TAG> {
         // because the runtime memory representations of both these types are identical
         unsafe { std::mem::transmute(self) }
     }
-
-    pub fn resolve(&self) -> Result<&TaggedType> {
-        let mut typeref = self.as_any();
-        let tagged_type = loop {
-            match typeref {
-                TypeReference::<{ TagType::Any as u8 }>::Type(ref ty) => break ty,
-                TypeReference::<{ TagType::Any as u8 }>::Reference(ref ident) => {
-                    typeref = context()
-                        .lookup_type(ident)
-                        .ok_or_else(|| anyhow!("undefined reference to type '{ident}'"))?
-                }
-            }
-        };
-        if let Some(tag_type) = tagged_type.ty.tag_type() {
-            let ref_type = TagType::try_from(TYPE_TAG).unwrap();
-            if !TagType::compare(tag_type, ref_type) {
-                return Err(anyhow!("expecting {}, got {}", ref_type, tag_type,));
-            }
-            Ok(tagged_type)
-        } else {
-            Err(anyhow!("{tagged_type:?} does not have a defined type tag"))
-        }
-    }
 }
 
 impl<const TYPE_TAG: u8> ToString for TypeReference<TYPE_TAG> {
@@ -330,6 +376,42 @@ impl<const TYPE_TAG: u8> ToString for TypeReference<TYPE_TAG> {
         match self {
             Self::Type(tagged_type) => tagged_type.to_string(),
             Self::Reference(typeref) => typeref.name.clone(),
+        }
+    }
+}
+
+pub trait TypeResolve {
+    fn resolve(&self) -> Result<&TaggedType>;
+}
+
+impl<const TYPE_TAG: u8> TypeResolve for AstElement<TypeReference<TYPE_TAG>> {
+    fn resolve(&self) -> Result<&TaggedType> {
+        let mut typeref = self.as_ref().map(|typeref| typeref.as_any());
+        let tagged_type = loop {
+            match &typeref.element {
+                TypeReference::<{ TagType::Any as u8 }>::Type(ty) => break ty,
+                TypeReference::<{ TagType::Any as u8 }>::Reference(ident) => {
+                    typeref = context().lookup_type(ident).ok_or_else(|| Error {
+                        kind: ErrorKind::Ast(format!("undefined reference to type '{ident}")),
+                        loc: typeref.loc,
+                    })?
+                }
+            }
+        };
+        if let Some(tag_type) = tagged_type.ty.tag_type() {
+            let ref_type = TagType::try_from(TYPE_TAG).unwrap();
+            if !TagType::compare(tag_type, ref_type) {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!("expecting {ref_type}, got {tag_type}")),
+                    loc: self.loc,
+                });
+            }
+            Ok(tagged_type)
+        } else {
+            Err(Error {
+                kind: ErrorKind::Ast(format!("{tagged_type:?} does not have a defined type tag")),
+                loc: self.loc,
+            })
         }
     }
 }

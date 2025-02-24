@@ -1,0 +1,11 @@
+[package]
+name = "libdeps"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+asn1chef = { path = "../../lib/asn1chef" }
+
+[lib]
+name = "deps"
+crate-type = ["dylib"]

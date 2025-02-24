@@ -17,7 +17,6 @@ defaultMagic OCTET STRING ::= '41534E3143484546'H
 currentVersion INTEGER ::= 3
 
 simpleHeader FileHeader ::= {
-	magic defaultMagic,
 	version currentVersion,
 	dataFormat leaf-id,
 	data '48656C6C6F2C20776F726C6421'H

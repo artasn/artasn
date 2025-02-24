@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use crate::parser::*;
-use std::fmt::{format, Write};
+use std::fmt::{format, Display, Write};
 
 macro_rules! enum_str {
     (pub enum $name:ident {
@@ -171,6 +171,25 @@ pub struct Token {
     pub loc: Loc,
 }
 
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.kind.to_string())?;
+        if let Some(data) = &self.data {
+            f.write_str("(")?;
+            f.write_str(&match data {
+                TokenData::Keyword(keyword) => keyword.name().to_string(),
+                TokenData::Named(name) => name.clone(),
+                TokenData::Number(num) => num.to_string(),
+                TokenData::Operator(op) => op.name().to_string(),
+                TokenData::String(kind, value) => format!("{} '{}'", kind.to_string(), value),
+            })?;
+            f.write_str(")")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     SOI,
@@ -244,6 +263,22 @@ pub struct Error {
     pub loc: Loc,
 }
 
+impl Error {
+    pub fn pos(&self, module_source: &str) -> (usize, usize) {
+        let line = 1 + module_source[..self.loc.offset]
+            .chars()
+            .filter(|c| *c == '\n')
+            .count();
+        let col = self.loc.offset - module_source[..self.loc.offset].rfind('\n').unwrap_or(1);
+        (line, col)
+    }
+
+    pub fn get_message(&self, module_source: &str) -> String {
+        let (line, col) = self.pos(module_source);
+        format!("{} at {}:{}", self.kind.message(), line, col)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     UnexpectedToken(char),
@@ -293,6 +328,89 @@ impl ErrorKind {
             | Self::UnterminatedString => true,
             _ => false,
         }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            ErrorKind::UnexpectedToken(token) => {
+                format!("unexpected token '{}'", token)
+            }
+            ErrorKind::ExpectingEOI => String::from("expecting end of input"),
+            ErrorKind::ExpectingOther {
+                expecting,
+                received,
+            } => {
+                let expecting_str = if expecting.len() == 1 {
+                    expecting[0].to_string()
+                } else {
+                    let mut option_strs = expecting
+                        .iter()
+                        .map(|option| option.to_string())
+                        .collect::<Vec<String>>();
+                    let last_idx = option_strs.len() - 1;
+                    let last = &option_strs[last_idx];
+                    option_strs[last_idx] = "or ".to_owned() + last;
+                    option_strs.join(", ")
+                };
+                if let Some(received_data) = &received.data {
+                    format!(
+                        "expecting {}, received {}",
+                        expecting_str,
+                        received_data.to_string(&received.kind)
+                    )
+                } else {
+                    format!(
+                        "expecting {}, received {}",
+                        expecting_str,
+                        received.kind.to_string()
+                    )
+                }
+            }
+            ErrorKind::IllegalStringCharacter {
+                string_kind,
+                character,
+            } => format!(
+                "illegal {} character '{}'",
+                string_kind.to_string(),
+                character
+            ),
+            ErrorKind::InvalidStringIndicator(indicator) => format!(
+                "illegal string indicator suffix '{}' (expecting 'B', 'H', or a cstring)",
+                indicator
+            ),
+            ErrorKind::ExpectingKeyword {
+                expecting,
+                received,
+            } => format!(
+                "expecting keyword {}, found keyword {}",
+                expecting.name(),
+                received.name()
+            ),
+            ErrorKind::ExpectingOperator {
+                expecting,
+                received,
+            } => format!(
+                "expecting operator '{}', found operator '{}'",
+                expecting.name(),
+                received.name()
+            ),
+            ErrorKind::MalformedIdentifier { ident } => {
+                format!("malformed identifier '{}'", ident)
+            }
+            ErrorKind::MalformedNumber { number } => format!("malformed integer '{}'", number),
+            ErrorKind::NumberTooLarge { number } => format!("number {} is too large", number),
+            ErrorKind::UnterminatedString => "unterminated string".to_string(),
+            ErrorKind::VariantUnmatched { variant } => {
+                format!("unmatched variant '{}'", variant)
+            }
+            ErrorKind::Ast(message) => message.clone(),
+        }
+    }
+}
+
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message())
     }
 }
 
@@ -441,8 +559,10 @@ impl Tokenizer {
         suffix: char,
     ) -> Result<(Loc, String, StringKind)> {
         let (invalid_char, kind) = match suffix {
-            'B' => (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::BString),
-            'H' => (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::HString),
+            // TODO: lowercase string indicators are not standard-compliant, but can be found occasionally in IETF RFCs
+            // there should be a compiler option to be permissive about this or not
+            'B' | 'b' => (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::BString),
+            'H' | 'h' => (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::HString),
             indicator => {
                 return Err(Error {
                     kind: ErrorKind::InvalidStringIndicator(indicator),
@@ -518,7 +638,9 @@ impl Tokenizer {
 
             if Self::is_name_char(self.current_char()) {
                 return Err(Error {
-                    kind: ErrorKind::MalformedNumber { number: format!("{}{}", num, self.current_char()) },
+                    kind: ErrorKind::MalformedNumber {
+                        number: format!("{}{}", num, self.current_char()),
+                    },
                     loc,
                 });
             }

@@ -21,7 +21,13 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    compiler.compile()?;
+    let errors = compiler.compile();
+    if errors.len() > 0 {
+        for error in errors {
+            println!("{error}");
+        }
+        std::process::exit(1);
+    }
 
     let elapsed = {
         let elapsed = start.elapsed();

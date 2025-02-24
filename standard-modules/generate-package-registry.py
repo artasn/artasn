@@ -3,8 +3,23 @@ import json
 import os
 import shutil
 
+from libdeps import get_module_dependencies
 from typing import Dict, List, Set, Tuple
 from util import make_data_dir, get_data_dir
+
+def get_all_dependencies(dir: str) -> List[dict]:
+    for root, _, files in os.walk(dir):
+        for file in files:
+            file = os.path.join(root, file)
+            with open(file, 'r') as f:
+                module_source = f.read()
+                if file == 'data/package-registry/registry/IETF/modules/RFC1354-MIB.asn':
+                    print(f'file = {file}')
+                    deps = get_module_dependencies(module_source)
+                    print(f'deps = {deps}')
+                    print('------------------')
+                    exit(1)
+                    # TODO: make modules imported with oid by valuereference as having unknown version
 
 def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
     # set that contains all docs that are updates to other docs
@@ -38,21 +53,21 @@ def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
         updates_set = set(map(lambda update: update['doc_id'], update_ids))
 
         for module in modules:
-            file_path = f'./modules/{module["module_name"]}.asn'
+            file_path = f'modules/{module["module_name"]}.asn'
             module_doc = module['doc_id']
             if module_doc == root_doc['doc_id']:
                 doc_modules.add(file_path)
             elif module_doc in updates_set:
                 update_doc = None
                 for update_module in update_modules:
-                    if update_module['doc'] == module_doc:
+                    if update_module['name'] == module_doc:
                         update_doc = update_module
                         break
 
                 if update_doc is None:
                     doc = next(update for update in update_ids if update['doc_id'] == module_doc)
                     update_doc = {
-                        'doc': doc['doc_id'],
+                        'name': doc['doc_id'],
                         'title': doc['title'],
                         'url': doc['url'],
                         'modules': set(),
@@ -63,7 +78,7 @@ def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
 
         if len(doc_modules) > 0:
             collection = {
-                'doc': root_doc['doc_id'],
+                'name': root_doc['doc_id'],
                 'title': root_doc['title'],
                 'url': root_doc['url'],
                 'modules': list(doc_modules),
@@ -83,7 +98,10 @@ def create_ietf_registry(registry_dir: str) -> bytes:
     with open(os.path.join(ietf_data_dir, 'downloads.json'), 'r') as f:
         downloads = json.load(f)
 
-    shutil.copytree(os.path.join(ietf_data_dir, 'modules'), os.path.join(registry_dir, 'modules'), dirs_exist_ok=True)
+    modules_dir = os.path.join(registry_dir, 'modules')
+    # shutil.copytree(os.path.join(ietf_data_dir, 'modules'), modules_dir, dirs_exist_ok=True)
+    deps = get_all_dependencies(modules_dir)
+    print(deps)
 
     collections = get_ietf_collections(index, downloads['modules'])
     collections_json = json.dumps(collections, sort_keys=True)
@@ -117,7 +135,7 @@ def get_itu_t_collections(recs: List[dict], modules: List[dict]) -> List[dict]:
             'name': rec['name'],
             'approval': rec['approval'],
             'title': rec['title'].replace('\u2013', '-'),
-            'modules': list(map(lambda module: f'./modules/{rec["name"]}/{module["name"]}.asn', modules)),
+            'modules': list(map(lambda module: f'modules/{rec["name"]}/{module["name"]}.asn', modules)),
         })
 
     return collections
@@ -162,22 +180,22 @@ def main():
     hash.update(itu_t_hash)
     registry_hash = hash.hexdigest()
 
-    package_registry = {
+    sources = {
         'hash': registry_hash,
-        'orgs': [
+        'sources': [
             {
                 'hash': ietf_hash.hex(),
                 'name': 'IETF',
-                'full_name': 'Internet Engineering Task Force',
+                'fullName': 'Internet Engineering Task Force',
                 'desc': 'IETF is responsible for the technical standards (called RFCs) that make up the Internet protocol suite, such as PKIX for public-key infrastructure, PKCS for public-key cryptography, and many others.',
-                'registry': './registry/IETF/registry.json',
+                'registry': 'registry/IETF/registry.json',
             },
             {  
                 'hash': itu_t_hash.hex(),
                 'name': 'ITU-T',
-                'full_name': 'International Telecommunication Union Telecommunication Standardization Sector',
+                'fullName': 'International Telecommunication Union Telecommunication Standardization Sector',
                 'desc': 'ITU-T is responsible for coordinating standards such as X.509 for cybersecurity, H.264 for video compression, and many others.',
-                'registry': './registry/ITU-T/registry.json'
+                'registry': 'registry/ITU-T/registry.json'
             }
         ],
     }
@@ -185,8 +203,8 @@ def main():
     with open(os.path.join(data_dir, 'hash.txt'), 'w') as f:
         f.write(registry_hash)
 
-    with open(os.path.join(data_dir, 'package-registry.json'), 'w') as f:
-        json.dump(package_registry, f)
+    with open(os.path.join(data_dir, 'sources.json'), 'w') as f:
+        json.dump(sources, f)
 
 if __name__ == '__main__':
     main()

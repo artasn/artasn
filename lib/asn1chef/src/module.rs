@@ -85,7 +85,7 @@ pub struct Module {
 
 #[derive(Debug, Clone)]
 pub struct ModuleHeader {
-    pub id: ModuleIdentifier,
+    pub oid: ModuleIdentifier,
     pub tag_default: TagDefault,
     pub extensibility_implied: bool,
     pub exports: Exports,
@@ -96,7 +96,7 @@ impl ModuleHeader {
     pub fn resolve_symbol(&self, symbol: &str) -> QualifiedIdentifier {
         self.resolve_import(symbol)
             .unwrap_or_else(|| QualifiedIdentifier {
-                module: self.id.clone(),
+                module: self.oid.clone(),
                 name: symbol.to_string(),
             })
     }

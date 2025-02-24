@@ -18,22 +18,44 @@ rule Program {
 
 rule Module {
     captures {
-        name = TypeReference
-        id = optional: DefinitiveOid
-        tag_default = optional: TagDefault
-        extension_default = optional: ExtensionDefault 
+        header = ModuleHeader
         body = ModuleBody
+    }
+    header = ModuleHeader
+    persist
+    body = ModuleBody
+    keyword END
+}
+
+rule ModuleHeader {
+    captures {
+        name = TypeReference
+        oid = optional: DefinitiveOid
+        tag_default = optional: TagDefault
+        extension_default = optional: ExtensionDefault
+        exports = optional: Exports
+        imports = optional: Imports
     }
     name = TypeReference
     persist
-    id = optional DefinitiveOid
+    oid = optional DefinitiveOid
     keyword DEFINITIONS
     tag_default = optional TagDefault
     extension_default = optional ExtensionDefault
     operator ::=
     keyword BEGIN
-    body = ModuleBody
-    keyword END
+    exports = optional Exports
+    imports = optional Imports
+}
+
+rule ModuleBody {
+    captures {
+        assignments = repeated: Assignment
+    }
+    repeated {
+        assignments = Assignment
+    }
+    return assignments
 }
 
 rule DefinitiveOid {
@@ -101,20 +123,6 @@ variant ExtensionDefault = ExtensibilityImplied {
     keyword IMPLIED
 };
 
-rule ModuleBody {
-    captures {
-        exports = optional: Exports
-        imports = optional: Imports
-        assignments = repeated: Assignment
-    }
-    persist
-    exports = optional Exports
-    imports = optional Imports
-    repeated {
-        assignments = Assignment
-    }
-}
-
 rule Exports {
     captures {
         kind = ExportsKind
@@ -154,14 +162,16 @@ rule SymbolsFromModule {
     module = GlobalModuleReference
 }
 
+variant AssignedIdentifier = DefinitiveOid | DefinedValue;
+
 rule GlobalModuleReference {
     captures {
         name = TypeReference
-        id = optional: DefinitiveOid
+        oid = optional: AssignedIdentifier
     }
     name = TypeReference
     optional {
-        id = DefinitiveOid
+        oid = AssignedIdentifier
     }
 }
 
@@ -235,28 +245,58 @@ rule TypeAssignment {
     ty = Type
 }
 
-variant Constant = Number | DefinedValue;
+variant Constant = IntegerValue | DefinedValue;
 
-variant RangeBound = Min {
+rule ConstantSeries {
+    captures {
+        constants = repeated: Constant
+    }
+    constants = Constant
+    persist
+    optional repeated {
+        operator |
+        constants = Constant
+    }
+    return constants
+}
+
+variant RangeLowerBound = Min {
     keyword MIN
-} | Max {
+} | GtConstant {
+    captures {
+        constant = Constant
+    }
+    constant = Constant
+    operator <
+    return constant
+} | Constant;
+
+variant RangeUpperBound = Max {
     keyword MAX
+} | LtConstant {
+    captures {
+        constant = Constant
+    }
+    operator <
+    persist
+    constant = Constant
+    return constant
 } | Constant;
 
 rule Range {
     captures {
-        lower = RangeBound
-        upper = RangeBound
+        lower = RangeLowerBound
+        upper = RangeUpperBound
     }
-    lower = RangeBound
+    lower = RangeLowerBound
     operator ..
     persist
-    upper = RangeBound
+    upper = RangeUpperBound
 }
 
 variant Constraint = Extensible {
     operator ...
-} | Range | Constant;
+} | Range | ConstantSeries;
 
 rule Constraints {
     captures {

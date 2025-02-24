@@ -115,16 +115,5 @@ def main():
 
     execute_chunked_task(modules, lambda chunk: download_modules(modules_dir, chunk))
 
-    # thread_count = 8
-    # threads: List[threading.Thread] = []
-    # chunked_modules = chunk_list(modules, len(modules) // thread_count)
-    # for chunk in chunked_modules:
-    #     thread = threading.Thread(target=download_modules, args=(modules_dir, chunk,))
-    #     thread.start()
-    #     threads.append(thread)
-
-    # for thread in threads:
-    #     thread.join()
-
 if __name__ == '__main__':
     main()

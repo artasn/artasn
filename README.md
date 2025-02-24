@@ -1,8 +1,10 @@
-# ASN1Chef
+# ASN.1⬢Chef
 
-ASN1Chef is a web-based suite of tools for working with [Abstract Syntax Notation One (ASN.1)](https://en.wikipedia.org/wiki/ASN.1).
+[![CI](https://github.com/asn1chef/asn1chef/actions/workflows/asn1chef.yml/badge.svg)](https://github.com/asn1chef/asn1chef/actions/workflows/asn1chef.yml)
 
-The [ASN1Chef Editor](https://lucasbaizer2.github.com/asn1chef) provides a Visual Studio Code-based editor for working with ASN.1 modules.
+ASN.1⬢Chef is a web-based suite of tools for working with [Abstract Syntax Notation One (ASN.1)](https://en.wikipedia.org/wiki/ASN.1).
+
+The [ASN.1⬢Chef Editor](https://asn1chef.github.io/asn1chef) provides a Visual Studio Code-based editor for working with ASN.1 modules.
 
 Functionality includes:
 
@@ -27,8 +29,15 @@ Functionality includes:
   - [x] DER (Distinguished Encoding Rules)
   - [ ] JER (JSON Encoding Rules)
   - [ ] XER (XML Encoding Rules)
-- [ ] Decoding arbitrary encoded bytes into types defined in ASN.1 modules.
-- [ ] Package registry with downloadable ASN.1 modules from various standards, including from:
-  - [ ] IETF (Internet Engineering Task Force)
-  - [ ] ITU-T (International Telecommunication Union Telecommunication Standardization Sector)
+- [ ] Decoding arbitrary encoded bytes into types defined in ASN.1 modules
+  - [ ] Editing parsed data directly in the UI
+  - [ ] Converting data between ASN.1 encodings
+- [x] Package registry with downloadable ASN.1 modules from various standards, including from:
+  - [x] IETF (Internet Engineering Task Force)
+  - [x] ITU-T (International Telecommunication Union Telecommunication Standardization Sector)
   - [ ] 3GPP (3rd Generation Partnership Project)
+  - [ ] User-defined custom sources
+  - [ ] Support for dependencies between packages
+- [ ] Code Generation
+  - [ ] Producing type stubs representing ASN.1 type definitions
+  - [ ] Producing functions to encode/decode stubs with various ASN.1 encodings

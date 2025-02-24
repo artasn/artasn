@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import App from './views/App';
 import { getWebFS } from './webfs';
 import './compiler/CompileWorkerClient';
 
@@ -43,7 +43,6 @@ defaultMagic OCTET STRING ::= '41534E3143484546'H
 currentVersion INTEGER ::= 3
 
 simpleHeader FileHeader ::= {
-	magic defaultMagic,
 	version currentVersion,
 	dataFormat leaf-id,
 	data '48656C6C6F2C20776F726C6421'H
@@ -65,3 +64,27 @@ END
 
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);
+
+// Set window title in a loop to prevent VSCode Web from modifying it.
+function configureWindowTitle() {
+    const ms = 50; // how many ms to wait before rewriting to title
+    const options = ['ASN.1⬢Chef', 'ASN.1⬡Chef'];
+    const cycleRate = 1000; // how many ms to wait before cycling to next option
+    const useOptions = false;
+
+    let optionIndex = 0;
+    let ctr = 0;
+    setInterval(() => {
+        if (useOptions) {
+            if (ctr++ >= cycleRate / ms) {
+                ctr = 0;
+                if (++optionIndex === options.length) {
+                    optionIndex = 0;
+                }
+            }
+        }
+        document.title = options[optionIndex];
+    }, ms);
+}
+
+configureWindowTitle();

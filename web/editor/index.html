@@ -3,20 +3,20 @@
 
 <head>
   <meta charset="utf-8" />
-  <link rel="icon" href="/favicon.ico" />
+  <link rel="icon" href="./favicon.ico" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
   <meta name="theme-color" content="#000000" />
-  <title>ASN1Chef Editor</title>
+  <title>ASN.1⬢Chef</title>
   <link data-name="vs/workbench/workbench.web.main" rel="stylesheet"
-    href="/static/vs/out/vs/workbench/workbench.web.main.css">
+    href="./static/vs/out/vs/workbench/workbench.web.main.css">
 </head>
 
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
   <div id="root"></div>
   <script type="module" src="/src/client.tsx"></script>
-  <script src="/static/vs/out/vs/loader.js"></script>
-  <script src="/static/vs/out/vs/webPackagePaths.js"></script>
+  <script src="./static/vs/out/vs/loader.js"></script>
+  <script src="./static/vs/out/vs/webPackagePaths.js"></script>
   <script>
     Object.keys(self.webPackagePaths).map(function (key, index) {
       self.webPackagePaths[key] = `${window.location.origin}/static/vs/node_modules/${key}/${self.webPackagePaths[key]}`;
@@ -32,9 +32,9 @@
       paths: self.webPackagePaths
     });
   </script>
-  <script src="/static/vs/out/nls.messages.js"></script>
-  <script src="/static/vs/out/vs/workbench/workbench.web.main.js"></script>
-  <script src="/static/vs/out/vs/code/browser/workbench/workbench.js"></script>
+  <script src="./static/vs/out/nls.messages.js"></script>
+  <script src="./static/vs/out/vs/workbench/workbench.web.main.js"></script>
+  <script src="./static/vs/out/vs/code/browser/workbench/workbench.js"></script>
 </body>
 
 </html>

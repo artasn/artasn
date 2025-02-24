@@ -22,7 +22,7 @@ export function addSourceFile(path: string, source: string): CompileError | null
     return lib.compiler_add_source(libweb, path, source);
 }
 
-export function compile(): CompileError | null {
+export function compile(): CompileError[] | null {
     ensureInit(libweb);
     return lib.compiler_compile(libweb);
 }

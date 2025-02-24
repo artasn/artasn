@@ -1,6 +1,6 @@
 #![allow(static_mut_refs)]
 
-mod ast;
+pub mod ast;
 mod context;
 pub use context::{context, context_mut, Context};
 
@@ -45,7 +45,7 @@ pub struct CompileError {
 
 impl CompileError {
     pub fn pos(&self) -> (usize, usize) {
-        offset_to_line_col(&self.source, self.error.loc.offset)
+        self.error.pos(&self.source)
     }
 
     pub fn len(&self) -> usize {
@@ -53,7 +53,7 @@ impl CompileError {
     }
 
     pub fn message(&self) -> String {
-        get_parse_error_message(&self.error)
+        self.error.kind.message()
     }
 }
 
@@ -73,7 +73,7 @@ impl std::error::Error for CompileError {
 
 impl Display for CompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (line, col) = self.pos();
+        let (line, col) = self.error.pos(&self.source);
         f.write_fmt(format_args!(
             "{}: {} at {}:{}:{}",
             self.phase.get_error_prefix(),
@@ -103,7 +103,7 @@ impl Compiler {
             sources: Vec::new(),
         }
     }
-    
+
     pub fn add_source(&mut self, path: String, source: String) -> CompileResult<()> {
         let mut token_stream = TokenStream::new(&source);
         let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
@@ -159,16 +159,37 @@ impl Compiler {
         }
     }
 
-    pub fn compile(&self) -> CompileResult<()> {
+    pub fn compile(&self) -> Vec<CompileError> {
+        macro_rules! map_err {
+            ( $source: expr ) => {
+                |error| CompileError {
+                    phase: CompilePhase::Walk,
+                    path: $source.path.clone(),
+                    source: $source.code.clone(),
+                    error,
+                }
+            };
+        }
+
         macro_rules! stage {
             ( $stage:ident ) => {{
+                let mut errors = Vec::new();
                 for source in &self.sources {
-                    ast::$stage(&source.program).map_err(|error| CompileError {
-                        phase: CompilePhase::Walk,
-                        path: source.path.clone(),
-                        source: source.code.clone(),
-                        error,
-                    })?;
+                    match ast::$stage(&source.program)
+                        .map(|errors| {
+                            errors
+                                .into_iter()
+                                .map(map_err!(source))
+                                .collect::<Vec<CompileError>>()
+                        })
+                        .map_err(map_err!(source))
+                    {
+                        Ok(source_errors) => errors.extend(source_errors),
+                        Err(err) => errors.push(err),
+                    }
+                }
+                if errors.len() > 0 {
+                    return errors;
                 }
             }};
         }
@@ -176,94 +197,12 @@ impl Compiler {
         stage!(register_all_modules);
         stage!(register_all_types);
         stage!(register_all_values);
+        stage!(verify_all_values);
 
-        Ok(())
+        Vec::new()
     }
 
     pub fn get_context<'a>() -> &'a Context {
         context()
-    }
-}
-
-pub fn offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
-    let line = 1 + source[..offset].chars().filter(|c| *c == '\n').count();
-    let col = offset - source[..offset].rfind('\n').unwrap_or(1);
-    (line, col)
-}
-
-fn get_parse_error_message(error: &parser::Error) -> String {
-    match &error.kind {
-        ErrorKind::UnexpectedToken(token) => {
-            format!("unexpected token '{}'", token)
-        }
-        ErrorKind::ExpectingEOI => String::from("expecting end of input"),
-        ErrorKind::ExpectingOther {
-            expecting,
-            received,
-        } => {
-            let expecting_str = if expecting.len() == 1 {
-                expecting[0].to_string()
-            } else {
-                let mut option_strs = expecting
-                    .iter()
-                    .map(|option| option.to_string())
-                    .collect::<Vec<String>>();
-                let last_idx = option_strs.len() - 1;
-                let last = &option_strs[last_idx];
-                option_strs[last_idx] = "or ".to_owned() + last;
-                option_strs.join(", ")
-            };
-            if let Some(received_data) = &received.data {
-                format!(
-                    "expecting {}, received {}",
-                    expecting_str,
-                    received_data.to_string(&received.kind)
-                )
-            } else {
-                format!(
-                    "expecting {}, received {}",
-                    expecting_str,
-                    received.kind.to_string()
-                )
-            }
-        }
-        ErrorKind::IllegalStringCharacter {
-            string_kind,
-            character,
-        } => format!(
-            "illegal {} character '{}'",
-            string_kind.to_string(),
-            character
-        ),
-        ErrorKind::InvalidStringIndicator(indicator) => format!(
-            "illegal string indicator suffix '{}' (expecting 'B', 'H', or a cstring)",
-            indicator
-        ),
-        ErrorKind::ExpectingKeyword {
-            expecting,
-            received,
-        } => format!(
-            "expecting keyword {}, found keyword {}",
-            expecting.name(),
-            received.name()
-        ),
-        ErrorKind::ExpectingOperator {
-            expecting,
-            received,
-        } => format!(
-            "expecting operator '{}', found operator '{}'",
-            expecting.name(),
-            received.name()
-        ),
-        ErrorKind::MalformedIdentifier { ident } => {
-            format!("malformed identifier '{}'", ident)
-        }
-        ErrorKind::MalformedNumber { number } => format!("malformed integer '{}'", number),
-        ErrorKind::NumberTooLarge { number } => format!("number {} is too large", number),
-        ErrorKind::UnterminatedString => "unterminated string".to_string(),
-        ErrorKind::VariantUnmatched { variant } => {
-            format!("unmatched variant '{}'", variant)
-        }
-        ErrorKind::Ast(message) => message.clone(),
     }
 }

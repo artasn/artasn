@@ -11,11 +11,13 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/roboto": "^5.1.1",
+    "@mui/icons-material": "^6.4.5",
     "@mui/material": "^6.4.3",
     "@mui/x-tree-view": "^7.26.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router-dom": "7.1.5",
+    "react-window": "^1.8.11",
     "vscode-web": "../vscode-web",
     "webfs": "../webfs"
   },
@@ -23,6 +25,7 @@
     "@types/node": "22.13.1",
     "@types/react": "19.0.8",
     "@types/react-dom": "19.0.3",
+    "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "5.7.3",
     "vite": "^6.1.0"

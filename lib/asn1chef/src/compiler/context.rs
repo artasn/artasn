@@ -5,6 +5,8 @@ use crate::{
 };
 use std::{collections::HashMap, mem::MaybeUninit};
 
+use super::parser::AstElement;
+
 static mut CONTEXT: MaybeUninit<Context> = MaybeUninit::uninit();
 
 pub fn init_context() {
@@ -23,14 +25,14 @@ pub fn context_mut<'a>() -> &'a mut Context {
 
 #[derive(Debug)]
 pub struct DeclaredValue {
-    pub value: valref!(),
-    pub ty: typeref!(),
+    pub value: AstElement<valref!()>,
+    pub ty: AstElement<typeref!()>,
 }
 
 #[derive(Debug)]
 pub struct Context {
     modules: HashMap<ModuleIdentifier, ModuleHeader>,
-    types: HashMap<QualifiedIdentifier, typeref!()>,
+    types: HashMap<QualifiedIdentifier, AstElement<typeref!()>>,
     values: HashMap<QualifiedIdentifier, DeclaredValue>,
 }
 
@@ -53,10 +55,10 @@ impl Context {
         self.modules.values().collect()
     }
 
-    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, &typeref!())> {
+    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, AstElement<&typeref!()>)> {
         self.types
             .iter()
-            .map(|(ident, typeref)| (ident.clone(), typeref))
+            .map(|(ident, typeref)| (ident.clone(), typeref.as_ref()))
             .collect()
     }
 
@@ -68,10 +70,10 @@ impl Context {
     }
 
     pub fn register_module(&mut self, module: ModuleHeader) {
-        self.modules.insert(module.id.clone(), module);
+        self.modules.insert(module.oid.clone(), module);
     }
 
-    pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: typeref!()) {
+    pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: AstElement<typeref!()>) {
         self.types.insert(ident, typeref);
     }
 
@@ -83,8 +85,8 @@ impl Context {
         self.modules.get(ident)
     }
 
-    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a typeref!()> {
-        self.types.get(ident)
+    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<AstElement<&'a typeref!()>> {
+        self.types.get(ident).map(|ty| ty.as_ref())
     }
 
     pub fn lookup_value<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredValue> {
@@ -97,13 +99,13 @@ impl Context {
     //         let types = self
     //             .types
     //             .iter()
-    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.id, &key.module))
+    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.oid, &key.module))
     //             .map(|(_, typeref)| typeref.resolve().cloned())
     //             .collect::<anyhow::Result<Vec<TaggedType>>>()?;
     //         let values = self
     //             .values
     //             .iter()
-    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.id, &key.module))
+    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.oid, &key.module))
     //             .map(|(_, valref)| valref.resolve().cloned())
     //             .collect::<anyhow::Result<Vec<Value>>>()?;
 

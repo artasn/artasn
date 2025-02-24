@@ -37,7 +37,7 @@ export async function addSourceFile(path: string, source: string): Promise<Compi
     return await callWorker('addSourceFile', { path, source });
 }
 
-export async function compile(): Promise<CompileError | null> {
+export async function compile(): Promise<CompileError[] | null> {
     return await callWorker('compile');
 }
 

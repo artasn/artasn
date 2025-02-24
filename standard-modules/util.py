@@ -32,7 +32,8 @@ def chunk_list(lst: List[T], size: int) -> List[List[T]]:
     it = iter(lst)
     return [list(itertools.islice(it, size)) for _ in range((len(lst) + size - 1) // size)]
 
-def execute_chunked_task(items: List[T], task: Callable[[List[T]], None], thread_count=4):
+def execute_chunked_task(items: List[T], task: Callable[[List[T]], None], thread_count=os.cpu_count()):
+    print(f'starting {thread_count} chunked task threads')
     threads: List[threading.Thread] = []
     chunked_items = chunk_list(items, len(items) // thread_count)
     for chunk in chunked_items:

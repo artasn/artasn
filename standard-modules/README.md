@@ -5,13 +5,17 @@ Sources include IETF, ITU-T, and in the future 3GPP.
 
 ## Download Modules
 
-To download modules, use `poetry` to run the Python file you want:
+To download modules, use [Poetry](https://python-poetry.org/docs/#installation) to run the Python file you want.
+
+### IETF
 
 To scrape for IETF modules, use: 
 
 ```
 poetry run python download-ietf-modules.py
 ```
+
+### ITU-T
 
 To download ITU-T modules:
 
@@ -20,10 +24,18 @@ Click the `Export result to MS Excel file` button, which looks like the icon for
 2. Download all [modules](https://www.itu.int/ITU-T/recommendations/fl.aspx?lang=1&pg_size=100). Click the same button to get the Excel file for the modules.
 3. `poetry run python download-itu-t-modules.py <Recommendations.xls> <Modules.xls>`
 
+### 3GPP
+
+To download 3GPP modules, first install the necessary system dependencies:
+
+```
+sudo apt install -y antiword pandoc
+```
+
 ## Generating Package Registry
 
 Once you have downloaded all modules, the next step is to generate the package registry.
 
 Run `poetry run python generate-package-registry.py`.
 This will generate a directory at `data/package-registry`.
-The contents of this directory should be statically served from a web server, for use with ASN1Chef.
+The contents of this directory should be statically served from a web server, for use with ASN.1⬢Chef.

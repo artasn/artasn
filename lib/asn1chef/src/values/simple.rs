@@ -1,21 +1,22 @@
 use std::fmt::Display;
 
-use anyhow::anyhow;
+use crate::{
+    compiler::parser::{AstElement, Error, ErrorKind, Result},
+    types::typeref,
+};
 
-use crate::types::{TagType, TypeReference};
-
-use super::{valref, Value};
+use super::{valref, Value, ValueResolve};
 
 #[derive(Debug, Clone)]
 pub struct EnumeratedValue {
-    pub ty: TypeReference<{ TagType::Enumerated as u8 }>,
-    pub item: Box<valref!(Integer)>,
+    pub ty: AstElement<typeref!(Enumerated)>,
+    pub item: Box<AstElement<valref!(Integer)>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SequenceValueComponent {
-    pub name: String,
-    pub value: valref!(),
+    pub name: AstElement<String>,
+    pub value: AstElement<valref!()>,
 }
 
 #[derive(Debug, Clone)]
@@ -25,15 +26,15 @@ pub struct SequenceValue {
 
 #[derive(Debug, Clone)]
 pub struct ChoiceValue {
-    pub alternative: String,
-    pub value: Box<valref!()>,
+    pub alternative: AstElement<String>,
+    pub value: Box<AstElement<valref!()>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ObjectIdentifier(pub Vec<ObjectIdentifierComponent>);
 
 impl ObjectIdentifier {
-    pub fn resolve_oid(&self) -> anyhow::Result<Oid> {
+    pub fn resolve_oid(&self) -> Result<Oid> {
         let mut nodes = Vec::new();
 
         for (i, component) in self.0.iter().enumerate() {
@@ -46,21 +47,27 @@ impl ObjectIdentifier {
                         }
                         Value::ObjectIdentifier(relative_oid) => {
                             if i != 0 {
-                                return Err(anyhow!("relative OBJECT IDENTIFIER can only be used as the first component of another OBJECT IDENTIFIER"));
+                                return Err(Error{
+                                    kind: ErrorKind::Ast("relative OBJECT IDENTIFIER can only be used as the first component of another OBJECT IDENTIFIER".to_string()),
+                                    loc: valref.loc,
+                                });
                             }
                             let resolved_oid = relative_oid.resolve_oid()?;
                             nodes.extend(resolved_oid.0);
                         }
                         other => {
-                            return Err(anyhow!(
-                                "expecting OBJECT IDENTIFIER or INTEGER; found {}",
-                                other.tag_type()
-                            ))
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "expecting OBJECT IDENTIFIER or INTEGER; found {}",
+                                    other.tag_type()
+                                )),
+                                loc: valref.loc,
+                            });
                         }
                     }
                 }
                 ObjectIdentifierComponent::IntegerLiteral(lit) => {
-                    nodes.push(*lit);
+                    nodes.push(lit.element);
                 }
             }
         }
@@ -73,8 +80,8 @@ impl ObjectIdentifier {
 pub enum ObjectIdentifierComponent {
     /// Must be either an `OBJECT IDENTIFIER` or `INTEGER` value.
     /// This will be verified when `ObjectIdentifier::resolve_oid` is invoked.
-    ValueReference(valref!()),
-    IntegerLiteral(u64),
+    ValueReference(AstElement<valref!()>),
+    IntegerLiteral(AstElement<u64>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

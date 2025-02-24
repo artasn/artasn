@@ -117,7 +117,7 @@ function Label({
                 alignItems: 'left',
             }}
         >
-            <Box>
+            <Box sx={{ display: 'flex' }}>
                 {icon && (
                     <Box
                         component={icon}
@@ -137,7 +137,7 @@ function Label({
             {subtext && <Box style={{
                 marginLeft: '20px',
                 fontSize: '0.8rem',
-                fontFamily: 'Courier New'
+                fontFamily: 'Courier New',
             }}>
                 ::= {subtext}
             </Box>}
