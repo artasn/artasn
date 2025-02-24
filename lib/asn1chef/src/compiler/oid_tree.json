@@ -2,6 +2,7 @@
     {
         "node": 0,
         "name": "itu-t",
+        "aliases": ["ccitt"],
         "children": [
             {
                 "node": 0,

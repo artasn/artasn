@@ -15,8 +15,8 @@
   <noscript>You need to enable JavaScript to run this app.</noscript>
   <div id="root"></div>
   <script type="module" src="/src/client.tsx"></script>
-  <script src="./static/vs/out/vs/loader.js"></script>
-  <script src="./static/vs/out/vs/webPackagePaths.js"></script>
+  <script type="text/javascript" src="./static/vs/out/vs/loader.js"></script>
+  <script type="text/javascript" src="./static/vs/out/vs/webPackagePaths.js"></script>
   <script>
     Object.keys(self.webPackagePaths).map(function (key, index) {
       self.webPackagePaths[key] = `${window.location.origin}/static/vs/node_modules/${key}/${self.webPackagePaths[key]}`;
@@ -32,9 +32,9 @@
       paths: self.webPackagePaths
     });
   </script>
-  <script src="./static/vs/out/nls.messages.js"></script>
-  <script src="./static/vs/out/vs/workbench/workbench.web.main.js"></script>
-  <script src="./static/vs/out/vs/code/browser/workbench/workbench.js"></script>
+  <script type="text/javascript" src="./static/vs/out/nls.messages.js"></script>
+  <script type="text/javascript" src="./static/vs/out/vs/workbench/workbench.web.main.js"></script>
+  <script type="text/javascript" src="./static/vs/out/vs/code/browser/workbench/workbench.js"></script>
 </body>
 
 </html>

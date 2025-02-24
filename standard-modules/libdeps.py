@@ -51,7 +51,6 @@ def get_module_dependencies(module_source: str) -> List[dict]:
     else:
         cdeps = res.dependencies
         deps = []
-        print(f'got {cdeps.dependencies_len} deps')
         for i in range(cdeps.dependencies_len):
             deps.append(module_to_dict(cdeps.dependencies[i]))
 

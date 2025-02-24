@@ -46,27 +46,37 @@ ietf_skip_modules = set([
     'SNMP-PROXY-MIB.asn',
 ])
 
-itu_t_skip_modules = set([])
+itu_t_skip_modules = set([
+    # missing comma at end of line 11
+    'Wrapper.asn',
+    # contains 'IMPLICIT TAGS' twice
+    'ProtProtocols.asn',
+    # empty module
+    # TODO: the actual module here, 'T38(2002).asn' should just be renamed to 'T38.asn'
+    'T38(1998).asn',
+    # not an actual module
+    'XmppIdentity.asn',
+    # missing closing '}' for oid on line 79
+    'DirectoryAbstractService.asn',
+])
 
 skip_modules = ietf_skip_modules.union(itu_t_skip_modules)
 
 def get_all_dependencies(dir: str) -> List[dict]:
-    i = 0
+    module_deps = []
     for root, _, files in os.walk(dir):
         for file in files:
             if os.path.basename(file) in skip_modules:
                 continue
             file = os.path.join(root, file)
             with open(file, 'r') as f:
-                i += 1
                 module_source = f.read()
-                print(f'file = {file} (#{i})')
                 # TODO: make modules imported with oid by valuereference as having unknown version
-                deps = get_module_dependencies(module_source)
-                print(f'deps = {deps}')
-                print('------------------')
+                # or, even better, resolve the actual version
+                module_deps.append(get_module_dependencies(module_source))
+    return module_deps
 
-def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
+def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: List[dict]) -> List[dict]:
     # set that contains all docs that are updates to other docs
     update_docs: Set[str] = set()
     for doc in docs:
@@ -91,7 +101,7 @@ def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
 
     collections = []
     for (root_doc, update_ids) in docs_with_updates:
-        doc_modules = set()
+        doc_modules = {}
         update_modules = []
 
         # make updates a set as an optimization
@@ -101,7 +111,16 @@ def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
             file_path = f'modules/{module["module_name"]}.asn'
             module_doc = module['doc_id']
             if module_doc == root_doc['doc_id']:
-                doc_modules.add(file_path)
+                dep = next((module_dep for module_dep in module_deps if module_dep['module']['name'] == module['module_name']), None)
+                obj = {
+                    'path': file_path,
+                }
+                if dep is not None:
+                    # if the oid is not defined, don't include it in the map at all
+                    # this is used to decrease the size of the registry file
+                    if dep['module']['oid']:
+                        obj['oid'] = dep['module']['oid']
+                doc_modules[file_path] = obj
             elif module_doc in updates_set:
                 update_doc = None
                 for update_module in update_modules:
@@ -126,7 +145,7 @@ def get_ietf_collections(docs: List[dict], modules: List[dict]) -> List[dict]:
                 'name': root_doc['doc_id'],
                 'title': root_doc['title'],
                 'url': root_doc['url'],
-                'modules': list(doc_modules),
+                'modules': list(doc_modules.values()),
             }
             if len(update_modules) > 0:
                 for update_module in update_modules:
@@ -145,10 +164,9 @@ def create_ietf_registry(registry_dir: str) -> bytes:
 
     modules_dir = os.path.join(registry_dir, 'modules')
     shutil.copytree(os.path.join(ietf_data_dir, 'modules'), modules_dir, dirs_exist_ok=True)
-    deps = get_all_dependencies(modules_dir)
-    print(deps)
+    module_deps = get_all_dependencies(modules_dir)
 
-    collections = get_ietf_collections(index, downloads['modules'])
+    collections = get_ietf_collections(index, downloads['modules'], module_deps)
     collections_json = json.dumps(collections, sort_keys=True)
     with open(os.path.join(registry_dir, 'registry.json'), 'w') as f:
         f.write(collections_json)
@@ -195,7 +213,6 @@ def create_itu_t_registry(registry_dir: str) -> bytes:
     modules_dir = os.path.join(registry_dir, 'modules')
     shutil.copytree(os.path.join(itu_t_data_dir, 'modules'), modules_dir, dirs_exist_ok=True)
     deps = get_all_dependencies(modules_dir)
-    print(deps)
 
     collections = get_itu_t_collections(recommendations, modules)
     collections_json = json.dumps(collections, sort_keys=True)
