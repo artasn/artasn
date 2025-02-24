@@ -12,6 +12,8 @@ use std::fmt::Display;
 
 pub mod encode;
 
+pub mod oid_tree;
+
 struct SourceFile {
     path: String,
     code: String,

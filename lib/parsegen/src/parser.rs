@@ -14,10 +14,6 @@ impl TokenStream {
         }
     }
 
-    pub fn into_tokenizer(self) -> Tokenizer {
-        self.tokenizer
-    }
-
     pub fn try_parse(&mut self, kind: TokenKind) -> Result<Token> {
         let token = self.tokenizer.tokenize_next()?;
         if token.kind == kind {
@@ -101,6 +97,42 @@ impl Parseable for AstTypeReference {
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstTypeReference(match token.data.unwrap() {
+                        TokenData::Named(name) => name,
+                        _ => unreachable!(),
+                    }),
+                    loc: token.loc,
+                })
+            })
+            .unwrap_or_else(ParseResult::Fail)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AstEncodingReference(pub String);
+
+impl Parseable for AstEncodingReference {
+    fn parse(context: ParseContext) -> ParseResult<Self> {
+        context
+            .tokens
+            .try_parse(TokenKind::TypeReference)
+            .map(|token| {
+                let name = match token.data.as_ref().unwrap() {
+                    TokenData::Named(name) => name,
+                    _ => unreachable!(),
+                };
+                for ch in name.chars() {
+                    if !ch.is_ascii_uppercase() {
+                        return ParseResult::Fail(Error {
+                            loc: token.loc,
+                            kind: ErrorKind::ExpectingOther {
+                                expecting: vec![TokenKind::EncodingReference],
+                                received: token,
+                            },
+                        });
+                    }
+                }
+                ParseResult::Ok(AstElement {
+                    element: AstEncodingReference(match token.data.unwrap() {
                         TokenData::Named(name) => name,
                         _ => unreachable!(),
                     }),
@@ -344,6 +376,25 @@ macro_rules! ok {
     }};
 }
 
+macro_rules! not {
+    ($parse_result:expr, $context:expr) => {{
+        let cursor = $context.tokens.cursor();
+        let parse_result = $parse_result;
+        match parse_result {
+            ParseResult::Ok(element) => {
+                return ParseResult::Fail(Error {
+                    kind: ErrorKind::ExpectingNegative,
+                    loc: element.loc,
+                })
+            }
+            ParseResult::Fail(_) => {
+                $context.tokens.set_cursor(cursor);
+            }
+            ParseResult::Error(err) => return ParseResult::Error(err),
+        }
+    }};
+}
+
 macro_rules! persistent_ok {
     ($parse_result:expr, $context: expr) => {{
         let parse_result = $parse_result;
@@ -376,17 +427,6 @@ macro_rules! optional_ok {
         }
     }};
 }
-
-// macro_rules! optional {
-//     ($parse_result:expr) => {{
-//         let parse_result = $parse_result;
-//         match parse_result {
-//             ParseResult::Ok(element) => Some(element),
-//             ParseResult::Fail(_) => None,
-//             ParseResult::Error(err) => return ParseResult::Error(err),
-//         }
-//     }};
-// }
 
 macro_rules! optional {
     ($parse_result:expr, $context:expr) => {{

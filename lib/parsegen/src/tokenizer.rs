@@ -131,6 +131,8 @@ enum_str! {
         Embedded = "EMBEDDED",
         Integer = "INTEGER",
         RelativeOidIri = "RELATIVE-OID-IRI",
+        Successors = "SUCCESSORS",
+        Descendants = "DESCENDANTS",
     }
 }
 
@@ -195,6 +197,7 @@ pub enum TokenKind {
     SOI,
     ValueReference,
     TypeReference,
+    EncodingReference,
     Keyword,
     Number,
     String,
@@ -208,6 +211,7 @@ impl ToString for TokenKind {
             Self::SOI => "SOI",
             Self::ValueReference => "valuereference",
             Self::TypeReference => "typereference",
+            Self::EncodingReference => "encodingreference",
             Self::Keyword => "keyword",
             Self::Number => "integer",
             Self::String => "string",
@@ -265,6 +269,9 @@ pub struct Error {
 
 impl Error {
     pub fn pos(&self, module_source: &str) -> (usize, usize) {
+        if self.loc.offset == 0 {
+            return (1, 1);
+        }
         let line = 1 + module_source[..self.loc.offset]
             .chars()
             .filter(|c| *c == '\n')
@@ -313,6 +320,7 @@ pub enum ErrorKind {
         variant: String,
     },
     UnterminatedString,
+    ExpectingNegative,
     Ast(String),
 }
 
@@ -403,6 +411,7 @@ impl ErrorKind {
             ErrorKind::VariantUnmatched { variant } => {
                 format!("unmatched variant '{}'", variant)
             }
+            ErrorKind::ExpectingNegative => format!("expecting provided token not to be present"),
             ErrorKind::Ast(message) => message.clone(),
         }
     }
@@ -427,7 +436,9 @@ lazy_static::lazy_static! {
 }
 
 impl Tokenizer {
-    const COMMENT: &[char] = &['-', '-'];
+    const LINE_COMMENT: &[char] = &['-', '-'];
+    const BLOCK_COMMENT_START: &[char] = &['/', '*'];
+    const BLOCK_COMMENT_END: &[char] = &['*', '/'];
 
     pub fn new(source: &str) -> Tokenizer {
         Tokenizer {
@@ -499,15 +510,15 @@ impl Tokenizer {
 
     fn skip_comments(&mut self) {
         'comment_loop: while !self.is_ended() {
-            if self.starts_with(Self::COMMENT) {
-                self.cursor += 2; // skip "--" prefix
+            if self.starts_with(Self::LINE_COMMENT) {
+                self.cursor += Self::LINE_COMMENT.len(); // skip "--" prefix
                 while !self.is_ended() {
                     if self.current_char() == '\n' {
                         self.cursor += 1;
                         break 'comment_loop;
-                    } else if self.starts_with(Self::COMMENT) {
+                    } else if self.starts_with(Self::LINE_COMMENT) {
                         // inline comment, e.g. --hello world--
-                        self.cursor += 2; // skip "--" sufix
+                        self.cursor += Self::LINE_COMMENT.len(); // skip "--" suffix
                         break 'comment_loop;
                     } else {
                         // inside a comment; ignore character
@@ -517,6 +528,17 @@ impl Tokenizer {
                 // if we reached here, there was an unclosed comment
                 // TODO: throw error?
                 break 'comment_loop;
+            } else if self.starts_with(Self::BLOCK_COMMENT_START) {
+                self.cursor += Self::BLOCK_COMMENT_START.len(); // skip "/*"" prefix
+                while !self.is_ended() {
+                    if self.starts_with(Self::BLOCK_COMMENT_END) {
+                        self.cursor += Self::BLOCK_COMMENT_END.len(); // skip "*/" prefix
+                        break 'comment_loop;
+                    } else {
+                        // inside a comment; ignore character
+                        self.cursor += 1;
+                    }
+                }
             } else {
                 break;
             }
@@ -667,13 +689,39 @@ impl Tokenizer {
             let start = self.cursor;
             let mut name = String::with_capacity(1);
             let mut could_be_keyword = true;
-            while !self.is_ended() && Self::is_name_char(self.current_char()) {
-                let ch = self.current_char();
-                if !ch.is_ascii_uppercase() {
-                    could_be_keyword = false;
+            while !self.is_ended() {
+                if Self::is_name_char(self.current_char()) {
+                    let ch = self.current_char();
+                    if could_be_keyword && !ch.is_ascii_uppercase() {
+                        could_be_keyword = false;
+                    }
+                    name.write_char(ch).unwrap();
+                    self.cursor += 1;
+                } else {
+                    if self.current_char() == '\n' {
+                        if let Some(last_char) = name.chars().last() {
+                            if last_char == '-' {
+                                // if we get a hyphen followed by a newline
+                                // the identifier can still be parsed as a multi-line identifier
+                                // skip all the whitespace and continue parsing
+                                //
+                                // TODO: check is this is compliant with the X.680 standard;
+                                // this occurs in RFC3126 module 'ETS-ElectronicSignatureFormats-88syntax':
+                                // FROM PKIX1Explicit88
+                                //      {iso(1) identified-organization(3) dod(6) internet(1)
+                                //      security(5) mechanisms(5) pkix(7) id-mod(0) id-pkix1-explicit-
+                                //      88(1)}
+                                self.skip_whitespace();
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
                 }
-                name.write_char(ch).unwrap();
-                self.cursor += 1;
             }
             let loc = Loc::new(start, name.len());
             if could_be_keyword {

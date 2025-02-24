@@ -1,4 +1,5 @@
 extern TypeReference
+extern EncodingReference
 extern ValueReference
 extern Number
 extern StringLiteral
@@ -30,7 +31,8 @@ rule Module {
 rule ModuleHeader {
     captures {
         name = TypeReference
-        oid = optional: DefinitiveOid
+        oid = optional: ModuleIdentifier
+        encoding_reference = optional: EncodingReference
         tag_default = optional: TagDefault
         extension_default = optional: ExtensionDefault
         exports = optional: Exports
@@ -38,8 +40,12 @@ rule ModuleHeader {
     }
     name = TypeReference
     persist
-    oid = optional DefinitiveOid
+    oid = optional ModuleIdentifier
     keyword DEFINITIONS
+    optional {
+        encoding_reference = EncodingReference
+        keyword INSTRUCTIONS
+    }
     tag_default = optional TagDefault
     extension_default = optional ExtensionDefault
     operator ::=
@@ -56,6 +62,17 @@ rule ModuleBody {
         assignments = Assignment
     }
     return assignments
+}
+
+variant ModuleIdentifier = DefinitiveOidWithIri | DefinitiveOid;
+
+rule DefinitiveOidWithIri {
+    captures {
+        oid = DefinitiveOid
+        iri = StringLiteral
+    }
+    oid = DefinitiveOid
+    iri = StringLiteral
 }
 
 rule DefinitiveOid {
@@ -125,11 +142,11 @@ variant ExtensionDefault = ExtensibilityImplied {
 
 rule Exports {
     captures {
-        kind = ExportsKind
+        kind = optional: ExportsKind
     }
     keyword EXPORTS
     persist
-    kind = ExportsKind
+    kind = optional ExportsKind
     operator ;
     return kind
 }
@@ -144,7 +161,7 @@ rule Imports {
     }
     keyword IMPORTS
     persist
-    repeated {
+    optional repeated {
         symbols_from_module = SymbolsFromModule
     }
     operator ;
@@ -155,14 +172,68 @@ rule SymbolsFromModule {
     captures {
         symbols = SymbolList
         module = GlobalModuleReference
+        selection_option = optional: SelectionOption
     }
     symbols = SymbolList
     keyword FROM
     persist
     module = GlobalModuleReference
+    optional {
+        selection_option = SelectionOption
+    }
 }
 
-variant AssignedIdentifier = DefinitiveOid | DefinedValue;
+rule SelectionOption {
+    captures {
+        kind = SelectionOptionKind
+    }
+    keyword WITH
+    persist
+    kind = SelectionOptionKind
+    return kind
+}
+
+variant SelectionOptionKind = Successors {
+    keyword SUCCESSORS
+} | Descendants {
+    keyword DESCENDANTS
+};
+
+variant AssignedIdentifier = DefinitiveOid | ValueIdentifier {
+    captures {
+        value = DefinedValue
+    }
+    value = DefinedValue
+    // We need to ensure that there is not a comma after the identifier.
+    // Take this example from 'RFC1354-MIB.asn':
+    // IMPORTS
+    //     Gauge, IpAddress
+    //             FROM RFC1155-SMI
+    //     mib-2, ip
+    //             FROM RFC1213-MIB
+    // The first module is erroneously parsed as { name = RFC1155-SMI, id = mib-2 },
+    // and then the first token available to SymbolList is the comma after mib-2.
+    // In order to ensure that the first module is parsed as { name = RFC1155-SMI, id = None },
+    // we need to ensure there is not a comma after the `id`.
+    not operator ,
+    // We also need to make sure that the next token is not the keyword FROM.
+    // Take this example from 'SIP-COMMON-MIB.asn':
+    // IMPORTS
+    // ...
+    // SipTCTransportProtocol,
+    // SipTCMethodName,
+    // SipTCEntityRole,
+    // SipTCOptionTagHeaders
+    //       FROM SIP-TC-MIB             -- RFC 4780
+    // applIndex
+    //       FROM NETWORK-SERVICES-MIB   -- RFC 2788
+    // The first module is erroneously parsed as { name = SIP-TC-MIB, id = applIndex },
+    // and then the first token available to SymbolList is the FROM before NETWORK-SERVICES-MIB.
+    // In order to ensure that the first module is parsed as { name = SIP-TC-MIB, id = None },
+    // we need to ensure that there is not a FROM after the `id`.
+    not keyword FROM
+    return value
+};
 
 rule GlobalModuleReference {
     captures {
@@ -228,6 +299,7 @@ rule ParameterizedReference {
     operator {
     persist
     operator }
+    return reference
 }
 
 variant Reference = TypeReference | ValueReference;
@@ -414,11 +486,16 @@ variant Class = Universal {
 
 rule Tag {
     captures {
+        encoding_reference = optional: EncodingReference
         class = optional: Class
         class_number = Number
     }
     operator [
     persist
+    optional {
+        encoding_reference = EncodingReference
+        operator :
+    }
     optional {
         class = Class
     }

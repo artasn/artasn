@@ -31,25 +31,28 @@ pub extern "C" fn get_module_dependencies(
 ) -> GetModuleDependenciesResult {
     let module_source = unsafe { CStr::from_ptr(module_source_cstr).to_str().unwrap() };
 
-    let mut tokens = TokenStream::new(module_source);
-    std::fs::write(
-        "/tmp/mod.asn",
-        tokens
-            .as_tokens()
-            .unwrap()
-            .iter()
-            .map(|token| token.to_string())
-            .collect::<Vec<String>>()
-            .join(" "),
-    )
-    .unwrap();
+    // let mut tokens = TokenStream::new(module_source);
+    // std::fs::write(
+    //     "/tmp/mod.asn",
+    //     tokens
+    //         .as_tokens()
+    //         .unwrap()
+    //         .iter()
+    //         .map(|token| token.to_string())
+    //         .collect::<Vec<String>>()
+    //         .join(" "),
+    // )
+    // .unwrap();
     let mut tokens = TokenStream::new(module_source);
 
     let context = ParseContext::new(&mut tokens);
     SOI::parse(ParseContext::new(context.tokens));
     match AstModuleHeader::parse(context) {
         ParseResult::Ok(header) => {
-            let module = match get_module(&header.element.name, header.element.oid.as_ref()) {
+            let module = match get_module(&header.element.name, header.element.oid.as_ref().map(|oid| match &oid.element {
+                AstModuleIdentifier::DefinitiveOid(oid) => oid,
+                AstModuleIdentifier::DefinitiveOidWithIri(oid_with_iri) => &oid_with_iri.element.oid,
+            })) {
                 Ok(module) => module,
                 Err(err) => return get_error_message(err, &module_source),
             };
@@ -63,7 +66,7 @@ pub extern "C" fn get_module_dependencies(
                         Some(oid) => match &oid.element {
                             AstAssignedIdentifier::DefinitiveOid(oid) => Some(oid),
                             // TODO: implement import by valuereference for oid
-                            AstAssignedIdentifier::DefinedValue(_) => None,
+                            AstAssignedIdentifier::ValueIdentifier(_) => None,
                         },
                         None => None,
                     };
@@ -73,7 +76,7 @@ pub extern "C" fn get_module_dependencies(
                     });
                 }
             } else {
-                deps_len = 42069;
+                deps_len = 0;
             }
             let deps_slice_box = dependencies.into_boxed_slice();
             let result = GetModuleDependenciesResult {

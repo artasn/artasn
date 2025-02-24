@@ -3,27 +3,13 @@ use num::BigUint;
 use super::{
     context::{context, DeclaredValue},
     context_mut,
+    oid_tree::{self, OidTreeNode, OidTreeNodeSearch},
     parser::*,
 };
 use crate::{module::*, types::*, values::*};
 
-fn lookup_oid_component_str(component: &str) -> Option<u64> {
-    Some(match component {
-        "itu-t" => 0,
-        "iso" => 1,
-        "joint-iso-itu-t" => 2,
-        _ => return None,
-    })
-}
-
-fn lookup_oid_component(val_ref: &AstElement<AstValueReference>) -> Result<u64> {
-    lookup_oid_component_str(&val_ref.element.0).ok_or_else(|| Error {
-        kind: ErrorKind::Ast(format!(
-            "unknown named oid component '{}'",
-            val_ref.element.0
-        )),
-        loc: val_ref.loc,
-    })
+fn lookup_root_oid_component_str(component: &str) -> Option<&OidTreeNode> {
+    oid_tree::lookup_root_node(component)
 }
 
 fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
@@ -33,7 +19,7 @@ fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
         .map(|symbol| {
             match match &symbol.element {
                 AstSymbol::ParameterizedReference(parameterized) => {
-                    parameterized.element.reference.element.clone()
+                    parameterized.element.0.element.clone()
                 }
                 AstSymbol::Reference(reference) => reference.element.clone(),
             } {
@@ -79,7 +65,13 @@ fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
 // }
 
 fn module_ast_to_module_ident(header: &AstElement<AstModuleHeader>) -> Result<ModuleIdentifier> {
-    name_and_oid_to_module_ident(&header.element.name, header.element.oid.as_ref())
+    name_and_oid_to_module_ident(
+        &header.element.name,
+        header.element.oid.as_ref().map(|oid| match &oid.element {
+            AstModuleIdentifier::DefinitiveOid(oid) => oid,
+            AstModuleIdentifier::DefinitiveOidWithIri(oid_with_iri) => &oid_with_iri.element.oid,
+        }),
+    )
 }
 
 fn module_ref_to_module_ident(
@@ -89,7 +81,7 @@ fn module_ref_to_module_ident(
         Some(oid) => match &oid.element {
             AstAssignedIdentifier::DefinitiveOid(oid) => Some(oid),
             // TODO: implement import by valuereference for oid
-            AstAssignedIdentifier::DefinedValue(_) => None,
+            AstAssignedIdentifier::ValueIdentifier(_) => None,
         },
         None => None,
     };
@@ -103,22 +95,27 @@ pub fn name_and_oid_to_module_ident(
     Ok(ModuleIdentifier {
         name: name.element.0.clone(),
         oid: match oid {
-            Some(oid) => Some(Oid(oid
-                .element
-                .0
-                .iter()
-                .map(|elem| {
-                    Ok(match &elem.element {
-                        AstDefinitiveOidComponent::Number(num) => num.element.0,
+            Some(oid) => Some({
+                let searches = oid
+                    .element
+                    .0
+                    .iter()
+                    .map(|elem| match &elem.element {
+                        AstDefinitiveOidComponent::Number(num) => {
+                            OidTreeNodeSearch::Number(num.element.0)
+                        }
                         AstDefinitiveOidComponent::NamedNumber(named_num) => {
-                            named_num.element.num.element.0
+                            OidTreeNodeSearch::Number(named_num.element.num.element.0)
                         }
                         AstDefinitiveOidComponent::ValueReference(val_ref) => {
-                            lookup_oid_component(val_ref)?
+                            OidTreeNodeSearch::Name(
+                                val_ref.as_ref().map(|val_ref| val_ref.0.clone()),
+                            )
                         }
                     })
-                })
-                .collect::<Result<Vec<u64>>>()?)),
+                    .collect::<Vec<OidTreeNodeSearch>>();
+                oid_tree::search(searches)?
+            }),
             None => None,
         },
     })
@@ -128,9 +125,9 @@ fn parse_object_identifier_component_valref(
     oid: &ModuleIdentifier,
     value: &AstElement<AstValueReference>,
 ) -> ObjectIdentifierComponent {
-    lookup_oid_component_str(&value.element.0).map_or_else(
+    lookup_root_oid_component_str(&value.element.0).map_or_else(
         || ObjectIdentifierComponent::ValueReference(parse_valuereference(oid, value)),
-        |lit| ObjectIdentifierComponent::IntegerLiteral(AstElement::new(lit, value.loc)),
+        |lit| ObjectIdentifierComponent::IntegerLiteral(AstElement::new(lit.node, value.loc)),
     )
 }
 
@@ -196,14 +193,19 @@ pub fn register_all_modules(program: &AstElement<AstProgram>) -> Result<Vec<Erro
             .element
             .exports
             .as_ref()
-            .map(|exports| &exports.element.0.element)
+            .map(|exports| &exports.element.0)
         {
-            Some(exports) => match exports {
-                AstExportsKind::All(_) => Exports::All,
-                AstExportsKind::SymbolList(symbol_list) => {
-                    Exports::SymbolList(symbol_list_to_string_list(&symbol_list.element))
-                }
+            Some(defined) => match defined {
+                Some(exports) => match &exports.element {
+                    AstExportsKind::All(_) => Exports::All,
+                    AstExportsKind::SymbolList(symbol_list) => {
+                        Exports::SymbolList(symbol_list_to_string_list(&symbol_list.element))
+                    }
+                },
+                None => Exports::All,
             },
+            // TODO: should "EXPORTS;" be treated as "EXPORTS ALL;" or an empty symbol list?
+            // probably should be a compiler option?
             None => Exports::All,
         };
         let mut imports = Vec::new();
@@ -718,7 +720,7 @@ pub fn verify_all_values(program: &AstElement<AstProgram>) -> Result<Vec<Error>>
 
         for (ident, declared_value) in context().list_values() {
             if ident.module != oid {
-                continue
+                continue;
             }
 
             if let Err(err) = verify_value(declared_value) {

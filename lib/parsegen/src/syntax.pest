@@ -36,6 +36,7 @@ statement = _{
     operator_statement |
     repeated_statement | 
     optional_statement |
+    not_statement |
     def_statement
 }
 
@@ -66,6 +67,7 @@ repeated_statement = {
     statement
 }
 optional_statement = { optional ~ statement }
+not_statement = { "not" ~ statement }
 def_statement = { ident }
 
 ident = @{ (ASCII_ALPHANUMERIC | "_")+ }

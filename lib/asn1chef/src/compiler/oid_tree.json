@@ -1,0 +1,177 @@
+[
+    {
+        "node": 0,
+        "name": "itu-t",
+        "children": [
+            {
+                "node": 0,
+                "name": "recommendation",
+                "children": [
+                    {
+                        "node": 0,
+                        "name": "xcmGenZeroDotZero"
+                    },
+                    {
+                        "node": 1,
+                        "name": "a"
+                    },
+                    {
+                        "node": 2,
+                        "name": "b"
+                    },
+                    {
+                        "node": 3,
+                        "name": "c"
+                    },
+                    {
+                        "node": 4,
+                        "name": "d"
+                    },
+                    {
+                        "node": 5,
+                        "name": "e"
+                    },
+                    {
+                        "node": 6,
+                        "name": "f"
+                    },
+                    {
+                        "node": 7,
+                        "name": "g"
+                    },
+                    {
+                        "node": 8,
+                        "name": "h"
+                    },
+                    {
+                        "node": 9,
+                        "name": "i"
+                    },
+                    {
+                        "node": 10,
+                        "name": "j"
+                    },
+                    {
+                        "node": 11,
+                        "name": "k"
+                    },
+                    {
+                        "node": 12,
+                        "name": "l"
+                    },
+                    {
+                        "node": 13,
+                        "name": "m"
+                    },
+                    {
+                        "node": 14,
+                        "name": "n"
+                    },
+                    {
+                        "node": 15,
+                        "name": "o"
+                    },
+                    {
+                        "node": 16,
+                        "name": "p"
+                    },
+                    {
+                        "node": 17,
+                        "name": "q"
+                    },
+                    {
+                        "node": 18,
+                        "name": "r"
+                    },
+                    {
+                        "node": 19,
+                        "name": "s"
+                    },
+                    {
+                        "node": 20,
+                        "name": "t"
+                    },
+                    {
+                        "node": 21,
+                        "name": "u"
+                    },
+                    {
+                        "node": 22,
+                        "name": "v"
+                    },
+                    {
+                        "node": 23,
+                        "name": "w"
+                    },
+                    {
+                        "node": 24,
+                        "name": "x"
+                    },
+                    {
+                        "node": 25,
+                        "name": "y"
+                    },
+                    {
+                        "node": 26,
+                        "name": "z"
+                    }
+                ]
+            },
+            {
+                "node": 1,
+                "name": "question"
+            },
+            {
+                "node": 2,
+                "name": "administration"
+            },
+            {
+                "node": 3,
+                "name": "network-operator"
+            },
+            {
+                "node": 4,
+                "name": "identified-organization"
+            },
+            {
+                "node": 5,
+                "name": "r-recommendations"
+            },
+            {
+                "node": 9,
+                "name": "data"
+            }
+        ]
+    },
+    {
+        "node": 1,
+        "name": "iso",
+        "children": [
+            {
+                "node": 0,
+                "name": "standard",
+                "aliases": ["std"]
+            },
+            {
+                "node": 1,
+                "name": "registration-authority"
+            },
+            {
+                "node": 2,
+                "name": "member-body"
+            },
+            {
+                "node": 3,
+                "name": "identified-organization",
+                "aliases": ["org", "iso-identified-organization"]
+            }
+        ]
+    },
+    {
+        "node": 2,
+        "name": "joint-iso-itu-t",
+        "aliases": [
+            "joint-iso-ccitt"
+        ]
+    }
+]

@@ -32,6 +32,7 @@ struct SyntaxParser {
     data: RuleData,
     block_stack: Vec<BlockType>,
     persist: bool,
+    not: bool,
 }
 
 impl SyntaxParser {
@@ -51,10 +52,13 @@ impl SyntaxParser {
         match self.block_stack.last().unwrap() {
             BlockType::Repeated => format!("repeated_ok!({})", inner),
             BlockType::Optional => format!("optional_ok!({}, 'optional_block)", inner),
-            BlockType::General => match self.persist {
-                true => format!("persistent_ok!({}, context)", inner),
-                false => format!("ok!({})", inner),
-            },
+            BlockType::General => match self.not {
+                true => format!("not!({}, ParseContext::new(context.tokens))", inner),
+                false => match self.persist {
+                    true => format!("persistent_ok!({}, context)", inner),
+                    false => format!("ok!({})", inner),
+                },
+            }
         }
     }
 
@@ -144,6 +148,12 @@ impl SyntaxParser {
             Rule::optional_statement => {
                 let expr = self.build_expression(pair);
                 self.write_indented(&format!("{};\n", expr.code));
+            }
+            Rule::not_statement => {
+                self.not = true;
+                self.write_indented("// not\n");
+                self.parse_statement(pair.into_inner().next().unwrap());
+                self.not = false;
             }
             Rule::var_statement => {
                 let mut var_pairs = pair.into_inner();
@@ -298,6 +308,7 @@ fn parse_rule(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) -> RuleData {
             },
             block_stack: Vec::with_capacity(4),
             persist: false,
+            not: false,
         };
         parser.block_stack.push(BlockType::General);
         for pair in pairs {
