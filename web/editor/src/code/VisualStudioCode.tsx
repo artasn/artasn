@@ -49,6 +49,8 @@ const VisualStudioCode = () => {
                 // ensure WebFS is working (i.e. the database is created) before creating the workbench
                 await getWebFS();
 
+                EditorConfig.options.additionalBuiltinExtensions =
+                    EditorConfig.options.additionalBuiltinExtensions.map(path => `${import.meta.env.VITE_ASSET_URL}${path}`);
                 window.createWorkbench(EditorConfig);
 
                 // pre-load the extension host iframe

@@ -1,11 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const ASSET_URL = process.env.ASSET_URL || '';
+const VITE_ASSET_URL = process.env.VITE_ASSET_URL || '';
 
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [react()],
     appType: 'spa',
-    base: ASSET_URL,
+    base: VITE_ASSET_URL,
 });

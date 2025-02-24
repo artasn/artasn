@@ -17,10 +17,10 @@
             "themeType": "light"
         },
         "additionalBuiltinExtensions": [
-            "/static/extensions/theme-defaults",
-            "/static/extensions/theme-seti",
-            "/static/extensions/webfs",
-            "/static/extensions/asn1"
+            "static/extensions/theme-defaults",
+            "static/extensions/theme-seti",
+            "static/extensions/webfs",
+            "static/extensions/asn1"
         ]
     },
     "folderUri": {

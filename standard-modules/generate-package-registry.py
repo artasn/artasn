@@ -1,7 +1,9 @@
 import hashlib
+import io
 import json
 import os
 import shutil
+import struct
 
 from libdeps import get_module_dependencies
 from typing import Dict, List, Set, Tuple
@@ -76,6 +78,23 @@ def get_all_dependencies(dir: str) -> List[dict]:
                 module_deps.append(get_module_dependencies(module_source))
     return module_deps
 
+def write_varint(number: int, buffer: bytearray):
+    while True:
+        b = number & 0x7f
+        number >>= 7
+        if number != 0:
+            buffer.append(b | 0x80)
+        else:
+            buffer.append(b)
+            break
+
+def serialize_registry(registry: dict, buffer: bytearray):
+    # magic header
+    buffer.extend(b'REGISTRY')
+    # version number
+    buffer.extend(struct.pack('!I', 1))
+    write_varint(len(registry), buffer)
+
 def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: List[dict]) -> List[dict]:
     # set that contains all docs that are updates to other docs
     update_docs: Set[str] = set()
@@ -116,10 +135,7 @@ def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: Lis
                     'path': file_path,
                 }
                 if dep is not None:
-                    # if the oid is not defined, don't include it in the map at all
-                    # this is used to decrease the size of the registry file
-                    if dep['module']['oid']:
-                        obj['oid'] = dep['module']['oid']
+                    obj['oid'] = dep['module']['oid']
                 doc_modules[file_path] = obj
             elif module_doc in updates_set:
                 update_doc = None
