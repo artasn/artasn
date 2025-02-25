@@ -38,22 +38,19 @@ function handleMessage(event: MessageEvent) {
         const message = data.message;
         if (message?.extension === 'asn1') {
             if (message.type === 'diagnostics') {
-                if (message.errors.length > 0) {
-                    for (const error of message.errors) {
-                        const uri = Uri.from({
-                            scheme: 'webfs',
-                            path: error.path,
-                        });
-                        const start = new Position(error.line - 1, error.col - 1);
-                        const end = new Position(start.line, start.character + error.len);
-                        diagnosticCollection.set(uri, [{
-                            message: error.message,
-                            range: new Range(start, end),
-                            severity: DiagnosticSeverity.Error,
-                        }]);
-                    }
-                } else {
-                    diagnosticCollection.clear();
+                diagnosticCollection.clear();
+                for (const error of message.errors) {
+                    const uri = Uri.from({
+                        scheme: 'webfs',
+                        path: error.path,
+                    });
+                    const start = new Position(error.line - 1, error.col - 1);
+                    const end = new Position(start.line, start.character + error.len);
+                    diagnosticCollection.set(uri, [{
+                        message: error.message,
+                        range: new Range(start, end),
+                        severity: DiagnosticSeverity.Error,
+                    }]);
                 }
             }
         }

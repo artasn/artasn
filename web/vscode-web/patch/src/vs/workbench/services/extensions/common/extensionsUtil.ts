@@ -6,7 +6,7 @@
 import { ExtensionIdentifierMap, IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 import { localize } from 'vs/nls';
 import { ILogService } from 'vs/platform/log/common/log';
-import * as semver from 'vs/base/common/semver/semver';
+// import * as semver from 'vs/base/common/semver/semver';
 import { Mutable } from 'vs/base/common/types';
 
 // TODO: @sandy081 merge this with deduping in extensionsScannerService.ts
