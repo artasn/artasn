@@ -46,6 +46,7 @@ impl Display for Class {
 pub struct Tag {
     pub class: Class,
     pub num: Option<u16>,
+    pub kind: TagKind,
 }
 
 pub struct TagContext<'a> {
@@ -54,19 +55,20 @@ pub struct TagContext<'a> {
     // If the tag is of a field in a SEQUENCE, this is the index (from 0) of that tag.
     pub structure_component_index: Option<u8>,
     // The type that is tagged by this tag.
-    pub ty: &'a Type,
+    pub ty: &'a BuiltinType,
 }
 
 impl Tag {
     pub const MAX_TAG: u16 = 16383;
 
-    pub fn new(class: Class, tag: u16) -> Tag {
+    pub fn new(class: Class, tag: u16, kind: TagKind) -> Tag {
         if tag > Self::MAX_TAG {
             panic!("{} > MAX_TAG", tag);
         }
         Tag {
             class,
             num: Some(tag),
+            kind,
         }
     }
 
@@ -108,6 +110,7 @@ impl Default for Tag {
         Tag {
             class: Class::ContextSpecific,
             num: None,
+            kind: TagKind::Implicit,
         }
     }
 }
@@ -128,10 +131,55 @@ impl Display for TagKind {
 }
 
 #[derive(Debug, Clone)]
+pub enum UntaggedType {
+    BuiltinType(BuiltinType),
+    Reference(AstElement<QualifiedIdentifier>),
+}
+
+impl Display for UntaggedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BuiltinType(builtin) => builtin.fmt(f),
+            Self::Reference(ident) => ident.element.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedType {
+    pub tag: Tag,
+    pub ty: BuiltinType,
+}
+
+#[derive(Debug, Clone)]
 pub struct TaggedType {
     pub tag: Tag,
-    pub kind: TagKind,
-    pub ty: Type,
+    pub ty: UntaggedType,
+}
+
+impl TaggedType {
+    pub fn resolve(&self) -> Result<ResolvedType> {
+        let mut tagged_ty = self;
+        loop {
+            match &tagged_ty.ty {
+                UntaggedType::BuiltinType(ty) => {
+                    return Ok(ResolvedType {
+                        tag: self.tag.clone(),
+                        ty: ty.clone(),
+                    });
+                }
+                UntaggedType::Reference(ident) => {
+                    tagged_ty = context().lookup_type(&ident.element).ok_or_else(|| Error {
+                        kind: ErrorKind::Ast(format!(
+                            "undefined reference to type '{}",
+                            ident.element
+                        )),
+                        loc: ident.loc,
+                    })?
+                }
+            }
+        }
+    }
 }
 
 impl Display for TaggedType {
@@ -205,7 +253,7 @@ pub enum TypeForm {
 }
 
 #[derive(Debug, Clone)]
-pub enum Type {
+pub enum BuiltinType {
     Boolean,
     Integer(IntegerType),
     BitString(BitStringType),
@@ -223,7 +271,7 @@ pub enum Type {
     PrintableString(CharacterString<PrintableStringCharset>),
 }
 
-impl Type {
+impl BuiltinType {
     pub fn tag_type(&self) -> Option<TagType> {
         Some(match self {
             Self::Boolean => TagType::Boolean,
@@ -320,98 +368,24 @@ impl Type {
     }
 }
 
-impl Display for Type {
+impl Display for BuiltinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Type::Boolean => "BOOLEAN",
-            Type::Integer(_) => "INTEGER",
-            Type::BitString(_) => "BIT STRING",
-            Type::OctetString(_) => "OCTET STRING",
-            Type::Null => "NULL",
-            Type::ObjectIdentifier => "OBJECT IDENTIFIER",
-            Type::Real => "REAL",
-            Type::Enumerated(_) => "ENUMERATED",
-            Type::Sequence(_) => "SEQUENCE",
-            Type::SequenceOf(_) => "SEQUENCE OF",
-            Type::Set(_) => "SET",
-            Type::SetOf(_) => "SET OF",
-            Type::Choice(_) => "CHOICE",
-            Type::NumericString(_) => "NUMERIC STRING",
-            Type::PrintableString(_) => "PRINTABLE STRING",
+            BuiltinType::Boolean => "BOOLEAN",
+            BuiltinType::Integer(_) => "INTEGER",
+            BuiltinType::BitString(_) => "BIT STRING",
+            BuiltinType::OctetString(_) => "OCTET STRING",
+            BuiltinType::Null => "NULL",
+            BuiltinType::ObjectIdentifier => "OBJECT IDENTIFIER",
+            BuiltinType::Real => "REAL",
+            BuiltinType::Enumerated(_) => "ENUMERATED",
+            BuiltinType::Sequence(_) => "SEQUENCE",
+            BuiltinType::SequenceOf(_) => "SEQUENCE OF",
+            BuiltinType::Set(_) => "SET",
+            BuiltinType::SetOf(_) => "SET OF",
+            BuiltinType::Choice(_) => "CHOICE",
+            BuiltinType::NumericString(_) => "NUMERIC STRING",
+            BuiltinType::PrintableString(_) => "PRINTABLE STRING",
         })
-    }
-}
-
-macro_rules! typeref {
-    () => {
-        crate::types::TypeReference<{crate::types::TagType::Any as u8}>
-    };
-    ($tag:ident) => {
-        crate::types::TypeReference<{crate::types::TagType::$tag as u8}>
-    };
-}
-pub(crate) use typeref;
-
-#[derive(Debug, Clone)]
-pub enum TypeReference<const TYPE_TAG: u8> {
-    Type(TaggedType),
-    Reference(QualifiedIdentifier),
-}
-
-impl<const TYPE_TAG: u8> TypeReference<TYPE_TAG> {
-    /// Casts `&'a self` to `&'a TypeReference<{ TagType::Any as u8 }>`.
-    ///
-    /// The returned reference is identical to `&self` (including pointing to the same memory),
-    /// except for the modified compile-time `<const TAG_TYPE: u8>` generic parameter.
-    pub fn as_any(&self) -> &TypeReference<{ TagType::Any as u8 }> {
-        // since the `<TYPE_TAG>` generic parameter type is only present at compile-time,
-        // we can safely transmute a &TypeReference<X> -> &TypeReference<Y>,
-        // because the runtime memory representations of both these types are identical
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl<const TYPE_TAG: u8> ToString for TypeReference<TYPE_TAG> {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Type(tagged_type) => tagged_type.to_string(),
-            Self::Reference(typeref) => typeref.name.clone(),
-        }
-    }
-}
-
-pub trait TypeResolve {
-    fn resolve(&self) -> Result<&TaggedType>;
-}
-
-impl<const TYPE_TAG: u8> TypeResolve for AstElement<TypeReference<TYPE_TAG>> {
-    fn resolve(&self) -> Result<&TaggedType> {
-        let mut typeref = self.as_ref().map(|typeref| typeref.as_any());
-        let tagged_type = loop {
-            match &typeref.element {
-                TypeReference::<{ TagType::Any as u8 }>::Type(ty) => break ty,
-                TypeReference::<{ TagType::Any as u8 }>::Reference(ident) => {
-                    typeref = context().lookup_type(ident).ok_or_else(|| Error {
-                        kind: ErrorKind::Ast(format!("undefined reference to type '{ident}")),
-                        loc: typeref.loc,
-                    })?
-                }
-            }
-        };
-        if let Some(tag_type) = tagged_type.ty.tag_type() {
-            let ref_type = TagType::try_from(TYPE_TAG).unwrap();
-            if !TagType::compare(tag_type, ref_type) {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!("expecting {ref_type}, got {tag_type}")),
-                    loc: self.loc,
-                });
-            }
-            Ok(tagged_type)
-        } else {
-            Err(Error {
-                kind: ErrorKind::Ast(format!("{tagged_type:?} does not have a defined type tag")),
-                loc: self.loc,
-            })
-        }
     }
 }

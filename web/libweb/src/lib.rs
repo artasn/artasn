@@ -3,7 +3,7 @@ use std::panic;
 use asn1chef::{
     compiler::{CompileError, Compiler},
     module,
-    types::{TagType, TaggedType, Type, TypeReference, TypeResolve},
+    types::{BuiltinType, Tag, TagType, TaggedType, UntaggedType},
     values::{Oid, Value, ValueReference, ValueResolve},
 };
 use js_sys::{Array, Object, Reflect};
@@ -110,55 +110,43 @@ impl ValueDefinition {
     }
 }
 
-fn serialize_typereference(typeref: &TypeReference<{ TagType::Any as u8 }>) -> JsValue {
-    let (obj, mode) = match typeref {
-        TypeReference::Reference(reference) => {
-            let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(reference)).unwrap();
+fn serialize_tagged_type(tagged_type: &TaggedType) -> JsValue {
+    let (obj, mode) = match &tagged_type.ty {
+        UntaggedType::Reference(reference) => {
+            let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&reference.element))
+                .unwrap();
             (obj, "reference")
         }
-        TypeReference::Type(tagged_type) => {
-            let obj = serialize_tagged_type(tagged_type);
+        UntaggedType::BuiltinType(builtin) => {
+            let obj = serialize_builtin_type(builtin);
             (obj, "type")
         }
     };
     Reflect::set(&obj, &"mode".into(), &mode.into()).unwrap();
+    Reflect::set(&obj, &"tag".into(), &serialize_type_tag(&tagged_type.tag)).unwrap();
     obj
 }
 
-fn serialize_tagged_type(tagged_type: &TaggedType) -> JsValue {
-    let tag = {
-        let obj = Object::new();
-        Reflect::set(
-            &obj,
-            &"class".into(),
-            &tagged_type.tag.class.to_string().into(),
-        )
-        .unwrap();
-        if let Some(num) = tagged_type.tag.num.clone() {
-            Reflect::set(&obj, &"num".into(), &num.into()).unwrap();
-        }
-        obj
-    };
-    let kind = tagged_type.kind.to_string();
-    let ty = serialize_type(&tagged_type.ty);
-
+fn serialize_type_tag(tag: &Tag) -> JsValue {
     let obj = Object::new();
-    Reflect::set(&obj, &"tag".into(), &tag).unwrap();
-    Reflect::set(&obj, &"kind".into(), &kind.into()).unwrap();
-    Reflect::set(&obj, &"ty".into(), &ty).unwrap();
+    Reflect::set(&obj, &"class".into(), &tag.class.to_string().into()).unwrap();
+    if let Some(num) = tag.num.clone() {
+        Reflect::set(&obj, &"num".into(), &num.into()).unwrap();
+    }
+    Reflect::set(&obj, &"kind".into(), &tag.kind.to_string().into()).unwrap();
     obj.into()
 }
 
-fn serialize_type(ty: &Type) -> JsValue {
+fn serialize_builtin_type(ty: &BuiltinType) -> JsValue {
     let obj = Object::new();
     Reflect::set(
         &obj,
-        &"kind".into(),
+        &"type".into(),
         &ty.tag_type().unwrap().to_string().into(),
     )
     .unwrap();
     match ty {
-        Type::Sequence(sequence) => {
+        BuiltinType::Sequence(sequence) => {
             let components = Array::new();
             for component in &sequence.components {
                 let obj = Object::new();
@@ -166,7 +154,7 @@ fn serialize_type(ty: &Type) -> JsValue {
                 Reflect::set(
                     &obj,
                     &"componentType".into(),
-                    &serialize_typereference(&component.component_type.element),
+                    &serialize_tagged_type(&component.component_type),
                 )
                 .unwrap();
                 Reflect::set(&obj, &"optional".into(), &component.optional.into()).unwrap();
@@ -204,7 +192,7 @@ fn serialize_valuereference(valref: &ValueReference<{ TagType::Any as u8 }>) -> 
 
 fn serialize_value(value: &Value) -> JsValue {
     let obj = Object::new();
-    Reflect::set(&obj, &"kind".into(), &value.tag_type().to_string().into()).unwrap();
+    Reflect::set(&obj, &"type".into(), &value.tag_type().to_string().into()).unwrap();
     match value {
         Value::Boolean(boolean) => {
             Reflect::set(&obj, &"value".into(), &(*boolean).into()).unwrap();
@@ -316,7 +304,7 @@ pub fn context_list_types() -> JsValue {
         types.push(
             &TypeDefinition {
                 ident: QualifiedIdentifier::new(&ident),
-                ty: serialize_typereference(&ty.element),
+                ty: serialize_tagged_type(ty),
             }
             .serialize(),
         );
@@ -331,7 +319,7 @@ pub fn context_list_values() -> JsValue {
         types.push(
             &ValueDefinition {
                 ident: QualifiedIdentifier::new(&ident),
-                ty: serialize_typereference(&val.ty.element),
+                ty: serialize_tagged_type(&val.ty),
                 value: serialize_valuereference(&val.value.element),
             }
             .serialize(),
@@ -366,7 +354,7 @@ pub fn context_der_encode(
                 Ok(value) => {
                     let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
                     libweb.buffer.clear();
-                    match value.der_encode(&mut libweb.buffer, ty, None) {
+                    match value.der_encode(&mut libweb.buffer, &ty, None) {
                         Ok(()) => {
                             let mut reverse = Vec::with_capacity(libweb.buffer.len());
                             for b in libweb.buffer.iter().rev() {

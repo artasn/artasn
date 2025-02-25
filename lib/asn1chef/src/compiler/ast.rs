@@ -337,12 +337,12 @@ fn parse_structure_components(
                     .element
                     .default
                     .as_ref()
-                    .map(|default| Ok(Box::new(parse_value(oid, default, resolved_ty)?)))
+                    .map(|default| Ok(Box::new(parse_value(oid, default, &resolved_ty)?)))
                 {
                     Some(result) => Some(result?),
                     None => None,
                 },
-                optional: false,
+                optional: component.element.optional.is_some(),
                 component_type: Box::new(ty),
             })
         })
@@ -352,10 +352,10 @@ fn parse_structure_components(
 fn parse_builtin_type(
     oid: &ModuleIdentifier,
     builtin: &AstElement<AstBuiltinType>,
-) -> Result<Type> {
+) -> Result<BuiltinType> {
     Ok(match &builtin.element {
-        AstBuiltinType::ObjectIdentifier(_) => Type::ObjectIdentifier,
-        AstBuiltinType::BitString(bit_string) => Type::BitString(BitStringType {
+        AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
+        AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
             named_bits: None, // TODO
             size_constraints: match &bit_string.element.size_constraints {
                 Some(sc) => Some(parse_constraints(
@@ -366,7 +366,7 @@ fn parse_builtin_type(
                 None => None,
             },
         }),
-        AstBuiltinType::OctetString(octet_string) => Type::OctetString(OctetStringType {
+        AstBuiltinType::OctetString(octet_string) => BuiltinType::OctetString(OctetStringType {
             size_constraints: match &octet_string.element.size_constraints {
                 Some(sc) => Some(parse_constraints(
                     oid,
@@ -376,73 +376,78 @@ fn parse_builtin_type(
                 None => None,
             },
         }),
-        AstBuiltinType::Integer(integer) => Type::Integer(IntegerType {
+        AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
             named_values: None, // TODO
             value_constraints: match &integer.element.value_constraints {
                 Some(sc) => Some(parse_constraints(oid, ConstraintsKind::Value, sc)?),
                 None => None,
             },
         }),
-        AstBuiltinType::Sequence(sequence) => Type::Sequence(Structure {
+        AstBuiltinType::Sequence(sequence) => BuiltinType::Sequence(Structure {
             ty: TagType::Sequence,
             components: parse_structure_components(oid, &sequence.element.components)?,
         }),
     })
 }
 
-fn parse_type(oid: &ModuleIdentifier, ty: &AstElement<AstType>) -> Result<AstElement<typeref!()>> {
-    Ok(AstElement::new(
-        match ty.element {
-            AstType::TaggedType(ref tagged_type) => {
-                let ty = parse_builtin_type(oid, &tagged_type.element.ty)?;
-                let tag = &tagged_type.element.tag;
-                let class = match tag.element.class {
-                    Some(ref class) => match class.element {
-                        AstClass::Universal(_) => Class::Universal,
-                        AstClass::Application(_) => Class::Application,
-                        AstClass::Private(_) => Class::Private,
-                    },
-                    None => Class::ContextSpecific,
-                };
-                let class_number = &tag.element.class_number;
-                if class_number.element.0 > Tag::MAX_TAG as u64 {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "tag number must not exceed {}",
-                            Tag::MAX_TAG
-                        )),
-                        loc: class_number.loc,
-                    });
-                }
-                let tag_number = class_number.element.0 as u16;
-                let tag = Tag::new(class, tag_number);
-                let kind = match tagged_type.element.kind {
-                    Some(ref kind) => match kind.element {
-                        AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
-                        AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
-                    },
-                    None => match context().lookup_module(oid).unwrap().tag_default {
-                        // TODO: should Automatic mean Implicit?
-                        TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
-                        TagDefault::Explicit => TagKind::Explicit,
-                    },
-                };
-                TypeReference::Type(TaggedType { tag, kind, ty })
+fn parse_untagged_type(
+    oid: &ModuleIdentifier,
+    ty: &AstElement<AstUntaggedType>,
+) -> Result<UntaggedType> {
+    Ok(match ty.element {
+        AstUntaggedType::BuiltinType(ref builtin) => {
+            UntaggedType::BuiltinType(parse_builtin_type(oid, builtin)?)
+        }
+        AstUntaggedType::TypeReference(ref typeref) => UntaggedType::Reference(AstElement::new(
+            context()
+                .lookup_module(oid)
+                .unwrap()
+                .resolve_symbol(&typeref.element.0),
+            typeref.loc,
+        )),
+    })
+}
+
+fn parse_type(oid: &ModuleIdentifier, ty: &AstElement<AstType>) -> Result<TaggedType> {
+    Ok(match &ty.element {
+        AstType::TaggedType(tagged_type) => {
+            let ty = parse_untagged_type(oid, &tagged_type.element.ty)?;
+            let tag = &tagged_type.element.tag;
+            let class = match tag.element.class {
+                Some(ref class) => match class.element {
+                    AstClass::Universal(_) => Class::Universal,
+                    AstClass::Application(_) => Class::Application,
+                    AstClass::Private(_) => Class::Private,
+                },
+                None => Class::ContextSpecific,
+            };
+            let class_number = &tag.element.class_number;
+            if class_number.element.0 > Tag::MAX_TAG as u64 {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!("tag number must not exceed {}", Tag::MAX_TAG)),
+                    loc: class_number.loc,
+                });
             }
-            AstType::BuiltinType(ref builtin) => TypeReference::Type(TaggedType {
-                tag: Tag::default(),
-                kind: TagKind::Implicit,
-                ty: parse_builtin_type(oid, builtin)?,
-            }),
-            AstType::TypeReference(ref typeref) => TypeReference::Reference(
-                context()
-                    .lookup_module(oid)
-                    .unwrap()
-                    .resolve_symbol(&typeref.element.0),
-            ),
+            let tag_number = class_number.element.0 as u16;
+            let kind = match tagged_type.element.kind {
+                Some(ref kind) => match kind.element {
+                    AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
+                    AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
+                },
+                None => match context().lookup_module(oid).unwrap().tag_default {
+                    // TODO: should Automatic mean Implicit?
+                    TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
+                    TagDefault::Explicit => TagKind::Explicit,
+                },
+            };
+            let tag = Tag::new(class, tag_number, kind);
+            TaggedType { tag, ty }
+        }
+        AstType::UntaggedType(untagged) => TaggedType {
+            tag: Tag::default(),
+            ty: parse_untagged_type(oid, untagged)?,
         },
-        ty.loc,
-    ))
+    })
 }
 
 fn register_type(
@@ -528,10 +533,10 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
 fn parse_sequence_value(
     oid: &ModuleIdentifier,
     seq_val: &AstElement<AstSequenceValue>,
-    target_type: &TaggedType,
+    target_type: &ResolvedType,
 ) -> Result<Value> {
     let seq_ty_components = match &target_type.ty {
-        Type::Sequence(seq_ty) => &seq_ty.components,
+        BuiltinType::Sequence(seq_ty) => &seq_ty.components,
         ty => {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
@@ -564,7 +569,7 @@ fn parse_sequence_value(
                 val_component.element.name.element.0 == ty_component.name.element
             }) {
                 let component_type = ty_component.component_type.resolve()?;
-                parse_value(oid, &val_component.element.value, component_type)?
+                parse_value(oid, &val_component.element.value, &component_type)?
             } else {
                 if let Some(default_value) = &ty_component.default_value {
                     (**default_value).clone()
@@ -573,7 +578,7 @@ fn parse_sequence_value(
                         kind: ErrorKind::Ast(format!(
                             "SEQUENCE value missing component '{}' of type {}",
                             ty_component.name.element,
-                            ty_component.component_type.element.to_string(),
+                            ty_component.component_type.to_string(),
                         )),
                         loc: seq_val.loc,
                     });
@@ -592,13 +597,13 @@ fn parse_sequence_value(
 fn parse_value(
     oid: &ModuleIdentifier,
     value: &AstElement<AstValue>,
-    target_type: &TaggedType,
+    target_type: &ResolvedType,
 ) -> Result<AstElement<valref!()>> {
     Ok(AstElement::new(
         match value.element {
             AstValue::BuiltinValue(ref builtin) => ValueReference::Value(match &builtin.element {
                 AstBuiltinValue::StringLiteral(ref str_lit) => match &target_type.ty {
-                    Type::BitString(_) => {
+                    BuiltinType::BitString(_) => {
                         let radix = match str_lit.element.kind {
                             StringKind::BString => 2,
                             StringKind::HString => 16,
@@ -617,7 +622,7 @@ fn parse_value(
                                 .expect("failed BigUint::parse_bytes"),
                         )
                     }
-                    Type::OctetString(_) => {
+                    BuiltinType::OctetString(_) => {
                         let radix = match str_lit.element.kind {
                             StringKind::BString => 2,
                             StringKind::HString => 16,
@@ -670,7 +675,7 @@ fn register_value(
     let name = value_assignment.element.name.element.0.clone();
     let ty = parse_type(oid, &value_assignment.element.ty)?;
     let resolved_ty = ty.resolve()?;
-    let val = parse_value(oid, &value_assignment.element.value, resolved_ty)?;
+    let val = parse_value(oid, &value_assignment.element.value, &resolved_ty)?;
 
     context_mut().register_value(
         QualifiedIdentifier {

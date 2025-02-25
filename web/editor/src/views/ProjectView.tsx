@@ -3,7 +3,7 @@ import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { getWebFS } from '../webfs';
 import * as compiler from '../compiler';
 import { Box, Card, Checkbox, FormControlLabel } from '@mui/material';
-import { CompileError, ModuleIdentifier, QualifiedIdentifier, TagClass, Type, TypeDefinition, TypeReference, ValueDefinition, ValueReference } from '../wasm-definitions';
+import { CompileError, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference } from '../wasm-definitions';
 import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
@@ -17,18 +17,18 @@ function getModuleString(module: ModuleIdentifier): string {
     }
 }
 
-function getTypeString(ref: TypeReference): string {
+function getTypeString(ref: TaggedType): string {
     if (ref.mode === 'reference') {
         return ref.name + ' FROM ' + getModuleString(ref.module);
     } else {
         if (ref.tag.class !== TagClass.ContextSpecific || ref.tag.num) {
             if (ref.tag.class === TagClass.ContextSpecific) {
-                return `[${ref.tag.num}] ${ref.kind} ${ref.ty.kind}`;
+                return `[${ref.tag.num}] ${ref.tag.kind} ${ref.type}`;
             } else {
-                return `[${ref.tag.class} ${ref.tag.num}] ${ref.kind} ${ref.ty.kind}`;
+                return `[${ref.tag.class} ${ref.tag.num}] ${ref.tag.kind} ${ref.type}`;
             }
         }
-        return ref.ty.kind;
+        return ref.type;
     }
 }
 
@@ -36,7 +36,7 @@ function getValueString(ref: ValueReference): string | undefined {
     if (ref.mode === 'reference') {
         return ref.name + ' FROM ' + getModuleString(ref.module);
     } else {
-        switch (ref.kind) {
+        switch (ref.type) {
             case 'BOOLEAN':
                 return ref.value.toString().toUpperCase();
             case 'INTEGER':
@@ -60,9 +60,9 @@ function qualifiedIdentifierEquals(a: QualifiedIdentifier, b: QualifiedIdentifie
     return false;
 }
 
-function resolveType(typeDefs: TypeDefinition[], type: TypeReference): Type | null {
+function resolveType(typeDefs: TypeDefinition[], type: TaggedType): BuiltinType | null {
     if (type.mode === 'type') {
-        return type.ty;
+        return type;
     } else {
         const resolved = typeDefs.find(typeDef => qualifiedIdentifierEquals(typeDef.ident, type)) ?? null;
         if (resolved === null) {
@@ -72,10 +72,10 @@ function resolveType(typeDefs: TypeDefinition[], type: TypeReference): Type | nu
     }
 }
 
-function getValueItem(name: string, ref: ValueReference, type?: TypeReference): TreeItemData {
+function getValueItem(name: string, ref: ValueReference, type?: TaggedType): TreeItemData {
     let children: TreeItemData[] | undefined;
     if (ref.mode === 'value') {
-        if (ref.kind === 'SEQUENCE') {
+        if (ref.type === 'SEQUENCE') {
             children = [];
             for (const component of ref.components) {
                 children.push(getValueItem(component.name, component.value));
@@ -141,8 +141,8 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
         for (const typeDef of declarations.types) {
             let children: TreeItemData[] | undefined;
             if (typeDef.ty.mode === 'type') {
-                const { ty } = typeDef.ty;
-                if (ty.kind === 'SEQUENCE') {
+                const { ty } = typeDef;
+                if (ty.type === 'SEQUENCE') {
                     children = [];
                     for (const component of ty.components) {
                         children.push({

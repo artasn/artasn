@@ -1,6 +1,6 @@
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
-    types::typeref,
+    types::TaggedType,
     values::valref,
 };
 use std::{collections::HashMap, mem::MaybeUninit};
@@ -26,13 +26,13 @@ pub fn context_mut<'a>() -> &'a mut Context {
 #[derive(Debug)]
 pub struct DeclaredValue {
     pub value: AstElement<valref!()>,
-    pub ty: AstElement<typeref!()>,
+    pub ty: TaggedType,
 }
 
 #[derive(Debug)]
 pub struct Context {
     modules: HashMap<ModuleIdentifier, ModuleHeader>,
-    types: HashMap<QualifiedIdentifier, AstElement<typeref!()>>,
+    types: HashMap<QualifiedIdentifier, TaggedType>,
     values: HashMap<QualifiedIdentifier, DeclaredValue>,
 }
 
@@ -55,10 +55,10 @@ impl Context {
         self.modules.values().collect()
     }
 
-    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, AstElement<&typeref!()>)> {
+    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, &TaggedType)> {
         self.types
             .iter()
-            .map(|(ident, typeref)| (ident.clone(), typeref.as_ref()))
+            .map(|(ident, typeref)| (ident.clone(), typeref))
             .collect()
     }
 
@@ -73,7 +73,7 @@ impl Context {
         self.modules.insert(module.oid.clone(), module);
     }
 
-    pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: AstElement<typeref!()>) {
+    pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: TaggedType) {
         self.types.insert(ident, typeref);
     }
 
@@ -85,8 +85,8 @@ impl Context {
         self.modules.get(ident)
     }
 
-    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<AstElement<&'a typeref!()>> {
-        self.types.get(ident).map(|ty| ty.as_ref())
+    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a TaggedType> {
+        self.types.get(ident)
     }
 
     pub fn lookup_value<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredValue> {

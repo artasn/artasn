@@ -52,7 +52,7 @@ impl Value {
     pub fn der_encode(
         &self,
         buf: &mut Vec<u8>,
-        tagged_type: &TaggedType,
+        tagged_type: &ResolvedType,
         structure_component_index: Option<u8>,
     ) -> Result<()> {
         let start_len = buf.len();
@@ -101,7 +101,7 @@ impl Value {
                 // and that the value provides only components in the SEQUENCE type,
                 // and that the component values are in the same order as in the type definition
                 let ty_components = match &tagged_type.ty {
-                    Type::Sequence(seq) => &seq.components,
+                    BuiltinType::Sequence(seq) => &seq.components,
                     _ => unreachable!(),
                 };
                 for (index, component) in sequence.components.iter().enumerate().rev() {
@@ -112,14 +112,14 @@ impl Value {
                         .unwrap()
                         .component_type
                         .resolve()?;
-                    value.der_encode(buf, value_ty, Some(index as u8))?;
+                    value.der_encode(buf, &value_ty, Some(index as u8))?;
                 }
             }
             other => todo!("{:#02X?}", other),
         }
 
         let end_len = buf.len();
-        if tagged_type.kind == TagKind::Explicit {
+        if tagged_type.tag.kind == TagKind::Explicit {
             encode::write_vlq((end_len - start_len) as u64, buf);
             Tag::default().ber_encode(
                 buf,
@@ -136,7 +136,7 @@ impl Value {
         tagged_type.tag.ber_encode(
             buf,
             TagContext {
-                is_outer_explicit: tagged_type.kind == TagKind::Explicit,
+                is_outer_explicit: tagged_type.tag.kind == TagKind::Explicit,
                 structure_component_index,
                 ty: &tagged_type.ty,
             },

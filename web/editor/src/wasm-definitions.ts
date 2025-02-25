@@ -16,11 +16,13 @@ export interface QualifiedIdentifier {
     name: string;
 }
 
-export type TypeReference = (QualifiedIdentifier & {
+export type TaggedType = {
+    tag: Tag;
+} & ((QualifiedIdentifier & {
     mode: 'reference',
-}) | (TaggedType & {
+}) | (BuiltinType & {
     mode: 'type',
-});
+}));
 
 export enum TagClass {
     Universal = 'UNIVERSAL',
@@ -32,6 +34,7 @@ export enum TagClass {
 export interface Tag {
     class: TagClass;
     num?: number;
+    kind: TagKind;
 }
 
 export enum TagKind {
@@ -39,43 +42,37 @@ export enum TagKind {
     Implicit = 'IMPLICIT',
 }
 
-export interface TaggedType {
-    tag: Tag;
-    kind: TagKind;
-    ty: Type;
-}
-
-export type Type = {
-    kind: 'BOOLEAN';
+export type BuiltinType = {
+    type: 'BOOLEAN';
 } | {
-    kind: 'INTEGER';
+    type: 'INTEGER';
 } | {
-    kind: 'BIT STRING';
+    type: 'BIT STRING';
 } | {
-    kind: 'OCTET STRING';
+    type: 'OCTET STRING';
 } | {
-    kind: 'NULL',
+    type: 'NULL',
 } | {
-    kind: 'OBJECT IDENTIFIER';
+    type: 'OBJECT IDENTIFIER';
 } | {
-    kind: 'REAL';
+    type: 'REAL';
 } | {
-    kind: 'ENUMERATED';
+    type: 'ENUMERATED';
 } | {
-    kind: 'SEQUENCE';
+    type: 'SEQUENCE';
     components: StructureComponent[];
 }
 
 export interface StructureComponent {
     name: string;
-    componentType: TypeReference;
+    componentType: TaggedType;
     defaultValue: ValueReference;
     optional: boolean;
 }
 
 export interface TypeDefinition {
     ident: QualifiedIdentifier;
-    ty: TypeReference;
+    ty: TaggedType;
 }
 
 export type ValueReference = (QualifiedIdentifier & {
@@ -85,32 +82,32 @@ export type ValueReference = (QualifiedIdentifier & {
 });
 
 export type Value = {
-    kind: 'BOOLEAN';
+    type: 'BOOLEAN';
     value: boolean;
 } | {
-    kind: 'INTEGER';
+    type: 'INTEGER';
     value: bigint;
 } | {
-    kind: 'BIT STRING';
+    type: 'BIT STRING';
     // Binary-encoded bits of the string (an ASN.1 bstring).
     value: string;
 } | {
-    kind: 'OCTET STRING';
+    type: 'OCTET STRING';
     // Hex-encoded bytes of the octet string (an ASN.1 hstring).
     value: string;
 } | {
-    kind: 'NULL',
+    type: 'NULL',
 } | {
-    kind: 'OBJECT IDENTIFIER';
+    type: 'OBJECT IDENTIFIER';
     // X.Y.Z format of the object identifier.
     value: string;
 } | {
-    kind: 'REAL';
+    type: 'REAL';
     value: number;
 } | {
-    kind: 'ENUMERATED';
+    type: 'ENUMERATED';
 } | {
-    kind: 'SEQUENCE';
+    type: 'SEQUENCE';
     components: StructureComponentValue[];
 }
 
@@ -121,6 +118,6 @@ export interface StructureComponentValue {
 
 export interface ValueDefinition {
     ident: QualifiedIdentifier;
-    ty: TypeReference;
+    ty: TaggedType;
     value: ValueReference;
 }

@@ -2,14 +2,14 @@ use std::fmt::Display;
 
 use crate::{
     compiler::parser::{AstElement, Error, ErrorKind, Result},
-    types::typeref,
+    types::TaggedType,
 };
 
 use super::{valref, Value, ValueResolve};
 
 #[derive(Debug, Clone)]
 pub struct EnumeratedValue {
-    pub ty: AstElement<typeref!(Enumerated)>,
+    pub ty: TaggedType,
     pub item: Box<AstElement<valref!(Integer)>>,
 }
 

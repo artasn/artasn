@@ -461,6 +461,7 @@ rule StructureComponent {
         name = ValueReference
         ty = Type
         default = optional: Value
+        optional = optional: Optional
     }
     name = ValueReference
     ty = Type
@@ -469,6 +470,13 @@ rule StructureComponent {
         keyword DEFAULT
         default = Value
     }
+    optional {
+        optional = Optional
+    }
+}
+
+rule Optional {
+    keyword OPTIONAL
 }
 
 variant BuiltinType = BitString | OctetString | Integer | Sequence | ObjectIdentifier {
@@ -513,17 +521,19 @@ rule TaggedType {
     captures {
         tag = Tag
         kind = optional: TagKind
-        ty = boxed BuiltinType
+        ty = boxed UntaggedType
     }
     tag = Tag
     persist
     optional {
         kind = TagKind
     }
-    ty = BuiltinType
+    ty = UntaggedType
 }
 
-variant Type = TaggedType | BuiltinType | TypeReference;
+variant UntaggedType = BuiltinType | TypeReference;
+
+variant Type = TaggedType | UntaggedType;
 
 rule ValueAssignment {
     captures {
