@@ -117,7 +117,7 @@ function Label({
                 alignItems: 'left',
             }}
         >
-            <Box sx={{ display: 'flex' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', }}>
                 {icon && (
                     <Box
                         component={icon}

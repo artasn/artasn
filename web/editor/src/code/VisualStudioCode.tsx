@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import EditorConfig from './EditorConfig.json';
 import { getWebFS } from '../webfs';
 
+const editorConfig = EditorConfig as any;
+
 let extensionHostIFrame: HTMLIFrameElement | null = null;
 let loading = false;
 
@@ -49,9 +51,21 @@ const VisualStudioCode = () => {
                 // ensure WebFS is working (i.e. the database is created) before creating the workbench
                 await getWebFS();
 
-                EditorConfig.options.additionalBuiltinExtensions =
-                    EditorConfig.options.additionalBuiltinExtensions.map(path => `${import.meta.env.VITE_ASSET_URL}${path}`);
-                window.createWorkbench(EditorConfig);
+                const baseUrl = import.meta.env.VITE_ASSET_URL;
+                if (baseUrl !== '/') {
+                    const productConfiguration = editorConfig.options.productConfiguration;
+                    productConfiguration.webEndpointUrlTemplate =
+                        window.location.protocol + '//' +
+                        window.location.host +
+                        baseUrl +
+                        'static/vs';
+                    productConfiguration.commit = '000000';
+                    productConfiguration.quality = 'default';
+                }
+                editorConfig.options.additionalBuiltinExtensions =
+                    editorConfig.options.additionalBuiltinExtensions.map((path: string) => `${baseUrl}${path}`);
+                console.log(editorConfig);
+                window.createWorkbench(editorConfig);
 
                 // pre-load the extension host iframe
                 // this will cache it, so that future calls will be very fast

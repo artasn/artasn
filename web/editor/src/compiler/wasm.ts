@@ -7,7 +7,7 @@ type LoadCallback = () => void;
 const loadCallbacks: LoadCallback[] = [];
 
 export async function initWasm() {
-    await init(fetch('/static/libasn1chef_bg.wasm'));
+    await init(fetch(`${import.meta.env.VITE_ASSET_URL}static/libasn1chef_bg.wasm`));
     libweb = lib.libweb_init();
 };
 

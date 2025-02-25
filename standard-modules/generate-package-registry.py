@@ -1,11 +1,10 @@
+import gzip
 import hashlib
-import io
 import json
+import libdeps
 import os
 import shutil
-import struct
 
-from libdeps import get_module_dependencies
 from typing import Dict, List, Set, Tuple
 from util import make_data_dir, get_data_dir
 
@@ -75,27 +74,57 @@ def get_all_dependencies(dir: str) -> List[dict]:
                 module_source = f.read()
                 # TODO: make modules imported with oid by valuereference as having unknown version
                 # or, even better, resolve the actual version
-                module_deps.append(get_module_dependencies(module_source))
+                module_deps.append(libdeps.get_module_dependencies(module_source))
     return module_deps
 
-def write_varint(number: int, buffer: bytearray):
-    while True:
-        b = number & 0x7f
-        number >>= 7
-        if number != 0:
-            buffer.append(b | 0x80)
-        else:
-            buffer.append(b)
-            break
+def get_module_dependencies(module: dict, dependencies: List[dict]):
+    module_dependencies = module.get('dependencies', [])
+    if len(module_dependencies) > 0:
+        dependencies.extend(module_dependencies)
+    module_updates = module.get('updates', [])
+    if len(module_updates) > 0:
+        for module_update in module_updates:
+            get_module_dependencies(module_update, dependencies)
 
-def serialize_registry(registry: dict, buffer: bytearray):
-    # magic header
-    buffer.extend(b'REGISTRY')
-    # version number
-    buffer.extend(struct.pack('!I', 1))
-    write_varint(len(registry), buffer)
+def insert_package_dependencies(registries: List[Tuple[str, dict]]):
+    for _, registry in registries:
+        for package in registry:
+            dependencies = []
+            for module in package['modules']:
+                get_module_dependencies(module, dependencies)
 
-def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: List[dict]) -> List[dict]:
+            packages = {}
+            for other_registry_name, other_registry in registries:
+                for other_package in other_registry:
+                    if other_package['name'] == package['name']:
+                        continue
+                    for module in other_package['modules']:
+                        for dependency in dependencies:
+                            if module.get('oid', None) == dependency['oid'] and module['name'] == dependency['name']:
+                                packages[other_package['name']] = {
+                                    'source': other_registry_name,
+                                    'name': other_package['name'],
+                                }
+
+            if len(packages) > 0:
+                package['dependencies'] = list(packages.values())
+
+def create_module_json(path: str, name: str, dep: dict) -> dict:
+    obj = {
+        'path': path,
+        'name': name,
+    }
+    if dep is not None:
+        obj['oid'] = dep['module']['oid']
+        if len(dependencies := dep['dependencies']) > 0:
+            obj['dependencies'] = dependencies
+    return obj
+
+def ietf_module_to_json(module: dict, module_deps: List[dict]) -> dict:
+    dep = next((module_dep for module_dep in module_deps if module_dep['module']['name'] == module['module_name']), None)
+    return create_module_json(f'modules/{module["module_name"]}.asn', module['module_name'], dep)
+
+def get_ietf_registry(docs: List[dict], modules: List[dict], module_deps: List[dict]) -> List[dict]:
     # set that contains all docs that are updates to other docs
     update_docs: Set[str] = set()
     for doc in docs:
@@ -127,16 +156,10 @@ def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: Lis
         updates_set = set(map(lambda update: update['doc_id'], update_ids))
 
         for module in modules:
-            file_path = f'modules/{module["module_name"]}.asn'
             module_doc = module['doc_id']
             if module_doc == root_doc['doc_id']:
-                dep = next((module_dep for module_dep in module_deps if module_dep['module']['name'] == module['module_name']), None)
-                obj = {
-                    'path': file_path,
-                }
-                if dep is not None:
-                    obj['oid'] = dep['module']['oid']
-                doc_modules[file_path] = obj
+                obj = ietf_module_to_json(module, module_deps)
+                doc_modules[obj['path']] = obj
             elif module_doc in updates_set:
                 update_doc = None
                 for update_module in update_modules:
@@ -150,11 +173,12 @@ def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: Lis
                         'name': doc['doc_id'],
                         'title': doc['title'],
                         'url': doc['url'],
-                        'modules': set(),
+                        'modules': {},
                     }
                     update_modules.append(update_doc)
 
-                update_doc['modules'].add(file_path)
+                obj = ietf_module_to_json(module, module_deps)
+                update_doc['modules'][obj['path']] = obj
 
         if len(doc_modules) > 0:
             collection = {
@@ -165,13 +189,13 @@ def get_ietf_collections(docs: List[dict], modules: List[dict], module_deps: Lis
             }
             if len(update_modules) > 0:
                 for update_module in update_modules:
-                    update_module['modules'] = list(update_module['modules'])
+                    update_module['modules'] = list(update_module['modules'].values())
                 collection['updates'] = update_modules
             collections.append(collection)
 
     return collections
 
-def create_ietf_registry(registry_dir: str) -> bytes:
+def create_ietf_registry(registry_dir: str) -> List[dict]:
     ietf_data_dir = get_data_dir('IETF')
     with open(os.path.join(ietf_data_dir, 'index.json'), 'r') as f:
         index = json.load(f)
@@ -182,15 +206,13 @@ def create_ietf_registry(registry_dir: str) -> bytes:
     shutil.copytree(os.path.join(ietf_data_dir, 'modules'), modules_dir, dirs_exist_ok=True)
     module_deps = get_all_dependencies(modules_dir)
 
-    collections = get_ietf_collections(index, downloads['modules'], module_deps)
-    collections_json = json.dumps(collections, sort_keys=True)
-    with open(os.path.join(registry_dir, 'registry.json'), 'w') as f:
-        f.write(collections_json)
-        hash = hashlib.sha256()
-        hash.update(collections_json.encode())
-        return hash.digest()
+    return get_ietf_registry(index, downloads['modules'], module_deps)
 
-def get_itu_t_collections(recs: List[dict], modules: List[dict]) -> List[dict]:
+def itu_t_module_to_json(rec: dict, module: dict, module_deps: List[dict]) -> dict:
+    dep = next((module_dep for module_dep in module_deps if module_dep['module']['name'] == module['name']), None)
+    return create_module_json(f'modules/{rec["name"]}/{module["name"]}.asn', module['name'], dep)
+
+def get_itu_t_registry(recs: List[dict], modules: List[dict], module_deps: List[dict]) -> List[dict]:
     # fast lookup for recommendations
     rec_lookup: Dict[str, dict] = {}
     for rec in recs:
@@ -214,12 +236,12 @@ def get_itu_t_collections(recs: List[dict], modules: List[dict]) -> List[dict]:
             'name': rec['name'],
             'approval': rec['approval'],
             'title': rec['title'].replace('\u2013', '-'),
-            'modules': list(map(lambda module: f'modules/{rec["name"]}/{module["name"]}.asn', modules)),
+            'modules': list(map(lambda module: itu_t_module_to_json(rec, module, module_deps), modules)),
         })
 
     return collections
 
-def create_itu_t_registry(registry_dir: str) -> bytes:
+def create_itu_t_registry(registry_dir: str) -> List[dict]:
     itu_t_data_dir = get_data_dir('ITU-T')
     with open(os.path.join(itu_t_data_dir, 'recommendations.json'), 'r') as f:
         recommendations = json.load(f)
@@ -228,16 +250,21 @@ def create_itu_t_registry(registry_dir: str) -> bytes:
 
     modules_dir = os.path.join(registry_dir, 'modules')
     shutil.copytree(os.path.join(itu_t_data_dir, 'modules'), modules_dir, dirs_exist_ok=True)
-    deps = get_all_dependencies(modules_dir)
+    module_deps = get_all_dependencies(modules_dir)
 
-    collections = get_itu_t_collections(recommendations, modules)
-    collections_json = json.dumps(collections, sort_keys=True)
+    return get_itu_t_registry(recommendations, modules, module_deps)
+
+def save_registry(registry_dir: str, registry: List[dict]) -> bytes:
+    registry_json = json.dumps(registry, sort_keys=True)
+
+    with gzip.open(os.path.join(registry_dir, 'registry.json.gz'), 'wb') as f:
+        f.write(registry_json.encode())
+
     with open(os.path.join(registry_dir, 'registry.json'), 'w') as f:
-        f.write(collections_json)
+        f.write(registry_json)
         hash = hashlib.sha256()
-        hash.update(collections_json.encode())
+        hash.update(registry_json.encode())
         return hash.digest()
-
 
 def main():
     data_dir = make_data_dir('package-registry')
@@ -249,12 +276,17 @@ def main():
     ietf_dir = os.path.join(registry_dir, 'IETF')
     if not os.path.exists(ietf_dir):
         os.mkdir(ietf_dir)
-    ietf_hash = create_ietf_registry(ietf_dir)
+    ietf_registry = create_ietf_registry(ietf_dir)
 
     itu_t_dir = os.path.join(registry_dir, 'ITU-T')
     if not os.path.exists(itu_t_dir):
         os.mkdir(itu_t_dir)
-    itu_t_hash = create_itu_t_registry(itu_t_dir)
+    itu_t_registry = create_itu_t_registry(itu_t_dir)
+
+    insert_package_dependencies([('IETF', ietf_registry), ('ITU-T', itu_t_registry)])
+
+    ietf_hash = save_registry(ietf_dir, ietf_registry)
+    itu_t_hash = save_registry(itu_t_dir, itu_t_registry)
 
     hash = hashlib.sha256()
     hash.update(ietf_hash)
@@ -269,14 +301,20 @@ def main():
                 'name': 'IETF',
                 'fullName': 'Internet Engineering Task Force',
                 'desc': 'IETF is responsible for the technical standards (called RFCs) that make up the Internet protocol suite, such as PKIX for public-key infrastructure, PKCS for public-key cryptography, and many others.',
-                'registry': 'registry/IETF/registry.json',
+                'registry': {
+                    'raw': 'registry/IETF/registry.json',
+                    'gzip': 'registry/IETF/registry.json.gz',
+                },
             },
             {  
                 'hash': itu_t_hash.hex(),
                 'name': 'ITU-T',
                 'fullName': 'International Telecommunication Union Telecommunication Standardization Sector',
                 'desc': 'ITU-T is responsible for coordinating standards such as X.509 for cybersecurity, H.264 for video compression, and many others.',
-                'registry': 'registry/ITU-T/registry.json'
+                'registry': {
+                    'raw': 'registry/ITU-T/registry.json',
+                    'gzip': 'registry/ITU-T/registry.json.gz'
+                },
             }
         ],
     }

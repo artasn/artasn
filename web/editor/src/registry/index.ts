@@ -9,18 +9,39 @@ export interface Source {
     name: string;
     fullName: string;
     desc: string;
-    registry: string;
+    registry: RegistryDescriptor;
+}
+
+export interface RegistryDescriptor {
+    raw: string;
+    gzip: string;
 }
 
 export type Registry = Package[];
 
 export interface Package {
     name: string;
-    modules: string[];
+    modules: Module[];
     title?: string;
     url?: string;
     approval?: string;
     updates?: Package[];
+    dependencies?: PackageDependency[];
+}
+
+export interface ModuleIdentifier {
+    name: string;
+    oid: string;
+}
+
+export type Module = ModuleIdentifier & {
+    path: string;
+    dependencies?: ModuleIdentifier[];
+};
+
+export interface PackageDependency {
+    source: string;
+    name: string;
 }
 
 export interface DownloadedPackage {
@@ -45,7 +66,6 @@ export type UpdateState = {
 
 export class PackageRegistry {
     constructor(private base: string) {
-        console.log('package registry: ' + base);
         if (this.base.endsWith('/')) {
             this.base = this.base.substring(0, this.base.length - 1);
         }
@@ -109,9 +129,29 @@ export class PackageRegistry {
         return await res.json();
     }
 
-    public async downloadRegistry(registryPath: string): Promise<Registry> {
-        const res = await fetch(`${this.base}/${registryPath}`);
-        return await res.json();
+    public async downloadRegistry(registry: RegistryDescriptor): Promise<Registry> {
+        if ('DecompressionStream' in window) {
+            // download the very small gzip file and decompress it when the browser supports it
+            const blob = await fetch(`${this.base}/${registry.gzip}`).then(res => res.blob());
+
+            const gunzip = new DecompressionStream('gzip');
+            const reader = blob.stream().pipeThrough(gunzip).getReader();
+
+            const textDecoder = new TextDecoder();
+            let registryText = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+                registryText += textDecoder.decode(value);
+            }
+
+            return JSON.parse(registryText);
+        } else {
+            // download the massive json file and hope that the HTTP server compresses it
+            return await fetch(`${this.base}/${registry.raw}`).then(res => res.json());
+        }
     }
 
     public getSources(): Source[] {
