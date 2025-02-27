@@ -1,6 +1,6 @@
 use crate::{compiler::parser::AstElement, values::valref};
 
-use super::{TagType, TaggedType};
+use super::{Constraints, TagType, TaggedType};
 
 #[derive(Debug, Clone)]
 pub struct StructureComponent {
@@ -13,9 +13,17 @@ pub struct StructureComponent {
 
 #[derive(Debug, Clone)]
 pub struct Structure {
-    // Always either Sequence, SequenceOf, Set, or SetOf
+    // Always either Sequence or Set
     pub ty: TagType,
     pub components: Vec<StructureComponent>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructureOf {
+    // Always either Sequence or Set
+    pub ty: TagType,
+    pub size_constraints: Option<Constraints>,
+    pub component_type: Box<TaggedType>,
 }
 
 #[derive(Debug, Clone)]

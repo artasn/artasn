@@ -47,7 +47,7 @@ impl OidTreeNode {
 
 lazy_static! {
     static ref ROOT_NODES: Vec<OidTreeNode> =
-        serde_json::from_str(include_str!("./oid_tree.json")).unwrap();
+        serde_json::from_str(include_str!("./oid_tree.json")).expect("oid_tree.json");
 }
 
 pub enum OidTreeNodeSearch {

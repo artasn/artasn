@@ -61,6 +61,9 @@ export type BuiltinType = {
 } | {
     type: 'SEQUENCE';
     components: StructureComponent[];
+} | {
+    type: 'SEQUENCE OF';
+    componentType: TaggedType;
 }
 
 export interface StructureComponent {
@@ -97,6 +100,7 @@ export type Value = {
     value: string;
 } | {
     type: 'NULL',
+    value: null;
 } | {
     type: 'OBJECT IDENTIFIER';
     // X.Y.Z format of the object identifier.
@@ -109,7 +113,10 @@ export type Value = {
 } | {
     type: 'SEQUENCE';
     components: StructureComponentValue[];
-}
+} | {
+    type: 'SEQUENCE OF';
+    elements: ValueReference[];
+};
 
 export interface StructureComponentValue {
     name: string;
@@ -121,3 +128,55 @@ export interface ValueDefinition {
     ty: TaggedType;
     value: ValueReference;
 }
+
+export interface TlvPos {
+    start: number;
+    end: number;
+}
+
+export interface TlvTag {
+    pos: TlvPos;
+    class: TagClass;
+    num: number;
+}
+
+export interface TlvLen {
+    pos: TlvPos;
+    len: number;
+}
+
+export interface DecodedValue {
+    tag: TlvTag;
+    len: TlvLen;
+    valuePos: TlvPos;
+    kind: DecodedValueKind;
+}
+
+export type DecodedValueKind = {
+    type: 'RAW';
+    data: string;
+} | {
+    type: 'BOOLEAN';
+    data: boolean;
+} | {
+    type: 'INTEGER';
+    data: bigint;
+} | {
+    type: 'BIT STRING';
+    data: bigint;
+} | {
+    type: 'OCTET STRING';
+    data: string;
+} | {
+    type: 'NULL';
+    data: null;
+} | {
+    type: 'OBJECT IDENTIFIER';
+    data: string;
+} | {
+    type: 'REAL';
+    data: number;
+} | {
+    type: 'SEQUENCE';
+    elements: DecodedValue[];
+};

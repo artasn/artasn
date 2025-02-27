@@ -328,9 +328,13 @@ fn parse_structure_components(
 ) -> Result<Vec<StructureComponent>> {
     components
         .iter()
-        .map(|component| {
-            let ty = parse_type(oid, &component.element.ty)?;
+        .enumerate()
+        .map(|(i, component)| {
+            let mut ty = parse_type(oid, &component.element.ty)?;
             let resolved_ty = ty.resolve()?;
+            if ty.tag.is_default() {
+                ty.tag.num = Some(i as u16);
+            }
             Ok(StructureComponent {
                 name: component.element.name.as_ref().map(|name| name.0.clone()),
                 default_value: match component
@@ -349,6 +353,20 @@ fn parse_structure_components(
         .collect::<Result<Vec<StructureComponent>>>()
 }
 
+fn parse_size_constraints(
+    oid: &ModuleIdentifier,
+    size_constraints: Option<&AstElement<AstSizeConstraints>>,
+) -> Result<Option<Constraints>> {
+    Ok(match size_constraints {
+        Some(sc) => Some(parse_constraints(
+            oid,
+            ConstraintsKind::Size,
+            &sc.element.0,
+        )?),
+        None => None,
+    })
+}
+
 fn parse_builtin_type(
     oid: &ModuleIdentifier,
     builtin: &AstElement<AstBuiltinType>,
@@ -357,24 +375,24 @@ fn parse_builtin_type(
         AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
         AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
             named_bits: None, // TODO
-            size_constraints: match &bit_string.element.size_constraints {
-                Some(sc) => Some(parse_constraints(
-                    oid,
-                    ConstraintsKind::Size,
-                    &sc.element.0,
-                )?),
-                None => None,
-            },
+            size_constraints: parse_size_constraints(
+                oid,
+                bit_string
+                    .element
+                    .size_constraints
+                    .as_ref()
+                    .map(|sc| &sc.element.0),
+            )?,
         }),
         AstBuiltinType::OctetString(octet_string) => BuiltinType::OctetString(OctetStringType {
-            size_constraints: match &octet_string.element.size_constraints {
-                Some(sc) => Some(parse_constraints(
-                    oid,
-                    ConstraintsKind::Size,
-                    &sc.element.0,
-                )?),
-                None => None,
-            },
+            size_constraints: parse_size_constraints(
+                oid,
+                octet_string
+                    .element
+                    .size_constraints
+                    .as_ref()
+                    .map(|sc| &sc.element.0),
+            )?,
         }),
         AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
             named_values: None, // TODO
@@ -383,10 +401,20 @@ fn parse_builtin_type(
                 None => None,
             },
         }),
-        AstBuiltinType::Sequence(sequence) => BuiltinType::Sequence(Structure {
-            ty: TagType::Sequence,
-            components: parse_structure_components(oid, &sequence.element.components)?,
-        }),
+        AstBuiltinType::Sequence(sequence) => match &sequence.element.0.element {
+            AstSequenceKind::SingleSequence(seq) => BuiltinType::Sequence(Structure {
+                ty: TagType::Sequence,
+                components: parse_structure_components(oid, &seq.element.components)?,
+            }),
+            AstSequenceKind::SequenceOf(seq_of) => BuiltinType::SequenceOf(StructureOf {
+                ty: TagType::Sequence,
+                size_constraints: parse_size_constraints(
+                    oid,
+                    seq_of.element.size_constraints.as_ref(),
+                )?,
+                component_type: Box::new(parse_type(oid, &seq_of.element.ty)?),
+            }),
+        },
     })
 }
 
@@ -401,7 +429,7 @@ fn parse_untagged_type(
         AstUntaggedType::TypeReference(ref typeref) => UntaggedType::Reference(AstElement::new(
             context()
                 .lookup_module(oid)
-                .unwrap()
+                .expect("lookup_module")
                 .resolve_symbol(&typeref.element.0),
             typeref.loc,
         )),
@@ -434,8 +462,8 @@ fn parse_type(oid: &ModuleIdentifier, ty: &AstElement<AstType>) -> Result<Tagged
                     AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
                     AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
                 },
-                None => match context().lookup_module(oid).unwrap().tag_default {
-                    // TODO: should Automatic mean Implicit?
+                None => match context().lookup_module(oid).expect("lookup_module").tag_default {
+                    // TODO: Automatic is not always Implicit, there are special cases where it means Explicit
                     TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
                     TagDefault::Explicit => TagKind::Explicit,
                 },
@@ -496,7 +524,7 @@ fn parse_valuereference(
         ValueReference::Reference(
             context()
                 .lookup_module(oid)
-                .unwrap()
+                .expect("lookup_module")
                 .resolve_symbol(&valref.0),
         )
     })
@@ -564,15 +592,18 @@ fn parse_sequence_value(
     }
     let mut components = Vec::new();
     for ty_component in seq_ty_components {
-        let value = {
+        let (value, is_default) = {
             if let Some(val_component) = seq_val.element.components.iter().find(|val_component| {
                 val_component.element.name.element.0 == ty_component.name.element
             }) {
                 let component_type = ty_component.component_type.resolve()?;
-                parse_value(oid, &val_component.element.value, &component_type)?
+                (
+                    parse_value(oid, &val_component.element.value, &component_type)?,
+                    false,
+                )
             } else {
                 if let Some(default_value) = &ty_component.default_value {
-                    (**default_value).clone()
+                    ((**default_value).clone(), true)
                 } else {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
@@ -589,6 +620,7 @@ fn parse_sequence_value(
         components.push(SequenceValueComponent {
             name: ty_component.name.clone(),
             value,
+            is_default,
         });
     }
     Ok(Value::Sequence(SequenceValue { components }))
@@ -647,7 +679,7 @@ fn parse_value(
                             kind: ErrorKind::Ast(format!(
                                 "{} value cannot be assigned to {}",
                                 str_lit.element.kind.to_string(),
-                                other_type.to_string()
+                                other_type,
                             )),
                             loc: builtin.loc,
                         })
@@ -659,6 +691,28 @@ fn parse_value(
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
                 AstBuiltinValue::SequenceValue(seq_val) => {
                     parse_sequence_value(oid, seq_val, target_type)?
+                }
+                AstBuiltinValue::SequenceOfValue(seq_of_val) => {
+                    let component_type = match &target_type.ty {
+                        BuiltinType::SequenceOf(seq_of) => &seq_of.component_type,
+                        other_type => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "{} value cannot be assigned to {}",
+                                    target_type.ty, other_type,
+                                )),
+                                loc: builtin.loc,
+                            })
+                        }
+                    };
+                    let component_type = component_type.resolve()?;
+
+                    let ast_elements = &seq_of_val.element.elements;
+                    let mut elements = Vec::with_capacity(ast_elements.len());
+                    for ast_element in ast_elements {
+                        elements.push(parse_value(oid, ast_element, &component_type)?);
+                    }
+                    Value::SequenceOf(elements)
                 }
                 other_builtin => todo!("{:#?}", other_builtin),
             }),

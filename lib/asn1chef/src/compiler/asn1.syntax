@@ -399,28 +399,37 @@ rule Integer {
     }
 }
 
+rule ParenthesizedSizeConstraints {
+    captures {
+        constraints = SizeConstraints
+    }
+    operator (
+    constraints = SizeConstraints
+    persist
+    operator )
+    return constraints
+}
+
 rule SizeConstraints {
     captures {
         constraints = Constraints
     }
-    operator (
     keyword SIZE
     persist
     constraints = Constraints
-    operator )
     return constraints
 }
 
 rule BitString {
     captures {
-        size_constraints = optional: SizeConstraints
+        size_constraints = optional: ParenthesizedSizeConstraints
         named_bits = optional: NamedNumberList
     }
     keyword BIT
     keyword STRING
     persist
     optional {
-        size_constraints = SizeConstraints
+        size_constraints = ParenthesizedSizeConstraints
     }
     optional {
         named_bits = NamedNumberList
@@ -429,23 +438,22 @@ rule BitString {
 
 rule OctetString {
     captures {
-        size_constraints = optional: SizeConstraints
+        size_constraints = optional: ParenthesizedSizeConstraints
     }
     keyword OCTET
     keyword STRING
     persist
     optional {
-        size_constraints = SizeConstraints
+        size_constraints = ParenthesizedSizeConstraints
     }
 }
 
-rule Sequence {
+variant SequenceKind = SingleSequence {
     captures {
         components = repeated: StructureComponent
     }
-    keyword SEQUENCE
-    persist
     operator {
+    persist
     optional {
         components = StructureComponent
     }
@@ -454,6 +462,28 @@ rule Sequence {
         components = StructureComponent
     }
     operator }
+} | SequenceOf {
+    captures {
+        size_constraints = optional: SizeConstraints
+        ty = boxed Type
+    }
+    optional {
+        size_constraints = SizeConstraints
+        persist
+    }
+    keyword OF
+    persist
+    ty = Type
+};
+
+rule Sequence {
+    captures {
+        kind = SequenceKind
+    }
+    keyword SEQUENCE
+    persist
+    kind = SequenceKind
+    return kind
 }
 
 rule StructureComponent {
@@ -570,6 +600,19 @@ rule SequenceValueComponent {
     value = Value
 }
 
+rule SequenceOfValue {
+    captures {
+        elements = repeated: Value
+    }
+    operator {
+    elements = Value
+    optional repeated {
+        operator ,
+        elements = Value
+    }
+    operator }
+}
+
 rule ChoiceValue {
     captures {
         alternative = ValueReference
@@ -596,6 +639,6 @@ rule IntegerValue {
     value = Number
 }
 
-variant BuiltinValue = StringLiteral | IntegerValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
+variant BuiltinValue = StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

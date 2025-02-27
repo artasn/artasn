@@ -8,6 +8,8 @@ import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
 import IconValue from '../icons/IconValue';
+import DecodedValueInfo from '../components/DecodedValueInfo';
+import { stringifyJSON } from '../util';
 
 function getModuleString(module: ModuleIdentifier): string {
     if (module.oid) {
@@ -17,22 +19,28 @@ function getModuleString(module: ModuleIdentifier): string {
     }
 }
 
-function getTypeString(ref: TaggedType): string {
-    if (ref.mode === 'reference') {
-        return ref.name + ' FROM ' + getModuleString(ref.module);
+function getTypeString(ty: TaggedType): string {
+    if (ty.mode === 'reference') {
+        return ty.name + ' FROM ' + getModuleString(ty.module);
     } else {
-        if (ref.tag.class !== TagClass.ContextSpecific || ref.tag.num) {
-            if (ref.tag.class === TagClass.ContextSpecific) {
-                return `[${ref.tag.num}] ${ref.tag.kind} ${ref.type}`;
+        let str;
+        if (ty.tag.class !== TagClass.ContextSpecific || ty.tag.num) {
+            if (ty.tag.class === TagClass.ContextSpecific) {
+                str = `[${ty.tag.num}] ${ty.tag.kind} ${ty.type}`;
             } else {
-                return `[${ref.tag.class} ${ref.tag.num}] ${ref.tag.kind} ${ref.type}`;
+                str = `[${ty.tag.class} ${ty.tag.num}] ${ty.tag.kind} ${ty.type}`;
             }
+        } else {
+            str = ty.type;
         }
-        return ref.type;
+        if (ty.type === 'SEQUENCE OF') {
+            str += ` ${getTypeString(ty.componentType)}`;
+        }
+        return str;
     }
 }
 
-function getValueString(ref: ValueReference): string | undefined {
+function getValueString(ref: ValueReference): string {
     if (ref.mode === 'reference') {
         return ref.name + ' FROM ' + getModuleString(ref.module);
     } else {
@@ -49,6 +57,8 @@ function getValueString(ref: ValueReference): string | undefined {
                 return ref.value.toUpperCase();
             case 'NULL':
                 return 'NULL';
+            default:
+                return '';
         }
     }
 }
@@ -72,21 +82,36 @@ function resolveType(typeDefs: TypeDefinition[], type: TaggedType): BuiltinType 
     }
 }
 
-function getValueItem(name: string, ref: ValueReference, type?: TaggedType): TreeItemData {
+function getValueItem(ref: ValueReference, name?: string, type?: TaggedType): TreeItemData {
     let children: TreeItemData[] | undefined;
     if (ref.mode === 'value') {
         if (ref.type === 'SEQUENCE') {
             children = [];
             for (const component of ref.components) {
-                children.push(getValueItem(component.name, component.value));
+                children.push(getValueItem(component.value, component.name));
+            }
+        } else if (ref.type === 'SEQUENCE OF') {
+            children = [];
+            for (const element of ref.elements) {
+                children.push(getValueItem(element));
             }
         }
     }
 
+    let label;
+    let subtext;
+    let secondaryLabel = type && getTypeString(type);
+    if (name) {
+        label = name;
+        subtext = getValueString(ref);
+    } else {
+        label = getValueString(ref);
+    }
+
     return {
-        label: name,
-        secondaryLabel: type && getTypeString(type),
-        subtext: getValueString(ref),
+        label,
+        secondaryLabel,
+        subtext,
         children,
     };
 }
@@ -139,7 +164,10 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
             icon: IconType,
         };
         for (const typeDef of declarations.types) {
+            let label = typeDef.ident.name;
+            let secondaryLabel = getTypeString(typeDef.ty);
             let children: TreeItemData[] | undefined;
+
             if (typeDef.ty.mode === 'type') {
                 const { ty } = typeDef;
                 if (ty.type === 'SEQUENCE') {
@@ -153,10 +181,9 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
                 }
             }
 
-            let label = typeDef.ident.name;
             typesItem.children!.push({
                 label,
-                secondaryLabel: getTypeString(typeDef.ty),
+                secondaryLabel,
                 children,
                 data: { kind: 'type', ident: typeDef.ident }
             });
@@ -171,7 +198,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
         };
         for (const valueDef of declarations.values) {
             valuesItem.children!.push({
-                ...getValueItem(valueDef.ident.name, valueDef.value, valueDef.ty),
+                ...getValueItem(valueDef.value, valueDef.ident.name, valueDef.ty),
                 data: { kind: 'value', ident: valueDef.ident },
             });
         }
@@ -190,8 +217,6 @@ function sortTree(items: TreeItemData[]) {
 }
 
 const ProjectView = () => {
-    const derHelpText = 'Select a value to inspect its DER encoding';
-
     const [compiling, setCompiling] = useState(false);
     const [tree, setTree] = useState<{
         hierarchical: boolean;
@@ -202,7 +227,7 @@ const ProjectView = () => {
         declarations: null,
         items: [],
     });
-    const [derValue, setDerValue] = useState(derHelpText);
+    const [derValue, setDerValue] = useState('');
 
     const refreshTree = (res: compiler.CompileResult) => {
         if (res.kind === 'error') {
@@ -211,7 +236,7 @@ const ProjectView = () => {
                 declarations: null,
                 items: [],
             });
-            setDerValue(derHelpText);
+            setDerValue('');
         } else {
             setTreeData(tree.hierarchical, res.declarations);
         }
@@ -250,7 +275,7 @@ const ProjectView = () => {
                     setDerValue(await compiler.derEncodeValue(ident));
                 }
             } else {
-                setDerValue(derHelpText);
+                setDerValue('');
             }
         }
     };
@@ -290,6 +315,7 @@ const ProjectView = () => {
                 flexDirection: 'column',
                 flexGrow: 1,
                 flexBasis: 0,
+                overflowY: 'scroll',
             }}>
                 <Box sx={{ flexGrow: 1 }}>
                     <FormControlLabel
@@ -300,11 +326,7 @@ const ProjectView = () => {
                     <RichTreeView
                         items={tree.items}
                         slots={{ item: ComplexTreeItem }}
-                        getItemId={item => JSON.stringify(item, (_, value) =>
-                            typeof value === 'bigint'
-                                ? value.toString()
-                                : value
-                        )}
+                        getItemId={item => stringifyJSON(item)}
                         onSelectedItemsChange={onTreeItemSelected} />
                 </Box>
                 {compiling ? (
@@ -324,7 +346,8 @@ const ProjectView = () => {
                     height: '100%',
                     fontSize: '1rem',
                     wordBreak: 'break-word',
-                }}>{derValue}</Card>
+                    userSelect: 'text',
+                }}><DecodedValueInfo encodedValue={derValue} /></Card>
             </Box>
         </Box>
     );

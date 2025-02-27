@@ -17,6 +17,7 @@ pub struct EnumeratedValue {
 pub struct SequenceValueComponent {
     pub name: AstElement<String>,
     pub value: AstElement<valref!()>,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone)]

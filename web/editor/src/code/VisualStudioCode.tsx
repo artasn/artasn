@@ -64,7 +64,6 @@ const VisualStudioCode = () => {
                 }
                 editorConfig.options.additionalBuiltinExtensions =
                     editorConfig.options.additionalBuiltinExtensions.map((path: string) => `${baseUrl}${path}`);
-                console.log(editorConfig);
                 window.createWorkbench(editorConfig);
 
                 // pre-load the extension host iframe

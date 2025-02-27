@@ -115,16 +115,14 @@ function Label({
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'left',
-            }}
-        >
+            }}>
             <Box sx={{ display: 'flex', alignItems: 'center', }}>
                 {icon && (
                     <Box
                         component={icon}
                         className="labelIcon"
                         color="inherit"
-                        sx={{ mr: 1, fontSize: '1.2rem' }}
-                    />
+                        sx={{ mr: 1, fontSize: '1.2rem' }} />
                 )}
                 {children}
                 {secondaryLabel && <span style={{
@@ -189,15 +187,13 @@ const ComplexTreeItem = React.forwardRef(function CustomTreeItem(
                             'Mui-focused': status.focused,
                             'Mui-disabled': status.disabled,
                         }),
-                    })}
-                >
+                    })}>
                     <TreeItem2IconContainer {...getIconContainerProps()}>
                         <TreeItem2Icon status={status} />
                     </TreeItem2IconContainer>
                     <TreeItem2Checkbox {...getCheckboxProps()} />
                     <Label
-                        {...getLabelProps({ icon, secondaryLabel, subtext, expandable: expandable && status.expanded })}
-                    />
+                        {...getLabelProps({ icon, secondaryLabel, subtext, expandable: expandable && status.expanded })} />
                     <TreeItem2DragAndDropOverlay {...getDragAndDropOverlayProps()} />
                 </Content>
                 {children && <TreeItem2GroupTransition {...getGroupTransitionProps()} />}

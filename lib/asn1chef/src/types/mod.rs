@@ -16,9 +16,10 @@ pub use constraints::*;
 
 use crate::{
     compiler::{
-        context, encode,
+        context,
         parser::{AstElement, Error, ErrorKind, Result},
     },
+    encoding,
     module::QualifiedIdentifier,
     values::{valref, Value, ValueResolve},
 };
@@ -52,8 +53,6 @@ pub struct Tag {
 pub struct TagContext<'a> {
     // True if the tag is the outer of an EXPLICIT definition.
     pub is_outer_explicit: bool,
-    // If the tag is of a field in a SEQUENCE, this is the index (from 0) of that tag.
-    pub structure_component_index: Option<u8>,
     // The type that is tagged by this tag.
     pub ty: &'a BuiltinType,
 }
@@ -72,17 +71,15 @@ impl Tag {
         }
     }
 
-    pub fn ber_encode(&self, buf: &mut Vec<u8>, ctx: TagContext<'_>) {
-        let (class, tag) = match (self.class, self.num, ctx.structure_component_index) {
-            // use the structure field index when available, overriding the tag
-            // TODO: determine whether tag was explicitly defined on field, or inherited from defined type
-            (_, _, Some(tag)) => (Class::ContextSpecific, tag as u16),
+    pub fn der_encode(&self, buf: &mut Vec<u8>, ctx: TagContext<'_>) {
+        let (class, tag) = match (self.class, self.num) {
             // explicit class and tag
-            (class, Some(tag), _) => (class, tag),
-            // when an unspecific tag and not a structure field, default to the UNIVERSAL tag
-            (Class::ContextSpecific, None, None) => {
-                (Class::Universal, ctx.ty.tag_type().unwrap() as u16)
-            }
+            (class, Some(tag)) => (class, tag),
+            // when no tag is specified, default to the UNIVERSAL tag
+            (Class::ContextSpecific, None) => (
+                Class::Universal,
+                ctx.ty.tag_type().expect("UNIVERSAL type to have a tag") as u16,
+            ),
             _ => unreachable!(),
         };
         let class = match class {
@@ -98,10 +95,14 @@ impl Tag {
             _ => 0b1,
         };
         if tag >= 31 {
-            encode::write_vlq(tag as u64, buf);
+            encoding::write_vlq(tag as u64, buf);
         }
         let msb_tag = if tag <= 30 { tag as u8 } else { 0b11111 };
         buf.push(class << 6 | form << 5 | msb_tag);
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.class == Class::ContextSpecific && self.num.is_none() && self.kind == TagKind::Implicit
     }
 }
 
@@ -198,7 +199,7 @@ impl Display for TaggedType {
     }
 }
 
-#[repr(u8)]
+#[repr(u16)]
 #[derive(Debug, PartialEq, IntEnum, Clone, Copy)]
 pub enum TagType {
     Any = 0,
@@ -263,9 +264,9 @@ pub enum BuiltinType {
     Real,
     Enumerated(EnumeratedType),
     Sequence(Structure),
-    SequenceOf(Structure),
+    SequenceOf(StructureOf),
     Set(Structure),
-    SetOf(Structure),
+    SetOf(StructureOf),
     Choice(Choice),
     NumericString(CharacterString<NumericStringCharset>),
     PrintableString(CharacterString<PrintableStringCharset>),
@@ -305,11 +306,14 @@ impl BuiltinType {
 
     pub fn ensure_satisfied_by_value(&self, valref: &AstElement<valref!()>) -> Result<()> {
         let value = valref.resolve()?;
-        if self.tag_type().unwrap() != value.tag_type() {
+        let tag_type = self
+            .tag_type()
+            .expect("ensure_satisfied_by_value: no tag type");
+        if tag_type != value.tag_type() {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
                     "expecting {} but found {}",
-                    self.tag_type().unwrap(),
+                    tag_type,
                     value.tag_type()
                 )),
                 loc: valref.loc,
@@ -325,6 +329,9 @@ impl BuiltinType {
             }
             (Self::Integer(integer), Value::Integer(value)) => {
                 (integer.value_constraints.as_ref(), *value)
+            }
+            (Self::SequenceOf(seq_of), Value::SequenceOf(value)) => {
+                (seq_of.size_constraints.as_ref(), value.len() as i64)
             }
             _ => (None, 0),
         };
@@ -371,21 +378,21 @@ impl BuiltinType {
 impl Display for BuiltinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            BuiltinType::Boolean => "BOOLEAN",
-            BuiltinType::Integer(_) => "INTEGER",
-            BuiltinType::BitString(_) => "BIT STRING",
-            BuiltinType::OctetString(_) => "OCTET STRING",
-            BuiltinType::Null => "NULL",
-            BuiltinType::ObjectIdentifier => "OBJECT IDENTIFIER",
-            BuiltinType::Real => "REAL",
-            BuiltinType::Enumerated(_) => "ENUMERATED",
-            BuiltinType::Sequence(_) => "SEQUENCE",
-            BuiltinType::SequenceOf(_) => "SEQUENCE OF",
-            BuiltinType::Set(_) => "SET",
-            BuiltinType::SetOf(_) => "SET OF",
-            BuiltinType::Choice(_) => "CHOICE",
-            BuiltinType::NumericString(_) => "NUMERIC STRING",
-            BuiltinType::PrintableString(_) => "PRINTABLE STRING",
+            Self::Boolean => "BOOLEAN",
+            Self::Integer(_) => "INTEGER",
+            Self::BitString(_) => "BIT STRING",
+            Self::OctetString(_) => "OCTET STRING",
+            Self::Null => "NULL",
+            Self::ObjectIdentifier => "OBJECT IDENTIFIER",
+            Self::Real => "REAL",
+            Self::Enumerated(_) => "ENUMERATED",
+            Self::Sequence(_) => "SEQUENCE",
+            Self::SequenceOf(_) => "SEQUENCE OF",
+            Self::Set(_) => "SET",
+            Self::SetOf(_) => "SET OF",
+            Self::Choice(_) => "CHOICE",
+            Self::NumericString(_) => "NUMERIC STRING",
+            Self::PrintableString(_) => "PRINTABLE STRING",
         })
     }
 }

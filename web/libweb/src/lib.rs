@@ -10,8 +10,15 @@ use js_sys::{Array, Object, Reflect};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+mod der;
+
+#[cfg(target_arch = "wasm32")]
+use lol_alloc::{AssumeSingleThreaded, FreeListAllocator};
+
+#[cfg(target_arch = "wasm32")]
 #[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+static ALLOCATOR: AssumeSingleThreaded<FreeListAllocator> =
+    unsafe { AssumeSingleThreaded::new(FreeListAllocator::new()) };
 
 pub struct LibWeb {
     pub compiler: Compiler,
@@ -81,7 +88,7 @@ impl TypeDefinition {
         Reflect::set(
             &obj,
             &"ident".into(),
-            &serde_wasm_bindgen::to_value(&self.ident).unwrap(),
+            &serde_wasm_bindgen::to_value(&self.ident).expect("QualifiedIdentifier to_value"),
         )
         .unwrap();
         Reflect::set(&obj, &"ty".into(), &self.ty).unwrap();
@@ -114,7 +121,7 @@ fn serialize_tagged_type(tagged_type: &TaggedType) -> JsValue {
     let (obj, mode) = match &tagged_type.ty {
         UntaggedType::Reference(reference) => {
             let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&reference.element))
-                .unwrap();
+                .expect("QualifiedIdentifier to_value");
             (obj, "reference")
         }
         UntaggedType::BuiltinType(builtin) => {
@@ -139,12 +146,7 @@ fn serialize_type_tag(tag: &Tag) -> JsValue {
 
 fn serialize_builtin_type(ty: &BuiltinType) -> JsValue {
     let obj = Object::new();
-    Reflect::set(
-        &obj,
-        &"type".into(),
-        &ty.tag_type().unwrap().to_string().into(),
-    )
-    .unwrap();
+    Reflect::set(&obj, &"type".into(), &ty.to_string().into()).unwrap();
     match ty {
         BuiltinType::Sequence(sequence) => {
             let components = Array::new();
@@ -170,6 +172,14 @@ fn serialize_builtin_type(ty: &BuiltinType) -> JsValue {
             }
             Reflect::set(&obj, &"components".into(), &components.into()).unwrap();
         }
+        BuiltinType::SequenceOf(sequence) => {
+            Reflect::set(
+                &obj,
+                &"componentType".into(),
+                &serialize_tagged_type(&sequence.component_type).into(),
+            )
+            .unwrap();
+        }
         _ => (),
     }
     obj.into()
@@ -178,7 +188,8 @@ fn serialize_builtin_type(ty: &BuiltinType) -> JsValue {
 fn serialize_valuereference(valref: &ValueReference<{ TagType::Any as u8 }>) -> JsValue {
     let (obj, mode) = match valref {
         ValueReference::Reference(reference) => {
-            let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(reference)).unwrap();
+            let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(reference))
+                .expect("QualifiedIdentifier to_value");
             (obj, "reference")
         }
         ValueReference::Value(value) => {
@@ -192,27 +203,24 @@ fn serialize_valuereference(valref: &ValueReference<{ TagType::Any as u8 }>) -> 
 
 fn serialize_value(value: &Value) -> JsValue {
     let obj = Object::new();
-    Reflect::set(&obj, &"type".into(), &value.tag_type().to_string().into()).unwrap();
-    match value {
-        Value::Boolean(boolean) => {
-            Reflect::set(&obj, &"value".into(), &(*boolean).into()).unwrap();
-        }
+    Reflect::set(&obj, &"type".into(), &value.type_name().into()).unwrap();
+    let (field, data) = match value {
+        Value::Boolean(boolean) => ("value", (*boolean).into()),
         Value::Integer(int) => {
             let int_str: JsValue = int.to_string().into();
             let bigint = js_sys::BigInt::new(&int_str).expect("INTEGER -> bigint");
-            Reflect::set(&obj, &"value".into(), &bigint.into()).unwrap();
+            ("value", bigint.into())
         }
-        Value::OctetString(octet_string) => {
-            Reflect::set(
-                &obj,
-                &"value".into(),
-                &hex::encode_upper(octet_string).into(),
-            )
-            .unwrap();
+        Value::BitString(bits) => {
+            let bits_str: JsValue = bits.to_string().into();
+            let bigint = js_sys::BigInt::new(&bits_str).expect("BIT STRING -> bigint");
+            ("value", bigint.into())
         }
+        Value::OctetString(octet_string) => ("value", hex::encode_upper(octet_string).into()),
+        Value::Null => ("value", JsValue::null()),
         Value::ObjectIdentifier(oid) => {
             let oid = oid.resolve_oid().expect("resolve oid");
-            Reflect::set(&obj, &"value".into(), &oid.to_string().into()).unwrap();
+            ("value", oid.to_string().into())
         }
         Value::Sequence(sequence) => {
             let components = Array::new();
@@ -227,10 +235,18 @@ fn serialize_value(value: &Value) -> JsValue {
                 .unwrap();
                 components.push(&obj.into());
             }
-            Reflect::set(&obj, &"components".into(), &components.into()).unwrap();
+            ("components", components.into())
+        }
+        Value::SequenceOf(seq_of) => {
+            let elements = Array::new();
+            for ast_element in seq_of {
+                elements.push(&serialize_valuereference(&ast_element.element).into());
+            }
+            ("elements", elements.into())
         }
         other => todo!("{:#?}", other),
-    }
+    };
+    Reflect::set(&obj, &field.into(), &data).unwrap();
     obj.into()
 }
 
@@ -240,7 +256,7 @@ pub fn libweb_init() -> *mut LibWeb {
 
     Box::into_raw(Box::new(LibWeb {
         compiler: Compiler::new(),
-        buffer: Vec::with_capacity(64 * 1024),
+        buffer: Vec::with_capacity(4 * 1024),
     }))
 }
 
@@ -259,7 +275,8 @@ pub fn compiler_add_source(libweb_ptr: *mut LibWeb, path: String, source: String
     let _ = Box::into_raw(libweb);
     match result {
         Ok(()) => JsValue::null(),
-        Err(err) => serde_wasm_bindgen::to_value(&JsCompileError::new(err)).unwrap(),
+        Err(err) => serde_wasm_bindgen::to_value(&JsCompileError::new(err))
+            .expect("JsCompileError to_value"),
     }
 }
 
@@ -281,7 +298,10 @@ pub fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
     } else {
         let array = Array::new();
         for err in errors {
-            array.push(&serde_wasm_bindgen::to_value(&JsCompileError::new(err)).unwrap());
+            array.push(
+                &serde_wasm_bindgen::to_value(&JsCompileError::new(err))
+                    .expect("JsCompileError to_value"),
+            );
         }
         array.into()
     }
@@ -294,7 +314,7 @@ pub fn context_list_modules() -> JsValue {
         .into_iter()
         .map(|module| ModuleIdentifier::new(&module.oid))
         .collect::<Vec<ModuleIdentifier>>();
-    serde_wasm_bindgen::to_value(&definitions).unwrap()
+    serde_wasm_bindgen::to_value(&definitions).expect("Vec<ModuleIdentifier> to_value")
 }
 
 #[wasm_bindgen]
@@ -338,7 +358,7 @@ pub fn context_der_encode(
     let oid = oid.map(|oid| {
         Oid(oid
             .split(".")
-            .map(|node| node.parse::<u64>().unwrap())
+            .map(|node| node.parse::<u64>().expect("parse oid node"))
             .collect())
     });
     let ident = module::QualifiedIdentifier {
@@ -354,7 +374,7 @@ pub fn context_der_encode(
                 Ok(value) => {
                     let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
                     libweb.buffer.clear();
-                    match value.der_encode(&mut libweb.buffer, &ty, None) {
+                    match value.der_encode(&mut libweb.buffer, &ty) {
                         Ok(()) => {
                             let mut reverse = Vec::with_capacity(libweb.buffer.len());
                             for b in libweb.buffer.iter().rev() {

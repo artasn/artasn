@@ -25,6 +25,8 @@ async function handleCall(call: string, args: any | null): Promise<any> {
             return wasm.listValues();
         case 'derEncodeValue':
             return wasm.derEncodeValue(args);
+        case 'derDecodeValue':
+            return wasm.derDecodeValue(args);
         default:
             return { error: `unknown call: ${call}` };
     }

@@ -292,15 +292,15 @@ pub enum ErrorKind {
     ExpectingEOI,
     ExpectingOther {
         expecting: Vec<TokenKind>,
-        received: Token,
+        found: Token,
     },
     ExpectingKeyword {
         expecting: Keyword,
-        received: Keyword,
+        found: Keyword,
     },
     ExpectingOperator {
         expecting: Operator,
-        received: Operator,
+        found: Operator,
     },
     InvalidStringIndicator(char),
     IllegalStringCharacter {
@@ -346,7 +346,7 @@ impl ErrorKind {
             ErrorKind::ExpectingEOI => String::from("expecting end of input"),
             ErrorKind::ExpectingOther {
                 expecting,
-                received,
+                found,
             } => {
                 let expecting_str = if expecting.len() == 1 {
                     expecting[0].to_string()
@@ -360,17 +360,17 @@ impl ErrorKind {
                     option_strs[last_idx] = "or ".to_owned() + last;
                     option_strs.join(", ")
                 };
-                if let Some(received_data) = &received.data {
+                if let Some(found_data) = &found.data {
                     format!(
-                        "expecting {}, received {}",
+                        "expecting {}, found {}",
                         expecting_str,
-                        received_data.to_string(&received.kind)
+                        found_data.to_string(&found.kind)
                     )
                 } else {
                     format!(
-                        "expecting {}, received {}",
+                        "expecting {}, found {}",
                         expecting_str,
-                        received.kind.to_string()
+                        found.kind.to_string()
                     )
                 }
             }
@@ -388,19 +388,19 @@ impl ErrorKind {
             ),
             ErrorKind::ExpectingKeyword {
                 expecting,
-                received,
+                found,
             } => format!(
                 "expecting keyword {}, found keyword {}",
                 expecting.name(),
-                received.name()
+                found.name()
             ),
             ErrorKind::ExpectingOperator {
                 expecting,
-                received,
+                found,
             } => format!(
                 "expecting operator '{}', found operator '{}'",
                 expecting.name(),
-                received.name()
+                found.name()
             ),
             ErrorKind::MalformedIdentifier { ident } => {
                 format!("malformed identifier '{}'", ident)

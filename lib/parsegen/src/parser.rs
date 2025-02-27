@@ -22,7 +22,7 @@ impl TokenStream {
             Err(Error {
                 kind: ErrorKind::ExpectingOther {
                     expecting: vec![kind],
-                    received: token.clone(),
+                    found: token.clone(),
                 },
                 loc: token.loc,
             })
@@ -126,7 +126,7 @@ impl Parseable for AstEncodingReference {
                             loc: token.loc,
                             kind: ErrorKind::ExpectingOther {
                                 expecting: vec![TokenKind::EncodingReference],
-                                received: token,
+                                found: token,
                             },
                         });
                     }
@@ -220,7 +220,7 @@ impl Keyword {
                     ParseResult::Fail(Error {
                         kind: ErrorKind::ExpectingKeyword {
                             expecting: keyword,
-                            received: ast.element,
+                            found: ast.element,
                         },
                         loc: ast.loc,
                     })
@@ -278,7 +278,7 @@ impl Operator {
                     ParseResult::Fail(Error {
                         kind: ErrorKind::ExpectingOperator {
                             expecting: operator,
-                            received: ast.element,
+                            found: ast.element,
                         },
                         loc: ast.loc,
                     })
@@ -356,6 +356,12 @@ impl Loc {
 
     pub fn at(offset: usize) -> Loc {
         Loc { offset, len: 0 }
+    }
+}
+
+impl Default for Loc {
+    fn default() -> Self {
+        Self::new(0, 0)
     }
 }
 

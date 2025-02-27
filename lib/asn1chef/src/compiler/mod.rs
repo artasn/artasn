@@ -10,8 +10,6 @@ pub mod parser;
 use parser::*;
 use std::fmt::Display;
 
-pub mod encode;
-
 pub mod oid_tree;
 
 struct SourceFile {

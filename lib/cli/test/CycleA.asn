@@ -8,4 +8,7 @@ ID ::= [APPLICATION 16383] EXPLICIT OBJECT IDENTIFIER
 root-id ID ::= { joint-iso-itu-t baizerlabs(1337) cycle(1) value(2) a(65) id(1) }
 leaf-id ID ::= { intermediate-id leaf(420) }
 
+SeqOf ::= SEQUENCE SIZE (1..5) OF [APPLICATION 1717] INTEGER
+seqOf SeqOf ::= { 1, 2, 3, 4, 5 }
+
 END

@@ -61,7 +61,6 @@ const PackageInfo = ({ source, pkg, onDownloadStateChanged }: PackageInfoProps) 
         name = `${name} (${pkg.approval})`;
     }
 
-    console.log(registries);
     const { modules, updatedBy } = getPackageModules(registries, {
         source: source.name,
         name: pkg.name,

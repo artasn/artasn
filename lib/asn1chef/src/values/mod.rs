@@ -4,9 +4,10 @@ use num::BigUint;
 pub use simple::*;
 
 use crate::{
+    encoding,
     compiler::{
-        context, encode,
-        parser::{AstElement, Error, ErrorKind, Result},
+        context,
+        parser::{AstElement, Error, ErrorKind, Loc, Result},
     },
     module::QualifiedIdentifier,
     types::*,
@@ -23,6 +24,7 @@ pub enum Value {
     Real(f64),
     Enumerated(EnumeratedValue),
     Sequence(SequenceValue),
+    SequenceOf(Vec<AstElement<valref!()>>),
     Choice(ChoiceValue),
 }
 
@@ -37,7 +39,7 @@ impl Value {
             Self::ObjectIdentifier(_) => TagType::ObjectIdentifier,
             Self::Real(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
-            Self::Sequence(_) => TagType::Sequence,
+            Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Choice(choice) => choice
                 .value
                 .resolve()
@@ -46,15 +48,26 @@ impl Value {
         }
     }
 
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::Boolean(_) => "BOOLEAN",
+            Self::Integer(_) => "INTEGER",
+            Self::BitString(_) => "BIT STRING",
+            Self::OctetString(_) => "OCTET STRING",
+            Self::Null => "NULL",
+            Self::ObjectIdentifier(_) => "OBJECT IDENTIFIER",
+            Self::Real(_) => "REAL",
+            Self::Enumerated(_) => "ENUMERATED",
+            Self::Sequence(_) => "SEQUENCE",
+            Self::SequenceOf(_) => "SEQUENCE OF",
+            Self::Choice(_) => "CHOICE",
+        }
+    }
+
     /// Reverse-encodes the value, including its tag.
     /// The resulting bytes are in reverse order.
     /// The bytes of the final output must be reversed to be valid DER.
-    pub fn der_encode(
-        &self,
-        buf: &mut Vec<u8>,
-        tagged_type: &ResolvedType,
-        structure_component_index: Option<u8>,
-    ) -> Result<()> {
+    pub fn der_encode(&self, buf: &mut Vec<u8>, tagged_type: &ResolvedType) -> Result<()> {
         let start_len = buf.len();
         match self {
             Self::ObjectIdentifier(oid) => {
@@ -62,12 +75,17 @@ impl Value {
 
                 if oid.len() > 2 {
                     for node in oid.iter().skip(2).rev() {
-                        encode::write_vlq(*node, buf);
+                        encoding::write_vlq(*node, buf);
                     }
+                } else if oid.len() < 2 {
+                    return Err(Error {
+                        kind: ErrorKind::Ast("illegal OBJECT IDENTIFIER with less than two nodes".to_string()),
+                        loc: Loc::default(),
+                    });
                 }
 
                 let prefix = oid[0] * 40 + oid[1];
-                encode::write_vlq(prefix, buf);
+                encoding::write_vlq(prefix, buf);
             }
             Self::Integer(num) => {
                 const SIGN_MASK: u8 = 0b1000_0000;
@@ -104,15 +122,30 @@ impl Value {
                     BuiltinType::Sequence(seq) => &seq.components,
                     _ => unreachable!(),
                 };
-                for (index, component) in sequence.components.iter().enumerate().rev() {
+                for component in sequence.components.iter().rev() {
+                    // default values aren't encoded
+                    if component.is_default {
+                        continue;
+                    }
                     let value = component.value.resolve()?;
                     let value_ty = ty_components
                         .iter()
                         .find(|ty_component| ty_component.name.element == component.name.element)
-                        .unwrap()
+                        .expect("find type component matching value component for SEQUENCE")
                         .component_type
                         .resolve()?;
-                    value.der_encode(buf, &value_ty, Some(index as u8))?;
+                    value.der_encode(buf, &value_ty)?;
+                }
+            }
+            Self::SequenceOf(sequence) => {
+                let component_type = match &tagged_type.ty {
+                    BuiltinType::SequenceOf(seq_ty) => &seq_ty.component_type,
+                    other => unreachable!("value is SequenceOf but type is {:?}", other),
+                };
+                let component_type = component_type.resolve()?;
+                for element in sequence.iter().rev() {
+                    let resolved = element.resolve()?;
+                    resolved.der_encode(buf, &component_type)?;
                 }
             }
             other => todo!("{:#02X?}", other),
@@ -120,24 +153,22 @@ impl Value {
 
         let end_len = buf.len();
         if tagged_type.tag.kind == TagKind::Explicit {
-            encode::write_vlq((end_len - start_len) as u64, buf);
-            Tag::default().ber_encode(
+            encoding::write_vlq((end_len - start_len) as u64, buf);
+            Tag::default().der_encode(
                 buf,
                 TagContext {
                     is_outer_explicit: false,
-                    structure_component_index,
                     ty: &tagged_type.ty,
                 },
             );
         }
 
         let end_len = buf.len();
-        encode::write_vlq((end_len - start_len) as u64, buf);
-        tagged_type.tag.ber_encode(
+        encoding::write_vlq((end_len - start_len) as u64, buf);
+        tagged_type.tag.der_encode(
             buf,
             TagContext {
                 is_outer_explicit: tagged_type.tag.kind == TagKind::Explicit,
-                structure_component_index,
                 ty: &tagged_type.ty,
             },
         );
@@ -279,12 +310,13 @@ impl<const TYPE_TAG: u8> ValueResolve for AstElement<ValueReference<TYPE_TAG>> {
                             kind: ErrorKind::Ast(format!("undefined reference to type '{ident}")),
                             loc: self.loc,
                         })?
-                        .value.as_ref();
+                        .value
+                        .as_ref();
                 }
             }
         };
         let tag_type = value.tag_type();
-        let ref_type = TagType::try_from(TYPE_TAG).unwrap();
+        let ref_type = TagType::try_from(TYPE_TAG as u16).expect("<const TYPE_TAG: u8> -> TypeTag");
         if !TagType::compare(tag_type, ref_type) {
             return Err(Error {
                 kind: ErrorKind::Ast(format!("expecting {}, got {}", ref_type, tag_type)),

@@ -18,9 +18,9 @@ function TabPanel(props: PanelProps) {
         <div
             role="tabpanel"
             hidden={value !== index}
-            id={`simple-tabpanel-${index}`}
-            aria-labelledby={`simple-tab-${index}`}
-            style={{ ...style, height: '100%' }}
+            id={`tabpanel-${index}`}
+            aria-labelledby={`tab-${index}`}
+            style={{ ...style, height: 'calc(100% - 83px)' }}
             {...other}>
             {value === index && children}
         </div>
