@@ -32,55 +32,6 @@ pub fn write_vlq(mut n: u64, buf: &mut Vec<u8>) -> usize {
     index
 }
 
-// Go: encoding/binary
-// func ReadUvarint(r io.ByteReader) (uint64, error) {
-// 	var x uint64
-// 	var s uint
-// 	for i := 0; i < MaxVarintLen64; i++ {
-// 		b, err := r.ReadByte()
-// 		if err != nil {
-// 			if i > 0 && err == io.EOF {
-// 				err = io.ErrUnexpectedEOF
-// 			}
-// 			return x, err
-// 		}
-// 		if b < 0x80 {
-// 			if i == MaxVarintLen64-1 && b > 1 {
-// 				return x, errOverflow
-// 			}
-// 			return x | uint64(b)<<s, nil
-// 		}
-// 		x |= uint64(b&0x7f) << s
-// 		s += 7
-// 	}
-// 	return x, errOverflow
-// }
-
-// Rust: vlq.rs
-// let mut buf = [0; 1];
-// let mut value: $uty = 0;
-// let mut shift = 1 as $uty;
-
-// loop {
-//     reader.read_exact(&mut buf)?;
-
-//     value = ((buf[0] & 0b0111_1111) as $uty)
-//         .checked_mul(shift)
-//         .and_then(|add| value.checked_add(add))
-//         .ok_or_else(|| {
-//             std::io::Error::new(
-//                 std::io::ErrorKind::Other,
-//                 concat!("provided VLQ data too long to fit into ", stringify!($ty)),
-//             )
-//         })?;
-
-//     if (buf[0] & 0b1000_0000) != 0 {
-//         break;
-//     }
-
-//     shift <<= 7;
-// }
-
 pub fn read_vlq(buf: &[u8]) -> io::Result<(u64, usize)> {
     let mut value: u64 = 0;
 
@@ -103,7 +54,7 @@ pub fn read_vlq(buf: &[u8]) -> io::Result<(u64, usize)> {
 
     Err(io::Error::new(
         io::ErrorKind::InvalidInput,
-        "VLQ data overflowed",
+        "VLQ data too large",
     ))
 }
 
@@ -345,6 +296,10 @@ mod test {
         assert_eq!(val_to_vlq(0x81), vec![0x81, 0x01]);
         assert_eq!(val_to_vlq(0x3fff), vec![0xff, 0x7f]);
         assert_eq!(val_to_vlq(0x4000), vec![0x81, 0x80, 0x00]);
+        assert_eq!(
+            val_to_vlq(0xffff_ffff_ffff_ffff),
+            vec![0x81, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
+        );
     }
 
     #[test]
@@ -356,6 +311,26 @@ mod test {
         assert_eq!(vlq_to_val(&[0x81, 0x01]), 0x81);
         assert_eq!(vlq_to_val(&[0xff, 0x7f]), 0x3fff);
         assert_eq!(vlq_to_val(&[0x81, 0x80, 0x00]), 0x4000);
+        assert_eq!(
+            vlq_to_val(&[0x81, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]),
+            0xffff_ffff_ffff_ffff
+        );
+    }
+
+    #[test]
+    fn test_read_invalid_vlq() {
+        assert_eq!(
+            read_vlq(&[0x80]).unwrap_err().to_string(),
+            "VLQ data ended early"
+        );
+        assert_eq!(
+            read_vlq(&[0x80; 10]).unwrap_err().to_string(),
+            "VLQ data too large"
+        );
+        assert_eq!(
+            read_vlq(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]).unwrap_err().to_string(),
+            "VLQ data overflowed"
+        );
     }
 }
 
