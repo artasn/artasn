@@ -1,4 +1,4 @@
-use num::BigUint;
+use num::{bigint::Sign, BigInt, BigUint};
 
 use super::{
     context::{context, DeclaredValue},
@@ -542,10 +542,10 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(uint as i64))
+        Ok(Value::Integer(BigInt::from_biguint(Sign::Plus, BigUint::from(uint))))
     } else {
         let int = num.element.value.element.0;
-        if int > i64::MAX as u64 {
+        if int > i64::MIN as u64 {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
                     "number -{} too small for a 64-bit signed integer",
@@ -554,7 +554,7 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(-(int as i64)))
+        Ok(Value::Integer(BigInt::from_biguint(Sign::Minus, BigUint::from(int))))
     }
 }
 

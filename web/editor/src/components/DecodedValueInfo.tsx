@@ -49,12 +49,13 @@ const DecodedValueInfo = ({ encodedValue }: DecodedValueInfoProps) => {
 export default DecodedValueInfo;
 
 function getValueComponent(encodedValue: string, value: DecodedValue) {
+    const tagBytes = value.tag.pos.end - value.tag.pos.start;
     return (
         <span key={stringifyJSON(value)}>
             <HoverableText hoverElement={getTagElement(value.tag)} style={{ backgroundColor: 'lavender' }}>
                 {getHexSlice(encodedValue, value.tag.pos)}
             </HoverableText>
-            <HoverableText hoverElement={`Length: ${value.len.len}`} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
+            <HoverableText hoverElement={getLengthElement(value.len.len)} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
                 {getHexSlice(encodedValue, value.len.pos)}
             </HoverableText>
             {value.kind.type !== 'SEQUENCE' ? (
@@ -62,7 +63,7 @@ function getValueComponent(encodedValue: string, value: DecodedValue) {
                     {getHexSlice(encodedValue, value.valuePos)}
                 </HoverableText>
             ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', margin: '10px 0px 0px 10px', gap: '10px', }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', margin: `10px 0px 0px ${tagBytes * 24}px`, gap: '10px', }}>
                     {value.kind.elements.map(element => getValueComponent(encodedValue, element))}
                 </Box>
             )}
@@ -93,7 +94,6 @@ const LITERAL_COLOR = '#098658';
 const IDENT_COLOR = '#267f99';
 
 function getTagElement(tag: TlvTag) {
-
     if (tag.class === TagClass.ContextSpecific) {
         return (
             <>
@@ -119,6 +119,15 @@ function getTagElement(tag: TlvTag) {
             </>
         );
     }
+}
+
+function getLengthElement(len: number) {
+    return (
+        <>
+            <span>Length: </span>
+            <span style={{ color: LITERAL_COLOR }}>{len}</span>
+        </>
+    );
 }
 
 function getValueKindElement(kind: DecodedValueKind) {
@@ -149,6 +158,14 @@ function getValueKindElement(kind: DecodedValueKind) {
             return 'Binary Data';
         case 'NULL':
             return 'NULL';
+        case 'PrintableString':
+            return (
+                <>
+                    <span style={{ color: IDENT_COLOR }}>PrintableString</span>
+                    &nbsp;
+                    <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
+                </>
+            );
         default:
             throw new Error(`getValueKindText: ${kind.type}`);
     }

@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use num::BigInt;
+
 use crate::{
     compiler::parser::{AstElement, Result},
     values::{valref, Value, ValueResolve},
@@ -53,13 +55,13 @@ pub struct Constraints {
 }
 
 impl Constraints {
-    pub fn includes_value(&self, value: i64) -> Result<bool> {
+    pub fn includes_value(&self, value: &BigInt) -> Result<bool> {
         macro_rules! cmp_constant {
             ( $value:expr, $op:tt, $constant:expr ) => {{
                 let constant = $constant.resolve()?;
                 match constant {
                     Value::Integer(integer) => {
-                        $value $op *integer
+                        $value $op integer
                     }
                     // the valref!(Integer) type will ensure the value
                     // is a Value::Integer when resolve() is called

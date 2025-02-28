@@ -1,14 +1,14 @@
 mod simple;
 
-use num::BigUint;
+use num::{bigint::Sign, BigInt, BigUint};
 pub use simple::*;
 
 use crate::{
-    encoding,
     compiler::{
         context,
         parser::{AstElement, Error, ErrorKind, Loc, Result},
     },
+    encoding,
     module::QualifiedIdentifier,
     types::*,
 };
@@ -16,7 +16,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Value {
     Boolean(bool),
-    Integer(i64),
+    Integer(BigInt),
     BitString(BigUint),
     OctetString(Vec<u8>),
     Null,
@@ -79,7 +79,9 @@ impl Value {
                     }
                 } else if oid.len() < 2 {
                     return Err(Error {
-                        kind: ErrorKind::Ast("illegal OBJECT IDENTIFIER with less than two nodes".to_string()),
+                        kind: ErrorKind::Ast(
+                            "illegal OBJECT IDENTIFIER with less than two nodes".to_string(),
+                        ),
                         loc: Loc::default(),
                     });
                 }
@@ -89,26 +91,43 @@ impl Value {
             }
             Self::Integer(num) => {
                 const SIGN_MASK: u8 = 0b1000_0000;
-                let num = *num;
-                if num == 0 {
-                    buf.extend_from_slice(&[0x00]);
-                } else if num == -1 {
-                    buf.extend_from_slice(&[0xff]);
-                } else {
-                    let prefix = if num.is_negative() { 0xff } else { 0x00 };
-                    let le_bytes = num.to_le_bytes();
-                    let mut msb_index = le_bytes.len() - 1;
-                    while le_bytes[msb_index] == prefix {
-                        msb_index -= 1;
-                    }
-                    buf.extend_from_slice(&le_bytes[..msb_index + 1]);
-                    if num > 0 && le_bytes[msb_index] & SIGN_MASK == SIGN_MASK {
-                        // if the number is positive and the leftmost bit of the msb is 1, add a padding byte of zeroes
-                        // this ensures the sign bit is a zero
+
+                let mut num = num.clone();
+                let sign = num.sign();
+                if sign == Sign::Minus {
+                    // add one to the value for two's complement negative representation
+                    num += 1;
+                }
+
+                if num == BigInt::ZERO {
+                    if sign == Sign::Minus {
+                        // fast encode for -1
+                        buf.extend_from_slice(&[0xff]);
+                    } else {
+                        // fast encode for 0
                         buf.extend_from_slice(&[0x00]);
-                    } else if num < 0 && le_bytes[msb_index] & SIGN_MASK != SIGN_MASK {
-                        // if the number is negative and the leftmost bit of the msb is 0, add a padding byte of ones
-                        // this ensures the sign bit is a one
+                    }
+                } else {
+                    let (_, mut bytes) = num.to_bytes_le();
+
+                    // invert all bits when the number is negative
+                    if sign == Sign::Minus {
+                        for i in 0..bytes.len() {
+                            bytes[i] = !bytes[i];
+                        }
+                    }
+
+                    // write the bytes in little-endian order,
+                    // such that when the DER is reversed after encoding,
+                    // the bytes are in big-endian order
+                    buf.extend_from_slice(&bytes);
+
+                    let msb = bytes[bytes.len() - 1];
+                    if sign != Sign::Minus && msb & SIGN_MASK == SIGN_MASK {
+                        // when the sign bit is set in the msb, but the number is positive, add a padding byte without the sign bit
+                        buf.extend_from_slice(&[0x00]);
+                    } else if sign == Sign::Minus && msb & SIGN_MASK != SIGN_MASK {
+                        // when the sign bit is not set in the msb, but the number is negative, add a padding byte containing the sign bit
                         buf.extend_from_slice(&[0xff]);
                     }
                 }
@@ -153,7 +172,7 @@ impl Value {
 
         let end_len = buf.len();
         if tagged_type.tag.kind == TagKind::Explicit {
-            encoding::write_vlq((end_len - start_len) as u64, buf);
+            encoding::write_tlv_len((end_len - start_len) as u64, buf);
             Tag::default().der_encode(
                 buf,
                 TagContext {
@@ -164,7 +183,7 @@ impl Value {
         }
 
         let end_len = buf.len();
-        encoding::write_vlq((end_len - start_len) as u64, buf);
+        encoding::write_tlv_len((end_len - start_len) as u64, buf);
         tagged_type.tag.der_encode(
             buf,
             TagContext {

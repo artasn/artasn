@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use num::bigint::Sign;
+
 use crate::{
     compiler::parser::{AstElement, Error, ErrorKind, Result},
     types::TaggedType,
@@ -44,7 +46,26 @@ impl ObjectIdentifier {
                     let resolved_value = valref.resolve()?;
                     match resolved_value {
                         Value::Integer(integer) => {
-                            nodes.push(*integer as u64);
+                            let (sign, digits) = integer.to_u64_digits();
+                            if sign == Sign::Minus {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "OBJECT IDENTIFIER node must be a non-negative integer"
+                                            .to_string(),
+                                    ),
+                                    loc: valref.loc,
+                                });
+                            }
+                            if digits.len() > 1 {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "OBJECT IDENTIFIER node is too large to fit in a 64-bit unsigned integer"
+                                            .to_string(),
+                                    ),
+                                    loc: valref.loc,
+                                });
+                            }
+                            nodes.push(digits[0]);
                         }
                         Value::ObjectIdentifier(relative_oid) => {
                             if i != 0 {

@@ -3,6 +3,7 @@ use std::fmt::Display;
 use int_enum::IntEnum;
 
 mod simple;
+use num::BigInt;
 pub use simple::*;
 
 mod structured;
@@ -322,18 +323,18 @@ impl BuiltinType {
 
         let (constraints, item) = match (self, value) {
             (Self::BitString(bit_string), Value::BitString(value)) => {
-                (bit_string.size_constraints.as_ref(), value.bits() as i64)
+                (bit_string.size_constraints.as_ref(), &BigInt::from(value.bits() as i64))
             }
             (Self::OctetString(octet_string), Value::OctetString(value)) => {
-                (octet_string.size_constraints.as_ref(), value.len() as i64)
+                (octet_string.size_constraints.as_ref(), &BigInt::from(value.len() as i64))
             }
             (Self::Integer(integer), Value::Integer(value)) => {
-                (integer.value_constraints.as_ref(), *value)
+                (integer.value_constraints.as_ref(), value)
             }
             (Self::SequenceOf(seq_of), Value::SequenceOf(value)) => {
-                (seq_of.size_constraints.as_ref(), value.len() as i64)
+                (seq_of.size_constraints.as_ref(), &BigInt::from(value.len() as i64))
             }
-            _ => (None, 0),
+            _ => (None, &BigInt::ZERO),
         };
         if let Some(constraints) = constraints {
             if !constraints.includes_value(item)? {

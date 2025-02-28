@@ -1,4 +1,5 @@
 use std::io;
+use std::mem;
 
 use crate::types::{Class, TypeForm};
 
@@ -6,6 +7,52 @@ mod parse;
 pub use parse::*;
 
 const MAX_VLQ_LEN: usize = 10;
+
+// Encodes a u64 to the least amount of little-endian bytes required to encode its full value.
+fn u64_to_le_bytes<'a>(num: u64) -> ([u8; mem::size_of::<u64>()], usize) {
+    if num == 0 {
+        ([0x00; 8], 1)
+    } else {
+        let le_bytes = num.to_le_bytes();
+        let mut msb_index = le_bytes.len() - 1;
+        while le_bytes[msb_index] == 0x00 {
+            msb_index -= 1;
+        }
+        (le_bytes, msb_index + 1)
+    }
+}
+
+pub fn write_tlv_len(len: u64, buf: &mut Vec<u8>) {
+    if len < 0x80 {
+        buf.push(len as u8);
+    } else {
+        let (le_bytes, le_bytes_len) = u64_to_le_bytes(len);
+        buf.extend_from_slice(&le_bytes[..le_bytes_len]);
+        buf.push(0x80 | le_bytes_len as u8);
+    }
+}
+
+pub fn read_tlv_len(buf: &[u8]) -> io::Result<(u64, usize)> {
+    if buf[0] < 0x80 {
+        Ok((buf[0] as u64, 1))
+    } else {
+        let be_bytes_len = buf[0] & 0x7f;
+        if buf.len() < 1 + be_bytes_len as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "TLV length ended early",
+            ));
+        }
+
+        let be_bytes = &buf[1..1 + be_bytes_len as usize];
+
+        const BUF_SIZE: usize = mem::size_of::<u64>();
+        let mut be_buf = [0u8; BUF_SIZE];
+        be_buf[BUF_SIZE - be_bytes.len()..].copy_from_slice(be_bytes);
+
+        Ok((u64::from_be_bytes(be_buf), 1 + be_bytes_len as usize))
+    }
+}
 
 pub fn write_vlq(mut n: u64, buf: &mut Vec<u8>) -> usize {
     const CARRY_BIT: u8 = 0b1000_0000;
@@ -46,14 +93,14 @@ pub fn read_vlq(buf: &[u8]) -> io::Result<(u64, usize)> {
         value = value
             .checked_mul(128)
             .and_then(|value| value.checked_add((b & 0x7f) as u64))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "VLQ data overflowed"))?;
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "VLQ data overflowed"))?;
         if b < 0x80 {
             return Ok((value, i + 1));
         }
     }
 
     Err(io::Error::new(
-        io::ErrorKind::InvalidInput,
+        io::ErrorKind::InvalidData,
         "VLQ data too large",
     ))
 }
@@ -146,7 +193,7 @@ impl<'a> DerReader<'a> {
         let num = if num & TAG_MASK == TAG_MASK {
             if self.offset >= self.source.len() {
                 return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
+                    io::ErrorKind::InvalidData,
                     "TLV malformed: EOF before large tag",
                 ));
             }
@@ -159,21 +206,24 @@ impl<'a> DerReader<'a> {
 
         if self.offset >= self.source.len() {
             return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
+                io::ErrorKind::InvalidData,
                 "TLV malformed: EOF before length",
             ));
         }
 
         let tag_end = self.offset;
         let len_start = self.offset;
-        let (value_len, len) = read_vlq(&self.source[self.offset..])?;
+        let (value_len, len) = read_tlv_len(&self.source[self.offset..])?;
         self.offset += len;
         let len_end = self.offset;
 
         if self.offset + value_len as usize > self.source.len() {
             return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "TLV value larger than buffer size",
+                io::ErrorKind::InvalidData,
+                format!(
+                    "TLV value larger than buffer size (tag at offset {})",
+                    tag_start + self.source_start
+                ),
             ));
         }
 
@@ -196,6 +246,20 @@ impl<'a> DerReader<'a> {
                 ),
             ),
         }))
+    }
+}
+
+impl<'a> Iterator for DerReader<'a> {
+    type Item = io::Result<Tlv<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.read_next() {
+            Ok(option) => match option {
+                Some(tlv) => Some(Ok(tlv)),
+                None => None,
+            },
+            Err(err) => Some(Err(err)),
+        }
     }
 }
 
@@ -274,7 +338,8 @@ impl<'a> DerReader<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::{read_vlq, write_vlq};
+    use super::{read_vlq, write_vlq, DecodedValue, DerReader};
+    use std::io;
 
     fn val_to_vlq(val: u64) -> Vec<u8> {
         let mut buf = Vec::with_capacity(10);
@@ -328,9 +393,21 @@ mod test {
             "VLQ data too large"
         );
         assert_eq!(
-            read_vlq(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]).unwrap_err().to_string(),
+            read_vlq(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f])
+                .unwrap_err()
+                .to_string(),
             "VLQ data overflowed"
         );
+    }
+
+    #[test]
+    fn test_der_decode() {
+        let reader = DerReader::new(include_bytes!("./test/LetsEncryptX3.der"), 0);
+        assert!(reader
+            .into_iter()
+            .map(|tlv| DecodedValue::der_decode(tlv?))
+            .collect::<io::Result<Vec<DecodedValue>>>()
+            .is_ok());
     }
 }
 

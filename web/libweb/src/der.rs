@@ -56,6 +56,14 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             }
             ("elements", "SEQUENCE", arr.into())
         }
+        DecodedValueKind::Set(elements) => {
+            let arr = Array::new();
+            for element in elements {
+                arr.push(&serialize_decoded_value(element));
+            }
+            ("elements", "SET", arr.into())
+        }
+        DecodedValueKind::PrintableString(str) => ("data", "PrintableString", str.into()),
     };
     Reflect::set(&obj, &"type".into(), &ty.into()).unwrap();
     Reflect::set(&obj, &field.into(), &data).unwrap();

@@ -179,4 +179,10 @@ export type DecodedValueKind = {
 } | {
     type: 'SEQUENCE';
     elements: DecodedValue[];
+} | {
+    type: 'SET';
+    elements: DecodedValue[];
+} | {
+    type: 'PrintableString';
+    data: string;
 };

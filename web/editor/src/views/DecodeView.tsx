@@ -176,18 +176,16 @@ const DecodeView = () => {
                 });
 
                 (async () => {
-                    const hexData = Array.from(res.data)
+                    setDerValue(Array.from(res.data)
                         .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
-                        .join('');
-                    console.log(hexData);
-                    setDerValue(hexData);
+                        .join(''));
                 })();
             }
         }
     };
 
     return (
-        <Grid container sx={{ fontSize: '1rem', padding: '10px' }} spacing={2}>
+        <Grid container sx={{ fontSize: '1rem', padding: '10px', height: '100%' }} spacing={2}>
             <Grid size={6}>
                 <Typography>Input</Typography>
                 <TextField
@@ -216,7 +214,7 @@ const DecodeView = () => {
                     )
                 )}
             </Grid>
-            <Grid size={6}>
+            <Grid size={6} sx={{ height: '100%' }}>
                 <Grid container spacing={2} alignItems="center">
                     <FormControl sx={{ flexGrow: 1 }}>
                         <InputLabel id="ots-label">Output Transfer Syntax</InputLabel>
@@ -233,17 +231,26 @@ const DecodeView = () => {
                     <Grid container direction="column" spacing={0}>
                         <FormControlLabel control={
                             <Checkbox
-                                value={parseTLV}
+                                checked={parseTLV}
                                 onChange={event => setParseTLV(event.currentTarget.checked)} />}
                             label="Parse TLV" />
                         <FormControlLabel disabled={!parseTLV} control={
                             <Checkbox
-                                value={useDefinitions}
+                                checked={useDefinitions}
                                 onChange={event => setUseDefinitions(event.currentTarget.checked)} />}
                             label="Use Definitions" />
                     </Grid>
                 </Grid>
-                {derValue && <DecodedValueInfo encodedValue={derValue} />}
+                <Grid
+                    container
+                    direction="column"
+                    sx={{
+                        overflowY: 'scroll',
+                        maxHeight: 'calc(100% - 75px)',
+                        paddingBottom: '40px',
+                    }}>
+                    {derValue && <DecodedValueInfo encodedValue={derValue} />}
+                </Grid>
             </Grid>
         </Grid>
     );
