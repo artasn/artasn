@@ -57,6 +57,6 @@ export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string
     return await callWorker('derEncodeValue', ident);
 }
 
-export async function derDecodeValue(derHex: string): Promise<DecodedValue[]> {
+export async function derDecodeValue(derHex: string): Promise<DecodedValue[] | string> {
     return await callWorker('derDecodeValue', derHex);
 }

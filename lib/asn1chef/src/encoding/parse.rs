@@ -28,7 +28,7 @@ impl DecodedValue {
                                     io::ErrorKind::InvalidData,
                                     "BOOLEAN must have a value",
                                 ));
-                            } else if value.len() > 1 || (value[0] != 0 && value[0] != 1) {
+                            } else if value.len() > 1 {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     "BOOLEAN is not in canonical format",

@@ -44,7 +44,7 @@ export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string
     return lib.context_der_encode(libweb, ident.module.name, ident.module.oid, ident.name);
 }
 
-export async function derDecodeValue(derHex: string): Promise<DecodedValue[]> {
+export async function derDecodeValue(derHex: string): Promise<DecodedValue[] | string> {
     return lib.der_decode(derHex);
 }
 

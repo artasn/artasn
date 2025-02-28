@@ -128,14 +128,14 @@ function Label({
                 {secondaryLabel && <span style={{
                     marginLeft: '10px',
                     fontSize: '0.8rem',
-                    fontFamily: 'Courier New',
+                    fontFamily: 'Droid Sans Mono',
                     color: 'grey'
                 }}>{secondaryLabel}</span>}
             </Box>
             {subtext && <Box style={{
                 marginLeft: '20px',
                 fontSize: '0.8rem',
-                fontFamily: 'Courier New',
+                fontFamily: 'Droid Sans Mono',
             }}>
                 ::= {subtext}
             </Box>}

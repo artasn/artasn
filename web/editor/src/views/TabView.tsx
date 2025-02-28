@@ -2,7 +2,8 @@ import React, { CSSProperties } from 'react';
 import ProjectView from './ProjectView';
 import { Box, Tab, Tabs } from '@mui/material';
 import PackageRegistryView from './PackageRegistryView';
-import { AccountTree, CloudDownload } from '@mui/icons-material';
+import { AccountTree, CloudDownload, FindInPage } from '@mui/icons-material';
+import DecodeView from './DecodeView';
 
 interface PanelProps {
     index: number;
@@ -18,8 +19,6 @@ function TabPanel(props: PanelProps) {
         <div
             role="tabpanel"
             hidden={value !== index}
-            id={`tabpanel-${index}`}
-            aria-labelledby={`tab-${index}`}
             style={{ ...style, height: 'calc(100% - 83px)' }}
             {...other}>
             {value === index && children}
@@ -44,9 +43,10 @@ const TabView = () => {
             padding: '10px',
         }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={value} onChange={handleChange} aria-label="basic tabs example">
+                <Tabs value={value} onChange={handleChange}>
                     <Tab label="Project" icon={<AccountTree />} iconPosition="start" />
                     <Tab label="Package Registry" icon={<CloudDownload />} iconPosition="start" />
+                    <Tab label="Decode" icon={<FindInPage />} iconPosition="start" />
                 </Tabs>
             </Box>
             <TabPanel value={value} index={0}>
@@ -54,6 +54,9 @@ const TabView = () => {
             </TabPanel>
             <TabPanel value={value} index={1}>
                 <PackageRegistryView />
+            </TabPanel>
+            <TabPanel value={value} index={2}>
+                <DecodeView />
             </TabPanel>
         </Box>
     );

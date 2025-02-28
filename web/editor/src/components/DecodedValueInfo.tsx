@@ -2,26 +2,46 @@ import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
 import { DecodedValue, DecodedValueKind, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
 import { Box, Typography } from '@mui/material';
-import { stringifyJSON } from '../util';
+import { joinNodes, stringifyJSON } from '../util';
 
 export interface DecodedValueInfoProps {
     encodedValue: string;
 }
 
 const DecodedValueInfo = ({ encodedValue }: DecodedValueInfoProps) => {
-    const [values, setValues] = useState<DecodedValue[]>([]);
+    const [values, setValues] = useState<{
+        values: DecodedValue[]
+    } | {
+        error: string;
+    }>({
+        values: [],
+    });
 
     useEffect(() => {
-        compiler.derDecodeValue(encodedValue).then(values => setValues(values));
+        compiler.derDecodeValue(encodedValue).then(res => {
+            if (typeof res === 'string') {
+                setValues({
+                    error: res,
+                });
+            } else {
+                setValues({
+                    values: res,
+                })
+            }
+        });
     }, [encodedValue]);
 
     if (encodedValue === '') {
         return (<Typography>Select a value to inspect its DER encoding</Typography>);
     }
 
+    if ('error' in values) {
+        return (<Typography>{values.error}</Typography>);
+    }
+
     return (
-        <Box sx={{ fontFamily: 'Courier New' }}>
-            {values.map(value => getValueComponent(encodedValue, value))}
+        <Box sx={{ fontFamily: 'Droid Sans Mono' }}>
+            {values.values.map(value => getValueComponent(encodedValue, value))}
         </Box>
     );
 };
@@ -31,14 +51,14 @@ export default DecodedValueInfo;
 function getValueComponent(encodedValue: string, value: DecodedValue) {
     return (
         <span key={stringifyJSON(value)}>
-            <HoverableText data={getTagText(value.tag)} style={{ backgroundColor: 'lavender' }}>
+            <HoverableText hoverElement={getTagElement(value.tag)} style={{ backgroundColor: 'lavender' }}>
                 {getHexSlice(encodedValue, value.tag.pos)}
             </HoverableText>
-            <HoverableText data={`Length: ${value.len.len}`} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
+            <HoverableText hoverElement={`Length: ${value.len.len}`} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
                 {getHexSlice(encodedValue, value.len.pos)}
             </HoverableText>
             {value.kind.type !== 'SEQUENCE' ? (
-                <HoverableText data={getValueKindText(value.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
+                <HoverableText hoverElement={getValueKindElement(value.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
                     {getHexSlice(encodedValue, value.valuePos)}
                 </HoverableText>
             ) : (
@@ -54,51 +74,77 @@ function getHexSlice(encodedValue: string, pos: TlvPos): string {
     return encodedValue.slice(pos.start * 2, pos.end * 2);
 }
 
-function getTagText(tag: TlvTag): string {
+const tagTypeMap: Record<number, string> = {
+    1: 'BOOLEAN',
+    2: 'INTEGER',
+    3: 'BIT STRING',
+    4: 'OCTET STRING',
+    5: 'NULL',
+    6: 'OBJECT IDENTIFIER',
+    9: 'REAL',
+    10: 'ENUMERATED',
+    16: 'SEQUENCE',
+    17: 'SET',
+    18: 'NUMERIC STRING',
+    19: 'PRINTABLE STRING',
+};
+const BRACKET_COLOR = '#0431fa';
+const LITERAL_COLOR = '#098658';
+const IDENT_COLOR = '#267f99';
+
+function getTagElement(tag: TlvTag) {
+
     if (tag.class === TagClass.ContextSpecific) {
-        return `[${tag.num}]`;
+        return (
+            <>
+                <span style={{ color: BRACKET_COLOR }}>[</span>
+                <span style={{ color: LITERAL_COLOR }}>{tag.num}</span>
+                <span style={{ color: BRACKET_COLOR }}>]</span>
+            </>
+        );
     } else {
-        let tagText = `[${tag.class} ${tag.num}]`;
-        if (tag.class === 'UNIVERSAL') {
-            const tagTypeMap: Record<number, string> = {
-                1: 'BOOLEAN',
-                2: 'INTEGER',
-                3: 'BIT STRING',
-                4: 'OCTET STRING',
-                5: 'NULL',
-                6: 'OBJECT IDENTIFIER',
-                9: 'REAL',
-                10: 'ENUMERATED',
-                16: 'SEQUENCE',
-                17: 'SET',
-                18: 'NUMERIC STRING',
-                19: 'PRINTABLE STRING',
-            };
-            if (tag.num in tagTypeMap) {
-                tagText += ` ${tagTypeMap[tag.num]}`;
-            }
-        }
-        return tagText;
+        return (
+            <>
+                <span style={{ color: BRACKET_COLOR }}>[</span>
+                <span style={{ color: IDENT_COLOR }}>{tag.class}</span>
+                &nbsp;
+                <span style={{ color: LITERAL_COLOR }}>{tag.num}</span>
+                <span style={{ color: BRACKET_COLOR }}>]</span>
+                {tag.class === 'UNIVERSAL' && tag.num in tagTypeMap && (
+                    <>
+                        &nbsp;
+                        <span style={{ color: IDENT_COLOR }}>{tagTypeMap[tag.num]}</span>
+                    </>
+                )}
+            </>
+        );
     }
 }
 
-function getValueKindText(kind: DecodedValueKind): string {
+function getValueKindElement(kind: DecodedValueKind) {
     switch (kind.type) {
         case 'RAW':
             return 'Raw Data';
         case 'BOOLEAN':
-            return kind.data.toString();
+            return <span style={{ color: IDENT_COLOR }}>{kind.data.toString().toUpperCase()}</span>;
         case 'INTEGER':
         case 'BIT STRING':
         case 'REAL':
-            return `${kind.type} ${kind.data}`;
+            return (
+                <>
+                    <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
+                    &nbsp;
+                    <span style={{ color: LITERAL_COLOR }}>{kind.data.toString()}</span>
+                </>
+            );
         case 'OBJECT IDENTIFIER':
             const desc = compiler.lookupOidDescription(kind.data);
-            if (desc !== null) {
-                return `${kind.data} (${desc})`;
-            } else {
-                return kind.data;
-            }
+            return (
+                <>
+                    {joinNodes(kind.data.split('.').map(node => (<span style={{ color: LITERAL_COLOR }}>{node}</span>)), (<span>.</span>))}
+                    {desc && <span>&nbsp; ({desc})</span>}
+                </>
+            );
         case 'OCTET STRING':
             return 'Binary Data';
         case 'NULL':
@@ -109,11 +155,11 @@ function getValueKindText(kind: DecodedValueKind): string {
 }
 
 interface HoverableTextProps {
-    data: string;
+    hoverElement: React.ReactNode;
     style?: CSSProperties;
 }
 
-const HoverableText = ({ children, data, style }: React.PropsWithChildren<HoverableTextProps>) => {
+const HoverableText = ({ children, hoverElement, style }: React.PropsWithChildren<HoverableTextProps>) => {
     const ref = useRef<HTMLSpanElement>(null);
     const [hover, setHover] = useState({
         hovering: false,
@@ -149,11 +195,12 @@ const HoverableText = ({ children, data, style }: React.PropsWithChildren<Hovera
                         position: 'fixed',
                         top: hover.pos.top,
                         left: hover.pos.left,
-                        backgroundColor: 'lightgray',
+                        backgroundColor: '#f8f8f8',
                         padding: '10px',
-                        borderRadius: '5px',
+                        border: '1px solid lightgrey',
+                        borderRadius: '3px',
                     }}>
-                    {data}
+                    {hoverElement}
                 </div>
             )}
         </span>
