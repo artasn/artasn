@@ -26,6 +26,8 @@ pub enum Value {
     Sequence(SequenceValue),
     SequenceOf(Vec<AstElement<valref!()>>),
     Choice(ChoiceValue),
+    NumericString(String),
+    PrintableString(String),
 }
 
 impl Value {
@@ -45,6 +47,8 @@ impl Value {
                 .resolve()
                 .expect("CHOICE value failed to resolve")
                 .tag_type(),
+            Self::NumericString(_) => TagType::PrintableString,
+            Self::PrintableString(_) => TagType::PrintableString,
         }
     }
 
@@ -61,6 +65,8 @@ impl Value {
             Self::Sequence(_) => "SEQUENCE",
             Self::SequenceOf(_) => "SEQUENCE OF",
             Self::Choice(_) => "CHOICE",
+            Self::NumericString(_) => "NumericString",
+            Self::PrintableString(_) => "PrintableString",
         }
     }
 
@@ -167,13 +173,18 @@ impl Value {
                     resolved.der_encode(buf, &component_type)?;
                 }
             }
+            Self::NumericString(str) | Self::PrintableString(str) => {
+                for ch in str.chars().rev() {
+                    buf.push(ch as u8);
+                }
+            }
             other => todo!("{:#02X?}", other),
         }
 
         let end_len = buf.len();
         if tagged_type.tag.kind == TagKind::Explicit {
             encoding::write_tlv_len((end_len - start_len) as u64, buf);
-            Tag::default().der_encode(
+            Tag::universal(tagged_type.ty.tag_type().expect("tag_type")).der_encode(
                 buf,
                 TagContext {
                     is_outer_explicit: false,
@@ -326,7 +337,7 @@ impl<const TYPE_TAG: u8> ValueResolve for AstElement<ValueReference<TYPE_TAG>> {
                     valref = context()
                         .lookup_value(ident)
                         .ok_or_else(|| Error {
-                            kind: ErrorKind::Ast(format!("undefined reference to type '{ident}")),
+                            kind: ErrorKind::Ast(format!("undefined reference to value '{ident}")),
                             loc: self.loc,
                         })?
                         .value

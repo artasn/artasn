@@ -509,10 +509,18 @@ rule Optional {
     keyword OPTIONAL
 }
 
+rule NumericString {
+    keyword NumericString
+}
+
+rule PrintableString {
+    keyword PrintableString
+}
+
 variant BuiltinType = BitString | OctetString | Integer | Sequence | ObjectIdentifier {
     keyword OBJECT
     keyword IDENTIFIER
-};
+} | NumericString | PrintableString;
 
 variant Class = Universal {
     keyword UNIVERSAL

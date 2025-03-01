@@ -326,15 +326,25 @@ fn parse_structure_components(
     oid: &ModuleIdentifier,
     components: &Vec<AstElement<AstStructureComponent>>,
 ) -> Result<Vec<StructureComponent>> {
+    let has_tags = components
+        .iter()
+        .any(|component| match &component.element.ty.element {
+            AstType::TaggedType(_) => true,
+            AstType::UntaggedType(_) => false,
+        });
     components
         .iter()
         .enumerate()
         .map(|(i, component)| {
-            let mut ty = parse_type(oid, &component.element.ty)?;
+            let ty = parse_type(
+                oid,
+                &component.element.ty,
+                TypeContext::StructureComponent {
+                    index: i as u16,
+                    has_tags,
+                },
+            )?;
             let resolved_ty = ty.resolve()?;
-            if ty.tag.is_default() {
-                ty.tag.num = Some(i as u16);
-            }
             Ok(StructureComponent {
                 name: component.element.name.as_ref().map(|name| name.0.clone()),
                 default_value: match component
@@ -412,9 +422,15 @@ fn parse_builtin_type(
                     oid,
                     seq_of.element.size_constraints.as_ref(),
                 )?,
-                component_type: Box::new(parse_type(oid, &seq_of.element.ty)?),
+                component_type: Box::new(parse_type(
+                    oid,
+                    &seq_of.element.ty,
+                    TypeContext::Contextless,
+                )?),
             }),
         },
+        AstBuiltinType::NumericString(_) => BuiltinType::NumericString,
+        AstBuiltinType::PrintableString(_) => BuiltinType::PrintableString,
     })
 }
 
@@ -436,7 +452,31 @@ fn parse_untagged_type(
     })
 }
 
-fn parse_type(oid: &ModuleIdentifier, ty: &AstElement<AstType>) -> Result<TaggedType> {
+enum TypeContext {
+    Contextless,
+    StructureComponent { index: u16, has_tags: bool },
+}
+
+// ASN.1 Tagging Rules
+//
+// Any TagDefault + [CLASS N] IMPLICIT = encoded as [CLASS N]
+// Any TagDefault + [CLASS N] EXPLICIT = encoded as [CLASS N]+Structured, [UNIVERSAL T]
+// TagDefault + [CLASS N] = [CLASS N] TagDefault
+// Any TagDefault + Untagged Type = encoded as [UNIVERSAL T]
+//
+// Exception to these rules:
+//     1. when TagDefault = AUTOMATIC, and
+//     2. there are NO tags for any of the types in a structure,
+//     then the tags for the component types are [CONTEXT-SPECIFIC ComponentIndex]
+fn parse_type(
+    oid: &ModuleIdentifier,
+    ty: &AstElement<AstType>,
+    type_context: TypeContext,
+) -> Result<TaggedType> {
+    let tag_default = context()
+        .lookup_module(oid)
+        .expect("lookup_module")
+        .tag_default;
     Ok(match &ty.element {
         AstType::TaggedType(tagged_type) => {
             let ty = parse_untagged_type(oid, &tagged_type.element.ty)?;
@@ -457,24 +497,54 @@ fn parse_type(oid: &ModuleIdentifier, ty: &AstElement<AstType>) -> Result<Tagged
                 });
             }
             let tag_number = class_number.element.0 as u16;
-            let kind = match tagged_type.element.kind {
-                Some(ref kind) => match kind.element {
-                    AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
-                    AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
+            let (kind, source) = match tagged_type.element.kind {
+                Some(ref kind) => (
+                    match kind.element {
+                        AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
+                        AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
+                    },
+                    TagSource::KindSpecified,
+                ),
+                None => (
+                    match tag_default {
+                        // TODO: Automatic is not always Implicit, there are special cases where it means Explicit
+                        TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
+                        TagDefault::Explicit => TagKind::Explicit,
+                    },
+                    TagSource::KindImplied,
+                ),
+            };
+            let tag = Tag::new(class, tag_number, kind, source);
+            TaggedType { tag: Some(tag), ty }
+        }
+        AstType::UntaggedType(untagged) => {
+            let ty = parse_untagged_type(oid, untagged)?;
+            let index = match type_context {
+                TypeContext::StructureComponent { index, has_tags } => match has_tags {
+                    true => None,
+                    false => Some(index),
                 },
-                None => match context().lookup_module(oid).expect("lookup_module").tag_default {
+                TypeContext::Contextless => None,
+            };
+            let tag = match (tag_default, index) {
+                (TagDefault::Automatic, Some(index)) => {
                     // TODO: Automatic is not always Implicit, there are special cases where it means Explicit
-                    TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
-                    TagDefault::Explicit => TagKind::Explicit,
+                    Some(Tag::new(
+                        Class::ContextSpecific,
+                        index,
+                        TagKind::Implicit,
+                        TagSource::TagImplied,
+                    ))
+                }
+                _ => match &ty {
+                    UntaggedType::BuiltinType(builtin) => {
+                        Some(Tag::universal(builtin.tag_type().expect("tag_type")))
+                    }
+                    UntaggedType::Reference(_) => None,
                 },
             };
-            let tag = Tag::new(class, tag_number, kind);
             TaggedType { tag, ty }
         }
-        AstType::UntaggedType(untagged) => TaggedType {
-            tag: Tag::default(),
-            ty: parse_untagged_type(oid, untagged)?,
-        },
     })
 }
 
@@ -483,7 +553,7 @@ fn register_type(
     type_assignment: &AstElement<AstTypeAssignment>,
 ) -> Result<()> {
     let name = type_assignment.element.name.element.0.clone();
-    let ty = parse_type(oid, &type_assignment.element.ty)?;
+    let ty = parse_type(oid, &type_assignment.element.ty, TypeContext::Contextless)?;
 
     context_mut().register_type(
         QualifiedIdentifier {
@@ -542,7 +612,10 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(BigInt::from_biguint(Sign::Plus, BigUint::from(uint))))
+        Ok(Value::Integer(BigInt::from_biguint(
+            Sign::Plus,
+            BigUint::from(uint),
+        )))
     } else {
         let int = num.element.value.element.0;
         if int > i64::MIN as u64 {
@@ -554,7 +627,10 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(BigInt::from_biguint(Sign::Minus, BigUint::from(int))))
+        Ok(Value::Integer(BigInt::from_biguint(
+            Sign::Minus,
+            BigUint::from(int),
+        )))
     }
 }
 
@@ -626,6 +702,39 @@ fn parse_sequence_value(
     Ok(Value::Sequence(SequenceValue { components }))
 }
 
+fn parse_character_string(
+    str_lit: &AstElement<AstStringLiteral>,
+    tag_type: TagType,
+) -> Result<Value> {
+    let cstring = match &str_lit.element.kind {
+        StringKind::CString => str_lit.element.data.clone(),
+        _ => {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "{} value cannot be assigned to {}",
+                    str_lit.element.kind.to_string(),
+                    tag_type
+                )),
+                loc: str_lit.loc,
+            })
+        }
+    };
+    let validator = match tag_type {
+        TagType::NumericString => |ch: char| ch.is_ascii_digit() || ch == ' ',
+        TagType::PrintableString => {
+            |ch: char| ch.is_ascii_alphanumeric() || " '()+,-./:=?".contains(ch)
+        }
+        _ => unreachable!(),
+    };
+    let invalid = cstring.chars().map(validator).any(|valid| !valid);
+    if invalid {}
+    Ok(match tag_type {
+        TagType::NumericString => Value::NumericString(cstring),
+        TagType::PrintableString => Value::PrintableString(cstring),
+        _ => unreachable!(),
+    })
+}
+
 fn parse_value(
     oid: &ModuleIdentifier,
     value: &AstElement<AstValue>,
@@ -673,6 +782,12 @@ fn parse_value(
                                 .expect("failed BigUint::parse_bytes")
                                 .to_bytes_be(),
                         )
+                    }
+                    BuiltinType::NumericString => {
+                        parse_character_string(str_lit, TagType::NumericString)?
+                    }
+                    BuiltinType::PrintableString => {
+                        parse_character_string(str_lit, TagType::PrintableString)?
                     }
                     other_type => {
                         return Err(Error {
@@ -727,7 +842,7 @@ fn register_value(
     value_assignment: &AstElement<AstValueAssignment>,
 ) -> Result<()> {
     let name = value_assignment.element.name.element.0.clone();
-    let ty = parse_type(oid, &value_assignment.element.ty)?;
+    let ty = parse_type(oid, &value_assignment.element.ty, TypeContext::Contextless)?;
     let resolved_ty = ty.resolve()?;
     let val = parse_value(oid, &value_assignment.element.value, &resolved_ty)?;
 

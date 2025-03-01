@@ -16,12 +16,12 @@ export interface QualifiedIdentifier {
     name: string;
 }
 
-export type TaggedType = {
-    tag: Tag;
-} & ((QualifiedIdentifier & {
+export type TaggedType = ((QualifiedIdentifier & {
     mode: 'reference',
+    tag?: Tag;
 }) | (BuiltinType & {
     mode: 'type',
+    tag: Tag,
 }));
 
 export enum TagClass {
@@ -33,13 +33,20 @@ export enum TagClass {
 
 export interface Tag {
     class: TagClass;
-    num?: number;
+    num: number;
     kind: TagKind;
+    source: TagSource;
 }
 
 export enum TagKind {
     Explicit = 'EXPLICIT',
     Implicit = 'IMPLICIT',
+}
+
+export enum TagSource {
+    TagImplied = 'TagImplied',
+    KindImplied = 'KindImplied',
+    KindSpecified = 'KindSpecified',
 }
 
 export type BuiltinType = {
@@ -64,7 +71,11 @@ export type BuiltinType = {
 } | {
     type: 'SEQUENCE OF';
     componentType: TaggedType;
-}
+} | {
+    type: 'NumericString';
+} | {
+    type: 'PrintableString';
+};
 
 export interface StructureComponent {
     name: string;
@@ -116,6 +127,12 @@ export type Value = {
 } | {
     type: 'SEQUENCE OF';
     elements: ValueReference[];
+} | {
+    type: 'NumericString';
+    value: string;
+} | {
+    type: 'PrintableString';
+    value: string;
 };
 
 export interface StructureComponentValue {
@@ -182,6 +199,9 @@ export type DecodedValueKind = {
 } | {
     type: 'SET';
     elements: DecodedValue[];
+} | {
+    type: 'NumericString';
+    data: string;
 } | {
     type: 'PrintableString';
     data: string;

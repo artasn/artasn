@@ -158,10 +158,11 @@ function getValueKindElement(kind: DecodedValueKind) {
             return 'Binary Data';
         case 'NULL':
             return 'NULL';
+        case 'NumericString':
         case 'PrintableString':
             return (
                 <>
-                    <span style={{ color: IDENT_COLOR }}>PrintableString</span>
+                    <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
                     &nbsp;
                     <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
                 </>

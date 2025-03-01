@@ -3,7 +3,7 @@ import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { getWebFS } from '../webfs';
 import * as compiler from '../compiler';
 import { Box, Card, Checkbox, FormControlLabel } from '@mui/material';
-import { CompileError, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference } from '../wasm-definitions';
+import { CompileError, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource } from '../wasm-definitions';
 import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
@@ -24,12 +24,16 @@ function getTypeString(ty: TaggedType): string {
         return ty.name + ' FROM ' + getModuleString(ty.module);
     } else {
         let str;
-        if (ty.tag.class !== TagClass.ContextSpecific || ty.tag.num) {
+        if (ty.tag.source !== TagSource.TagImplied) {
             if (ty.tag.class === TagClass.ContextSpecific) {
-                str = `[${ty.tag.num}] ${ty.tag.kind} ${ty.type}`;
+                str = `[${ty.tag.num}] `;
             } else {
-                str = `[${ty.tag.class} ${ty.tag.num}] ${ty.tag.kind} ${ty.type}`;
+                str = `[${ty.tag.class} ${ty.tag.num}] `;
             }
+            if (ty.tag.source !== TagSource.KindImplied) {
+                str += `${ty.tag.kind} `;
+            }
+            str += ty.type;
         } else {
             str = ty.type;
         }
@@ -57,6 +61,9 @@ function getValueString(ref: ValueReference): string {
                 return ref.value.toUpperCase();
             case 'NULL':
                 return 'NULL';
+            case 'NumericString':
+            case 'PrintableString':
+                return `"${ref.value}"`;
             default:
                 return '';
         }
@@ -174,6 +181,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
                     children = [];
                     for (const component of ty.components) {
                         children.push({
+                            id: `types/${JSON.stringify(typeDef.ident.module)}/${label}/${component.name}`,
                             label: component.name,
                             secondaryLabel: getTypeString(component.componentType),
                         });
@@ -182,6 +190,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
             }
 
             typesItem.children!.push({
+                id: `types/${JSON.stringify(typeDef.ident.module)}/${label}`,
                 label,
                 secondaryLabel,
                 children,

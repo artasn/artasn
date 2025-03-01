@@ -9,9 +9,6 @@ pub use simple::*;
 mod structured;
 pub use structured::*;
 
-mod character_strings;
-use character_strings::*;
-
 mod constraints;
 pub use constraints::*;
 
@@ -44,11 +41,35 @@ impl Display for Class {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TagSource {
+    // If the source type has no tag, and thus the entire tag was implied.
+    // This happens in two cases:
+    //   1. The UNIVERSAL tag was implied for a type.
+    //   2. The CONTEXT-SPECIFIC tag was implied for a structure component type in a module with the AUTOMATIC TagDefault.
+    TagImplied,
+    // If the tag did not have IMPLICIT or EXPLICIT specified, and the kind was determined via the module's TagDefault.
+    KindImplied,
+    // If the tag had either IMPLICIT or EXPLICIT specified.
+    KindSpecified,
+}
+
+impl Display for TagSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::TagImplied => "TagImplied",
+            Self::KindImplied => "KindImplied",
+            Self::KindSpecified => "KindSpecified",
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Tag {
     pub class: Class,
-    pub num: Option<u16>,
+    pub num: u16,
     pub kind: TagKind,
+    pub source: TagSource,
 }
 
 pub struct TagContext<'a> {
@@ -61,29 +82,29 @@ pub struct TagContext<'a> {
 impl Tag {
     pub const MAX_TAG: u16 = 16383;
 
-    pub fn new(class: Class, tag: u16, kind: TagKind) -> Tag {
-        if tag > Self::MAX_TAG {
-            panic!("{} > MAX_TAG", tag);
+    pub fn new(class: Class, num: u16, kind: TagKind, source: TagSource) -> Tag {
+        if num > Self::MAX_TAG {
+            panic!("{} > MAX_TAG", num);
         }
         Tag {
             class,
-            num: Some(tag),
+            num,
             kind,
+            source,
         }
     }
 
+    pub fn universal(tag_type: TagType) -> Tag {
+        Tag::new(
+            Class::Universal,
+            tag_type as u16,
+            TagKind::Implicit,
+            TagSource::TagImplied,
+        )
+    }
+
     pub fn der_encode(&self, buf: &mut Vec<u8>, ctx: TagContext<'_>) {
-        let (class, tag) = match (self.class, self.num) {
-            // explicit class and tag
-            (class, Some(tag)) => (class, tag),
-            // when no tag is specified, default to the UNIVERSAL tag
-            (Class::ContextSpecific, None) => (
-                Class::Universal,
-                ctx.ty.tag_type().expect("UNIVERSAL type to have a tag") as u16,
-            ),
-            _ => unreachable!(),
-        };
-        let class = match class {
+        let class = match self.class {
             Class::Universal => 0b00,
             Class::Application => 0b01,
             Class::ContextSpecific => 0b10,
@@ -95,25 +116,15 @@ impl Tag {
             // if either the outer tag of an EXPLICIT definition or is constructed, form = 1
             _ => 0b1,
         };
-        if tag >= 31 {
-            encoding::write_vlq(tag as u64, buf);
+        if self.num >= 31 {
+            encoding::write_vlq(self.num as u64, buf);
         }
-        let msb_tag = if tag <= 30 { tag as u8 } else { 0b11111 };
+        let msb_tag = if self.num <= 30 {
+            self.num as u8
+        } else {
+            0b11111
+        };
         buf.push(class << 6 | form << 5 | msb_tag);
-    }
-
-    pub fn is_default(&self) -> bool {
-        self.class == Class::ContextSpecific && self.num.is_none() && self.kind == TagKind::Implicit
-    }
-}
-
-impl Default for Tag {
-    fn default() -> Self {
-        Tag {
-            class: Class::ContextSpecific,
-            num: None,
-            kind: TagKind::Implicit,
-        }
     }
 }
 
@@ -155,18 +166,19 @@ pub struct ResolvedType {
 
 #[derive(Debug, Clone)]
 pub struct TaggedType {
-    pub tag: Tag,
+    pub tag: Option<Tag>,
     pub ty: UntaggedType,
 }
 
 impl TaggedType {
     pub fn resolve(&self) -> Result<ResolvedType> {
         let mut tagged_ty = self;
+        let mut tag = self.tag.as_ref();
         loop {
             match &tagged_ty.ty {
                 UntaggedType::BuiltinType(ty) => {
                     return Ok(ResolvedType {
-                        tag: self.tag.clone(),
+                        tag: tag.expect("unreachable: no tag").clone(),
                         ty: ty.clone(),
                     });
                 }
@@ -177,7 +189,8 @@ impl TaggedType {
                             ident.element
                         )),
                         loc: ident.loc,
-                    })?
+                    })?;
+                    tag = tag.or(tagged_ty.tag.as_ref());
                 }
             }
         }
@@ -186,11 +199,16 @@ impl TaggedType {
 
 impl Display for TaggedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(num) = self.tag.num {
-            if self.tag.class == Class::ContextSpecific {
-                f.write_fmt(format_args!("[{}] ", num))?;
-            } else {
-                f.write_fmt(format_args!("[{} {}] ", self.tag.class, num))?;
+        if let Some(tag) = self.tag.as_ref() {
+            if tag.source != TagSource::TagImplied {
+                if tag.class == Class::ContextSpecific {
+                    f.write_fmt(format_args!("[{}] ", tag.num))?;
+                } else {
+                    f.write_fmt(format_args!("[{} {}] ", tag.class, tag.num))?;
+                }
+                if tag.source == TagSource::KindSpecified {
+                    f.write_fmt(format_args!("{} ", tag.kind))?;
+                }
             }
         }
 
@@ -269,8 +287,8 @@ pub enum BuiltinType {
     Set(Structure),
     SetOf(StructureOf),
     Choice(Choice),
-    NumericString(CharacterString<NumericStringCharset>),
-    PrintableString(CharacterString<PrintableStringCharset>),
+    NumericString,
+    PrintableString,
 }
 
 impl BuiltinType {
@@ -287,8 +305,8 @@ impl BuiltinType {
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
             Self::Choice(_) => return None,
-            Self::NumericString(_) => TagType::NumericString,
-            Self::PrintableString(_) => TagType::PrintableString,
+            Self::NumericString => TagType::NumericString,
+            Self::PrintableString => TagType::PrintableString,
         })
     }
 
@@ -322,18 +340,21 @@ impl BuiltinType {
         }
 
         let (constraints, item) = match (self, value) {
-            (Self::BitString(bit_string), Value::BitString(value)) => {
-                (bit_string.size_constraints.as_ref(), &BigInt::from(value.bits() as i64))
-            }
-            (Self::OctetString(octet_string), Value::OctetString(value)) => {
-                (octet_string.size_constraints.as_ref(), &BigInt::from(value.len() as i64))
-            }
+            (Self::BitString(bit_string), Value::BitString(value)) => (
+                bit_string.size_constraints.as_ref(),
+                &BigInt::from(value.bits() as i64),
+            ),
+            (Self::OctetString(octet_string), Value::OctetString(value)) => (
+                octet_string.size_constraints.as_ref(),
+                &BigInt::from(value.len() as i64),
+            ),
             (Self::Integer(integer), Value::Integer(value)) => {
                 (integer.value_constraints.as_ref(), value)
             }
-            (Self::SequenceOf(seq_of), Value::SequenceOf(value)) => {
-                (seq_of.size_constraints.as_ref(), &BigInt::from(value.len() as i64))
-            }
+            (Self::SequenceOf(seq_of), Value::SequenceOf(value)) => (
+                seq_of.size_constraints.as_ref(),
+                &BigInt::from(value.len() as i64),
+            ),
             _ => (None, &BigInt::ZERO),
         };
         if let Some(constraints) = constraints {
@@ -392,8 +413,8 @@ impl Display for BuiltinType {
             Self::Set(_) => "SET",
             Self::SetOf(_) => "SET OF",
             Self::Choice(_) => "CHOICE",
-            Self::NumericString(_) => "NUMERIC STRING",
-            Self::PrintableString(_) => "PRINTABLE STRING",
+            Self::NumericString => "NUMERIC STRING",
+            Self::PrintableString => "PRINTABLE STRING",
         })
     }
 }

@@ -1,7 +1,10 @@
 #![allow(unused)]
 
 use crate::parser::*;
-use std::fmt::{format, Display, Write};
+use std::{
+    collections::HashSet,
+    fmt::{format, Display, Write},
+};
 
 macro_rules! enum_str {
     (pub enum $name:ident {
@@ -164,6 +167,17 @@ enum_str! {
         Period = ".",
         Negative = "-",
     }
+}
+
+lazy_static::lazy_static! {
+    static ref FAST_KEYWORD_CHECK: std::collections::HashSet<&'static str> = {
+        let keywords = Keyword::NAMES;
+        let mut set = std::collections::HashSet::with_capacity(keywords.len());
+        for keyword in keywords {
+            set.insert(*keyword);
+        }
+        set
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -344,10 +358,7 @@ impl ErrorKind {
                 format!("unexpected token '{}'", token)
             }
             ErrorKind::ExpectingEOI => String::from("expecting end of input"),
-            ErrorKind::ExpectingOther {
-                expecting,
-                found,
-            } => {
+            ErrorKind::ExpectingOther { expecting, found } => {
                 let expecting_str = if expecting.len() == 1 {
                     expecting[0].to_string()
                 } else {
@@ -386,18 +397,12 @@ impl ErrorKind {
                 "illegal string indicator suffix '{}' (expecting 'B', 'H', or a cstring)",
                 indicator
             ),
-            ErrorKind::ExpectingKeyword {
-                expecting,
-                found,
-            } => format!(
+            ErrorKind::ExpectingKeyword { expecting, found } => format!(
                 "expecting keyword {}, found keyword {}",
                 expecting.name(),
                 found.name()
             ),
-            ErrorKind::ExpectingOperator {
-                expecting,
-                found,
-            } => format!(
+            ErrorKind::ExpectingOperator { expecting, found } => format!(
                 "expecting operator '{}', found operator '{}'",
                 expecting.name(),
                 found.name()
@@ -688,14 +693,9 @@ impl Tokenizer {
         if Self::is_name_char(self.current_char()) && self.current_char() != '-' {
             let start = self.cursor;
             let mut name = String::with_capacity(1);
-            let mut could_be_keyword = true;
             while !self.is_ended() {
                 if Self::is_name_char(self.current_char()) {
-                    let ch = self.current_char();
-                    if could_be_keyword && !ch.is_ascii_uppercase() {
-                        could_be_keyword = false;
-                    }
-                    name.write_char(ch).unwrap();
+                    name.write_char(self.current_char()).unwrap();
                     self.cursor += 1;
                 } else {
                     if self.current_char() == '\n' {
@@ -724,14 +724,12 @@ impl Tokenizer {
                 }
             }
             let loc = Loc::new(start, name.len());
-            if could_be_keyword {
-                if let Some(keyword) = Keyword::from_name(&name) {
-                    return Ok(Some(Token {
-                        kind: TokenKind::Keyword,
-                        data: Some(TokenData::Keyword(keyword)),
-                        loc,
-                    }));
-                }
+            if FAST_KEYWORD_CHECK.contains(&name.as_str()) {
+                return Ok(Some(Token {
+                    kind: TokenKind::Keyword,
+                    data: Some(TokenData::Keyword(Keyword::from_name(&name).unwrap())),
+                    loc,
+                }));
             }
 
             if !IDENT_REGEX.is_match(&name) {

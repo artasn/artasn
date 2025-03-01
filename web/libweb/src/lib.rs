@@ -130,17 +130,18 @@ fn serialize_tagged_type(tagged_type: &TaggedType) -> JsValue {
         }
     };
     Reflect::set(&obj, &"mode".into(), &mode.into()).unwrap();
-    Reflect::set(&obj, &"tag".into(), &serialize_type_tag(&tagged_type.tag)).unwrap();
+    if let Some(tag) = tagged_type.tag.as_ref() {
+        Reflect::set(&obj, &"tag".into(), &serialize_type_tag(tag)).unwrap();
+    }
     obj
 }
 
 fn serialize_type_tag(tag: &Tag) -> JsValue {
     let obj = Object::new();
     Reflect::set(&obj, &"class".into(), &tag.class.to_string().into()).unwrap();
-    if let Some(num) = tag.num.clone() {
-        Reflect::set(&obj, &"num".into(), &num.into()).unwrap();
-    }
+    Reflect::set(&obj, &"num".into(), &tag.num.into()).unwrap();
     Reflect::set(&obj, &"kind".into(), &tag.kind.to_string().into()).unwrap();
+    Reflect::set(&obj, &"source".into(), &tag.source.to_string().into()).unwrap();
     obj.into()
 }
 
@@ -244,6 +245,7 @@ fn serialize_value(value: &Value) -> JsValue {
             }
             ("elements", elements.into())
         }
+        Value::NumericString(str) | Value::PrintableString(str) => ("value", str.into()),
         other => todo!("{:#?}", other),
     };
     Reflect::set(&obj, &field.into(), &data).unwrap();
@@ -380,9 +382,13 @@ pub fn context_der_encode(
                             for b in libweb.buffer.iter().rev() {
                                 reverse.push(*b);
                             }
+                            let _ = Box::into_raw(libweb);
                             hex::encode_upper(&reverse)
                         }
-                        Err(err) => err.kind.to_string(),
+                        Err(err) => {
+                            let _ = Box::into_raw(libweb);
+                            err.kind.to_string()
+                        }
                     }
                 }
                 Err(err) => err.kind.to_string(),

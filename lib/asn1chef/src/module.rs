@@ -63,7 +63,7 @@ pub struct QualifiedObject<T> {
     pub ident: QualifiedIdentifier,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TagDefault {
     Explicit,
     Implicit,
