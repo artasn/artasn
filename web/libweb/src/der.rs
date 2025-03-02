@@ -1,6 +1,8 @@
 use std::io;
 
-use asn1chef::encoding::{DecodedValue, DecodedValueKind, DerReader, TlvElement, TlvPos, TlvTag};
+use asn1chef::encoding::{
+    DecodedValue, DecodedValueForm, DecodedValueKind, DerReader, TlvElement, TlvPos, TlvTag,
+};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
@@ -23,6 +25,25 @@ fn serialize_tlv_len(len: TlvElement<u32>) -> JsValue {
     let obj = Object::new();
     Reflect::set(&obj, &"pos".into(), &serialize_tlv_pos(len.pos)).unwrap();
     Reflect::set(&obj, &"len".into(), &len.element.into()).unwrap();
+    obj.into()
+}
+
+fn serialize_decoded_value_form(form: DecodedValueForm) -> JsValue {
+    let obj = Object::new();
+    let (form, field, value) = match form {
+        DecodedValueForm::Primitive(kind) => {
+            ("primitive", "kind", serialize_decoded_value_kind(kind))
+        }
+        DecodedValueForm::Constructed(elements) => {
+            let arr = Array::new();
+            for element in elements {
+                arr.push(&serialize_decoded_value(element));
+            }
+            ("constructed", "elements", arr.into())
+        }
+    };
+    Reflect::set(&obj, &"type".into(), &form.into()).unwrap();
+    Reflect::set(&obj, &field.into(), &value).unwrap();
     obj.into()
 }
 
@@ -49,20 +70,6 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             ("data", "OBJECT IDENTIFIER", data.to_string().into())
         }
         DecodedValueKind::Real(data) => ("data", "REAL", data.to_string().into()),
-        DecodedValueKind::Sequence(elements) => {
-            let arr = Array::new();
-            for element in elements {
-                arr.push(&serialize_decoded_value(element));
-            }
-            ("elements", "SEQUENCE", arr.into())
-        }
-        DecodedValueKind::Set(elements) => {
-            let arr = Array::new();
-            for element in elements {
-                arr.push(&serialize_decoded_value(element));
-            }
-            ("elements", "SET", arr.into())
-        }
         DecodedValueKind::PrintableString(str) => ("data", "PrintableString", str.into()),
     };
     Reflect::set(&obj, &"type".into(), &ty.into()).unwrap();
@@ -74,11 +81,16 @@ fn serialize_decoded_value(value: DecodedValue) -> JsValue {
     let obj = Object::new();
     Reflect::set(&obj, &"tag".into(), &serialize_tlv_tag(value.tag)).unwrap();
     Reflect::set(&obj, &"len".into(), &serialize_tlv_len(value.len)).unwrap();
-    Reflect::set(&obj, &"valuePos".into(), &serialize_tlv_pos(value.value_pos)).unwrap();
     Reflect::set(
         &obj,
-        &"kind".into(),
-        &serialize_decoded_value_kind(value.kind),
+        &"valuePos".into(),
+        &serialize_tlv_pos(value.value_pos),
+    )
+    .unwrap();
+    Reflect::set(
+        &obj,
+        &"form".into(),
+        &serialize_decoded_value_form(value.form),
     )
     .unwrap();
     obj.into()

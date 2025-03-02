@@ -166,7 +166,15 @@ export interface DecodedValue {
     tag: TlvTag;
     len: TlvLen;
     valuePos: TlvPos;
+    form: DecodedValueForm;
+}
+
+export type DecodedValueForm = {
+    type: 'primitive';
     kind: DecodedValueKind;
+} | {
+    type: 'constructed';
+    elements: DecodedValue[];
 }
 
 export type DecodedValueKind = {
@@ -193,12 +201,6 @@ export type DecodedValueKind = {
 } | {
     type: 'REAL';
     data: number;
-} | {
-    type: 'SEQUENCE';
-    elements: DecodedValue[];
-} | {
-    type: 'SET';
-    elements: DecodedValue[];
 } | {
     type: 'NumericString';
     data: string;

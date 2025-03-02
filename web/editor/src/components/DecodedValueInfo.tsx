@@ -58,13 +58,13 @@ function getValueComponent(encodedValue: string, value: DecodedValue) {
             <HoverableText hoverElement={getLengthElement(value.len.len)} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
                 {getHexSlice(encodedValue, value.len.pos)}
             </HoverableText>
-            {value.kind.type !== 'SEQUENCE' ? (
-                <HoverableText hoverElement={getValueKindElement(value.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
+            {value.form.type == 'primitive' ? (
+                <HoverableText hoverElement={getValueKindElement(value.form.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
                     {getHexSlice(encodedValue, value.valuePos)}
                 </HoverableText>
             ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', margin: `10px 0px 0px ${tagBytes * 24}px`, gap: '10px', }}>
-                    {value.kind.elements.map(element => getValueComponent(encodedValue, element))}
+                    {value.form.elements.map(element => getValueComponent(encodedValue, element))}
                 </Box>
             )}
         </span>
@@ -167,8 +167,6 @@ function getValueKindElement(kind: DecodedValueKind) {
                     <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
                 </>
             );
-        default:
-            throw new Error(`getValueKindText: ${kind.type}`);
     }
 }
 

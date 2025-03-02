@@ -632,12 +632,17 @@ impl Tokenizer {
             self.cursor += 1;
             let indicator = self.current_char();
             let loc_end = self.cursor;
-            if indicator == 'B' || indicator == 'H' {
+            let valid_indicator = "BbHh".contains(indicator);
+            if valid_indicator {
                 // move cursor past indicator if valid
                 self.cursor += 1;
             }
             let mut value: String = self.source[value_start..value_end].iter().collect();
-            value = value.replace([' ', '\n'], "");
+            if valid_indicator {
+                // only replace spaces in the string if it's not a cstring
+                // TODO: should cstring have newlines removed?
+                value = value.replace([' ', '\n'], "");
+            }
             Ok(Some((
                 Loc::new(loc_start, loc_end - loc_start),
                 value,

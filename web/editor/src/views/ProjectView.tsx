@@ -89,18 +89,18 @@ function resolveType(typeDefs: TypeDefinition[], type: TaggedType): BuiltinType 
     }
 }
 
-function getValueItem(ref: ValueReference, name?: string, type?: TaggedType): TreeItemData {
+function getValueItem(id: string, ref: ValueReference, name?: string, type?: TaggedType): TreeItemData {
     let children: TreeItemData[] | undefined;
     if (ref.mode === 'value') {
         if (ref.type === 'SEQUENCE') {
             children = [];
             for (const component of ref.components) {
-                children.push(getValueItem(component.value, component.name));
+                children.push(getValueItem(`${id}/${component.name}`, component.value, component.name));
             }
         } else if (ref.type === 'SEQUENCE OF') {
             children = [];
-            for (const element of ref.elements) {
-                children.push(getValueItem(element));
+            for (const [index, element] of ref.elements.entries()) {
+                children.push(getValueItem(`${id}/${index}`, element));
             }
         }
     }
@@ -116,6 +116,7 @@ function getValueItem(ref: ValueReference, name?: string, type?: TaggedType): Tr
     }
 
     return {
+        id,
         label,
         secondaryLabel,
         subtext,
@@ -181,7 +182,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
                     children = [];
                     for (const component of ty.components) {
                         children.push({
-                            id: `types/${JSON.stringify(typeDef.ident.module)}/${label}/${component.name}`,
+                            id: `types/${JSON.stringify(typeDef.ident)}/${component.name}`,
                             label: component.name,
                             secondaryLabel: getTypeString(component.componentType),
                         });
@@ -190,7 +191,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
             }
 
             typesItem.children!.push({
-                id: `types/${JSON.stringify(typeDef.ident.module)}/${label}`,
+                id: `types/${JSON.stringify(typeDef.ident)}`,
                 label,
                 secondaryLabel,
                 children,
@@ -207,7 +208,7 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
         };
         for (const valueDef of declarations.values) {
             valuesItem.children!.push({
-                ...getValueItem(valueDef.value, valueDef.ident.name, valueDef.ty),
+                ...getValueItem(`values/${JSON.stringify(valueDef.ident)}`, valueDef.value, valueDef.ident.name, valueDef.ty),
                 data: { kind: 'value', ident: valueDef.ident },
             });
         }
@@ -217,11 +218,6 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
 }
 
 function sortTree(items: TreeItemData[]) {
-    for (const item of items) {
-        if (item.children) {
-            sortTree(item.children);
-        }
-    }
     items.sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -266,7 +262,9 @@ const ProjectView = () => {
             items = [];
         }
 
-        sortTree(items);
+        for (const rootItem of items) {
+            sortTree(rootItem.children!);
+        }
 
         setTree({
             hierarchical,
