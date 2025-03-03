@@ -323,6 +323,7 @@ const ProjectView = () => {
                 flexGrow: 1,
                 flexBasis: 0,
                 overflowY: 'scroll',
+                marginBottom: '50px',
             }}>
                 <Box sx={{ flexGrow: 1 }}>
                     <FormControlLabel
@@ -347,14 +348,16 @@ const ProjectView = () => {
                 marginBottom: '50px',
                 flexGrow: 1,
                 flexBasis: 0,
+                maxWidth: '50%',
             }}>
                 <Card style={{
+                    overflow: 'scroll',
                     padding: '10px',
                     height: '100%',
+                    maxWidth: '100%',
                     fontSize: '1rem',
-                    wordBreak: 'break-word',
                     userSelect: 'text',
-                }}><DecodedValueInfo encodedValue={derValue} /></Card>
+                }}><DecodedValueInfo mode="tlv" encodedValue={derValue} /></Card>
             </Box>
         </Box>
     );

@@ -17,6 +17,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router-dom": "7.1.5",
+    "react-toastify": "^11.0.5",
     "react-window": "^1.8.11",
     "vscode-web": "../vscode-web",
     "webfs": "../webfs"

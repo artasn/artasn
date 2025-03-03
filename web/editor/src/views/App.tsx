@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import VisualStudioCode, { getExtensionHostIFrame } from '../code/VisualStudioCode';
 import TabView from './TabView';
 import AppLoadingView from './AppLoadingView';
+import { ToastContainer } from 'react-toastify';
 
 import './App.css';
 
@@ -21,6 +22,7 @@ const App = () => {
             <VisualStudioCode />
             <TabView />
             <AppLoadingView loading={loading} />
+            <ToastContainer />
         </>
     );
 };

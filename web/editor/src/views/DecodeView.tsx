@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Box, Checkbox, FormControl, FormControlLabel, FormGroup, Grid2 as Grid, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
-import DecodedValueInfo from '../components/DecodedValueInfo';
+import React, { useEffect, useRef, useState } from 'react';
+import { Button, ButtonGroup, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, Grid2 as Grid, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
+import DecodedValueInfo, { DecodedValueViewMode } from '../components/DecodedValueInfo';
+import { FileUpload } from '@mui/icons-material';
+import { toast, Bounce } from 'react-toastify';
 
 enum DataFormat {
     Binary = 'binary',
@@ -9,11 +11,8 @@ enum DataFormat {
     PEM = 'PEM',
 }
 
-const dataFormatRegExpMap = {
-    [DataFormat.Hex]: new RegExp('^[0-9A-Fa-f]+$'),
-    [DataFormat.Base64]: new RegExp('^[0-9A-Za-z+/]+={0,2}$'),
-};
 const pemBlockRegExp = new RegExp('^-----(.+?)-----$');
+const textDecoder = new TextDecoder();
 
 interface PEMBlock {
     name: string;
@@ -59,8 +58,10 @@ function decodePEM(input: string): PEMBlock | string {
         base64 += line;
     }
 
-    if (!dataFormatRegExpMap[DataFormat.Base64].test(base64)) {
-        return 'malformed PEM body: illegal base64';
+    for (let i = 0; i < base64.length; i++) {
+        if (!isBase64Digit(base64.charCodeAt(i))) {
+            return 'malformed PEM body: illegal base64';
+        }
     }
 
     return {
@@ -80,12 +81,35 @@ function decodeHex(hex: string): Uint8Array | string {
     return decoded;
 }
 
-function decodeData(input: string): {
+function byteArrayEquals(a: Uint8Array, b: Uint8Array) {
+    if (a.byteLength !== b.byteLength) {
+        return false;
+    }
+    for (let i = 0; i < a.byteLength; i++) {
+        if (a.at(i) !== b.at(i)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isHexDigit(b: number) {
+    const c = String.fromCharCode(b);
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+}
+
+function isBase64Digit(b: number) {
+    const c = String.fromCharCode(b);
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c === '+' || c === '/' || c === '=';
+}
+
+function decodeData(input: Uint8Array): {
     format: DataFormat;
     data: Uint8Array;
 } | string {
-    if (input.startsWith('-----')) {
-        const res = decodePEM(input);
+    const pemPrefix = Uint8Array.from('-----', c => c.charCodeAt(0));
+    if (input.byteLength > 5 && byteArrayEquals(input, pemPrefix)) {
+        const res = decodePEM(textDecoder.decode(input));
         if (typeof res === 'string') {
             return res;
         }
@@ -95,31 +119,37 @@ function decodeData(input: string): {
         };
     }
 
-    for (const [format, regexp] of Object.entries(dataFormatRegExpMap)) {
-        if (regexp.test(input)) {
-            let data: Uint8Array;
-            if (format === DataFormat.Hex) {
-                const res = decodeHex(input);
-                if (typeof res === 'string') {
-                    return res;
-                }
-                data = res;
-            } else if (format === DataFormat.Base64) {
-                data = Uint8Array.from(atob(input), c => c.charCodeAt(0));
-            } else {
-                throw new Error(`unsupported format: ${format}`);
-            }
-            return {
-                format: format as DataFormat,
-                data,
-            };
+    let data: Uint8Array;
+    let format: DataFormat;
+    if (input.every(isHexDigit)) {
+        const res = decodeHex(textDecoder.decode(input));
+        if (typeof res === 'string') {
+            return res;
         }
+        data = res;
+        format = DataFormat.Hex;
+    } else if (input.every(isBase64Digit)) {
+        data = Uint8Array.from(atob(textDecoder.decode(input)), c => c.charCodeAt(0));
+        format = DataFormat.Base64;
+    } else {
+        data = input;
+        format = DataFormat.Binary;
     }
 
-    return {
-        format: DataFormat.Binary,
-        data: Uint8Array.from(input, c => c.charCodeAt(0)),
-    };
+    return { format, data };
+}
+
+function chunkString(str: string, chunkLength: number): string[] {
+    chunkLength = Math.floor(chunkLength);
+    if (chunkLength <= 0) {
+        return [str];
+    }
+
+    const chunks = [];
+    for (let i = 0; i < str.length; i += chunkLength) {
+        chunks.push(str.substring(i, i + chunkLength));
+    }
+    return chunks;
 }
 
 enum TransferSyntax {
@@ -130,37 +160,141 @@ enum TransferSyntax {
     XER = 'XER',
 }
 
+type InputEncoding = {
+    format: DataFormat;
+    transferSyntax: TransferSyntax;
+} | {
+    error: string;
+};
+
+interface InputDialogProps {
+    open: boolean;
+    source: Uint8Array | null;
+    encoding: InputEncoding | null;
+    onClose: () => void;
+    onChange: (source: string) => void;
+}
+
+const InputDialog = ({ open, source, encoding, onClose, onChange }: InputDialogProps) => {
+    const isBinaryData = encoding !== null && 'format' in encoding && encoding.format === DataFormat.Binary;
+    let sourceText: string | null = null;
+    if (!isBinaryData) {
+        if (source === null) {
+            sourceText = '';
+        } else {
+            sourceText = textDecoder.decode(source);
+        }
+    }
+
+    const onInputChanged = (source: string) => {
+        if (isBinaryData) {
+            onChange('');
+        } else {
+            onChange(source.trim());
+        }
+    }
+
+    const closeModal = () => {
+        onClose();
+    };
+
+    return (
+        <Dialog onClose={closeModal} open={open} maxWidth="sm" fullWidth>
+            <DialogTitle>Change Input</DialogTitle>
+            <DialogContent>
+                <Typography>Input</Typography>
+                <TextField
+                    slotProps={{
+                        htmlInput: {
+                            style: {
+                                fontFamily: 'Droid Sans Mono',
+                                fontSize: '10px',
+                            }
+                        }
+                    }}
+                    multiline
+                    rows={10}
+                    fullWidth
+                    value={isBinaryData ? '[binary data]' : sourceText}
+                    onChange={event => onInputChanged(event.currentTarget.value)} />
+            </DialogContent>
+            <DialogActions>
+                <div style={{ paddingLeft: '15px' }}>
+                    {encoding !== null && (
+                        'error' in encoding ? (
+                            <Typography variant="caption">
+                                Error: {encoding.error}
+                            </Typography>
+                        ) : (
+                            <Typography variant="caption">
+                                Detected encoding: {encoding.transferSyntax}-encoded {encoding.format}
+                            </Typography>
+                        )
+                    )}
+                </div>
+                <div style={{ flex: '1 0 0' }} />
+                <Button onClick={closeModal}>OK</Button>
+            </DialogActions>
+        </Dialog>
+    );
+};
+
 const DecodeView = () => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [inputDialogOpen, setInputDialogOpen] = useState(false);
     const [input, setInput] = useState<{
-        source: string;
-        encoding: {
-            format: DataFormat;
-            transferSyntax: TransferSyntax;
-        } | {
-            error: string;
-        } | null;
+        source: Uint8Array | null;
+        encoding: InputEncoding | null;
     }>({
-        source: '',
+        source: null,
         encoding: null,
     });
+    const [inputFileName, setInputFileName] = useState<string | null>(null);
     const [derValue, setDerValue] = useState<string | null>(null);
     const [outputTransferSyntax, setOutputTransferSyntax] = useState<TransferSyntax>(TransferSyntax.DER);
     const [parseTLV, setParseTLV] = useState(true);
     const [useDefinitions, setUseDefinitions] = useState(true);
+    const [decodeViewMode, setDecodeViewMode] = useState<DecodedValueViewMode>('components');
 
-    const onInputChanged = (source: string) => {
-        source = source.trim();
-        if (source === '') {
+    const [rawViewElement, setRawViewElement] = useState<HTMLDivElement | null>(null);
+    const [rawViewWidth, setRawViewWidth] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (rawViewElement !== null) {
+            const resizeObserver = new ResizeObserver(() => {
+                setRawViewWidth(rawViewElement!.clientWidth);
+            });
+            resizeObserver.observe(rawViewElement);
+            return () => resizeObserver.disconnect();
+        }
+    }, [rawViewElement]);
+
+    const onInputChanged = (source: string | Uint8Array, newInputFile?: string) => {
+        if (newInputFile) {
+            setInputFileName(newInputFile);
+        } else if (inputFileName !== null) {
+            setInputFileName(null);
+            if (fileInputRef.current !== null) {
+                fileInputRef.current.value = '';
+            }
+        }
+        if (source.length === 0) {
             setInput({
-                source: '',
+                source: null,
                 encoding: null,
             });
             setDerValue(null);
         } else {
-            const res = decodeData(source);
+            let bytes: Uint8Array;
+            if (typeof source === 'string') {
+                bytes = Uint8Array.from(source, c => c.charCodeAt(0));
+            } else {
+                bytes = source;
+            }
+            const res = decodeData(bytes);
             if (typeof res === 'string') {
                 setInput({
-                    source,
+                    source: bytes,
                     encoding: {
                         error: res
                     },
@@ -168,7 +302,7 @@ const DecodeView = () => {
                 setDerValue(null);
             } else {
                 setInput({
-                    source,
+                    source: bytes,
                     encoding: {
                         format: res.format,
                         transferSyntax: TransferSyntax.DER,
@@ -184,39 +318,71 @@ const DecodeView = () => {
         }
     };
 
+    const onFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.currentTarget.files;
+        if (files === null || files.length !== 1) {
+            setInputFileName(null);
+            setDerValue(null);
+        } else {
+            const file = files[0];
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            onInputChanged(bytes, file.name);
+        }
+    };
+
+    const onRawViewClicked = () => {
+        if (derValue !== null) {
+            const selection = window.getSelection();
+            if (selection !== null) {
+                if (selection.anchorNode === rawViewElement!) {
+                    selection.empty();
+                    return;
+                }
+                selection.selectAllChildren(rawViewElement!);
+            }
+            navigator.clipboard.writeText(derValue);
+
+            toast.info('Copied value to clipboard!', {
+                position: 'bottom-center',
+                autoClose: 2000,
+                hideProgressBar: true,
+                closeOnClick: true,
+                pauseOnHover: false,
+                draggable: false,
+                theme: 'colored',
+                transition: Bounce,
+            });
+        }
+    };
+
     return (
-        <Grid container sx={{ fontSize: '1rem', padding: '10px', height: '100%' }} spacing={2}>
-            <Grid size={6}>
-                <Typography>Input</Typography>
-                <TextField
-                    slotProps={{
-                        htmlInput: {
-                            style: {
-                                fontFamily: 'Droid Sans Mono',
-                                fontSize: '10px',
-                            }
-                        }
-                    }}
-                    multiline
-                    rows={10}
-                    fullWidth
-                    value={input.source}
-                    onChange={event => onInputChanged(event.currentTarget.value)} />
-                {input.encoding && (
-                    'error' in input.encoding ? (
-                        <Typography variant="caption">
-                            Error: {input.encoding.error}
-                        </Typography>
-                    ) : (
-                        <Typography variant="caption">
-                            Detected encoding: {input.encoding.transferSyntax}-encoded {input.encoding.format}
-                        </Typography>
-                    )
-                )}
-            </Grid>
-            <Grid size={6} sx={{ height: '100%' }}>
-                <Grid container spacing={2} alignItems="center">
-                    <FormControl sx={{ flexGrow: 1 }}>
+        <Grid container direction="column" sx={{ fontSize: '1rem', padding: '10px', height: '100%', }} spacing={2}>
+            <Grid container direction="row" spacing={2} alignItems="center" sx={{ paddingRight: '10px' }}>
+                <Grid container direction="column" spacing={1} alignItems="flex-end">
+                    <InputDialog
+                        open={inputDialogOpen}
+                        source={input.source}
+                        encoding={input.encoding}
+                        onClose={() => setInputDialogOpen(false)}
+                        onChange={onInputChanged} />
+                    <ButtonGroup variant="contained">
+                        <Button onClick={() => setInputDialogOpen(true)}>Change Input</Button>
+                        <input
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            type="file"
+                            id="decode-file-upload-button"
+                            onChange={onFileInputChange} />
+                        <label htmlFor="decode-file-upload-button">
+                            <Button variant="contained" component="span">
+                                <FileUpload />
+                            </Button>
+                        </label>
+                    </ButtonGroup>
+                    {inputFileName && <Typography variant="caption">{inputFileName}</Typography>}
+                </Grid>
+                <Grid flexGrow={1}>
+                    <FormControl fullWidth>
                         <InputLabel id="ots-label">Output Transfer Syntax</InputLabel>
                         <Select
                             labelId="ots-label"
@@ -228,29 +394,45 @@ const DecodeView = () => {
                             ))}
                         </Select>
                     </FormControl>
-                    <Grid container direction="column" spacing={0}>
-                        <FormControlLabel control={
-                            <Checkbox
-                                checked={parseTLV}
-                                onChange={event => setParseTLV(event.currentTarget.checked)} />}
-                            label="Parse TLV" />
-                        <FormControlLabel disabled={!parseTLV} control={
-                            <Checkbox
-                                checked={useDefinitions}
-                                onChange={event => setUseDefinitions(event.currentTarget.checked)} />}
-                            label="Use Definitions" />
-                    </Grid>
                 </Grid>
-                <Grid
-                    container
-                    direction="column"
-                    sx={{
-                        overflowY: 'scroll',
-                        maxHeight: 'calc(100% - 75px)',
-                        paddingBottom: '40px',
-                    }}>
-                    {derValue && <DecodedValueInfo encodedValue={derValue} />}
-                </Grid>
+            </Grid>
+            <Grid container direction="row" spacing={0}>
+                <FormControlLabel control={
+                    <Checkbox
+                        checked={parseTLV}
+                        onChange={event => setParseTLV(event.currentTarget.checked)} />}
+                    label="Parse TLV" />
+                <FormControlLabel disabled={!parseTLV} control={
+                    <Checkbox
+                        checked={useDefinitions}
+                        onChange={event => setUseDefinitions(event.currentTarget.checked)} />}
+                    label="Use Definitions" />
+                <FormControlLabel disabled={!parseTLV} control={
+                    <Checkbox
+                        checked={decodeViewMode === 'tlv'}
+                        onChange={() => setDecodeViewMode(decodeViewMode === 'tlv' ? 'components' : 'tlv')} />}
+                    label="Binary View" />
+            </Grid>
+            <Grid
+                flexGrow={1}
+                sx={{
+                    overflow: 'scroll',
+                    maxHeight: 'calc(100% - 140px)',
+                    maxWidth: '100%',
+                    paddingBottom: '40px',
+                }}>
+                {derValue && (parseTLV ? (
+                    <DecodedValueInfo mode={decodeViewMode} encodedValue={derValue} />
+                ) : (
+                    <div
+                        ref={ref => setRawViewElement(ref)}
+                        style={{ userSelect: 'text' }}
+                        onClick={onRawViewClicked}>
+                        {chunkString(derValue, rawViewWidth !== null ? Math.floor(rawViewWidth / 10) : 80).map((chunk, i) => (
+                            <Typography key={i.toString()} fontFamily="Droid Sans Mono">{chunk}</Typography>
+                        ))}
+                    </div>
+                ))}
             </Grid>
         </Grid>
     );

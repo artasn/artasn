@@ -43,10 +43,16 @@ pub fn read_tlv_len(buf: &[u8]) -> io::Result<(u64, usize)> {
                 "TLV length ended early",
             ));
         }
+        const BUF_SIZE: usize = mem::size_of::<u64>();
+        if be_bytes_len as usize > BUF_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "TLV length is longer than 8 bytes",
+            ));
+        }
 
         let be_bytes = &buf[1..1 + be_bytes_len as usize];
 
-        const BUF_SIZE: usize = mem::size_of::<u64>();
         let mut be_buf = [0u8; BUF_SIZE];
         be_buf[BUF_SIZE - be_bytes.len()..].copy_from_slice(be_bytes);
 

@@ -681,6 +681,9 @@ fn parse_sequence_value(
                 if let Some(default_value) = &ty_component.default_value {
                     ((**default_value).clone(), true)
                 } else {
+                    if ty_component.optional {
+                        continue;
+                    }
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
                             "SEQUENCE value missing component '{}' of type {}",

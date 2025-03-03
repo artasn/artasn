@@ -371,23 +371,22 @@ impl BuiltinType {
 
         match (self, value) {
             (Self::Sequence(seq), Value::Sequence(value)) => {
-                if seq.components.len() != value.components.len() {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "SEQUENCE type has {} components, provided value has {}",
-                            seq.components.len(),
-                            value.components.len()
-                        )),
-                        loc: valref.loc,
+                for seq_component in &seq.components {
+                    let val_component = value.components.iter().find(|val_component| {
+                        val_component.name.element == seq_component.name.element
                     });
-                }
-
-                for i in 0..seq.components.len() {
-                    let seq_component = &seq.components[i];
-                    let val_component = &value.components[i];
-
-                    let seq_ty = seq_component.component_type.resolve()?;
-                    seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
+                    if let Some(val_component) = val_component {
+                        let seq_ty = seq_component.component_type.resolve()?;
+                        seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
+                    } else if seq_component.default_value.is_none() && !seq_component.optional {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "SEQUENCE missing required component '{}'",
+                                seq_component.name.element
+                            )),
+                            loc: valref.loc,
+                        });
+                    }
                 }
             }
             _ => (),

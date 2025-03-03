@@ -1,14 +1,18 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
 import { DecodedValue, DecodedValueKind, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
-import { Box, Typography } from '@mui/material';
+import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
+import { ChevronRight } from '@mui/icons-material';
+
+export type DecodedValueViewMode = 'tlv' | 'components';
 
 export interface DecodedValueInfoProps {
     encodedValue: string;
+    mode: DecodedValueViewMode;
 }
 
-const DecodedValueInfo = ({ encodedValue }: DecodedValueInfoProps) => {
+const DecodedValueInfo = ({ encodedValue, mode }: DecodedValueInfoProps) => {
     const [values, setValues] = useState<{
         values: DecodedValue[]
     } | {
@@ -41,33 +45,79 @@ const DecodedValueInfo = ({ encodedValue }: DecodedValueInfoProps) => {
 
     return (
         <Box sx={{ fontFamily: 'Droid Sans Mono' }}>
-            {values.values.map(value => getValueComponent(encodedValue, value))}
+            {values.values.map(value =>
+                <ValueComponent
+                    key={stringifyJSON(value)}
+                    mode={mode}
+                    encodedValue={encodedValue}
+                    value={value}
+                    style={value.form.type === 'constructed'
+                        ? { paddingLeft: '40px' }
+                        : undefined} />
+            )}
         </Box>
     );
 };
 
 export default DecodedValueInfo;
 
-function getValueComponent(encodedValue: string, value: DecodedValue) {
+interface ValueComponentProps {
+    encodedValue: string;
+    mode: DecodedValueViewMode;
+    value: DecodedValue;
+    style?: CSSProperties;
+}
+
+const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProps) => {
+    const [expanded, setExpanded] = useState(true);
+
     const tagBytes = value.tag.pos.end - value.tag.pos.start;
+
+    let rootStyle = style ?? {};
+    if (value.form.type === 'constructed') {
+        rootStyle = {
+            ...rootStyle,
+            marginLeft: '-40px',
+        };
+    }
     return (
-        <span key={stringifyJSON(value)}>
-            <HoverableText hoverElement={getTagElement(value.tag)} style={{ backgroundColor: 'lavender' }}>
-                {getHexSlice(encodedValue, value.tag.pos)}
-            </HoverableText>
-            <HoverableText hoverElement={getLengthElement(value.len.len)} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
-                {getHexSlice(encodedValue, value.len.pos)}
-            </HoverableText>
-            {value.form.type == 'primitive' ? (
-                <HoverableText hoverElement={getValueKindElement(value.form.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
-                    {getHexSlice(encodedValue, value.valuePos)}
-                </HoverableText>
-            ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', margin: `10px 0px 0px ${tagBytes * 24}px`, gap: '10px', }}>
-                    {value.form.elements.map(element => getValueComponent(encodedValue, element))}
-                </Box>
+        <div style={rootStyle}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', }}>
+                {value.form.type === 'constructed' && (
+                    <IconButton onClick={() => setExpanded(!expanded)}>
+                        <ChevronRight sx={{
+                            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        }} />
+                    </IconButton>
+                )}
+                {mode === 'tlv' ? (
+                    <>
+                        <HoverableText hoverElement={getTagElement(value.tag)} style={{ backgroundColor: 'lavender' }}>
+                            {getHexSlice(encodedValue, value.tag.pos)}
+                        </HoverableText>
+                        <HoverableText hoverElement={getLengthElement(value.len.len)} style={{ backgroundColor: 'lightblue', marginLeft: '5px' }}>
+                            {getHexSlice(encodedValue, value.len.pos)}
+                        </HoverableText>
+                        {value.form.type == 'primitive' && (
+                            <HoverableText hoverElement={getValueKindElement(value.form.kind)} style={{ backgroundColor: 'lightgreen', marginLeft: '5px' }}>
+                                {getHexSlice(encodedValue, value.valuePos)}
+                            </HoverableText>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {getTagElement(value.tag)}
+                        &nbsp;
+                        {value.form.type == 'primitive' && getValueKindElement(value.form.kind, false)}
+                    </>
+                )}
+            </span>
+            {value.form.type == 'constructed' && expanded && (
+                <Grid container direction="column" sx={{ marginLeft: `${40 + tagBytes * 19 + 5}px`, gap: '10px', }}>
+                    {value.form.elements.map(element => <ValueComponent key={stringifyJSON(element)} mode={mode} encodedValue={encodedValue} value={element} />)}
+                </Grid>
             )}
-        </span>
+        </div>
     );
 }
 
@@ -86,8 +136,8 @@ const tagTypeMap: Record<number, string> = {
     10: 'ENUMERATED',
     16: 'SEQUENCE',
     17: 'SET',
-    18: 'NUMERIC STRING',
-    19: 'PRINTABLE STRING',
+    18: 'NumericString',
+    19: 'PrintableString',
 };
 const BRACKET_COLOR = '#0431fa';
 const LITERAL_COLOR = '#098658';
@@ -103,19 +153,15 @@ function getTagElement(tag: TlvTag) {
             </>
         );
     } else {
-        return (
+        return tag.class === 'UNIVERSAL' && tag.num in tagTypeMap ? (
+            <span style={{ color: IDENT_COLOR }}>{tagTypeMap[tag.num]}</span>
+        ) : (
             <>
                 <span style={{ color: BRACKET_COLOR }}>[</span>
                 <span style={{ color: IDENT_COLOR }}>{tag.class}</span>
                 &nbsp;
                 <span style={{ color: LITERAL_COLOR }}>{tag.num}</span>
                 <span style={{ color: BRACKET_COLOR }}>]</span>
-                {tag.class === 'UNIVERSAL' && tag.num in tagTypeMap && (
-                    <>
-                        &nbsp;
-                        <span style={{ color: IDENT_COLOR }}>{tagTypeMap[tag.num]}</span>
-                    </>
-                )}
             </>
         );
     }
@@ -130,19 +176,26 @@ function getLengthElement(len: number) {
     );
 }
 
-function getValueKindElement(kind: DecodedValueKind) {
+function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true) {
     switch (kind.type) {
         case 'RAW':
-            return 'Raw Data';
+            if (includeType) {
+                return 'Raw Data';
+            } else {
+                return kind.data;
+            }
         case 'BOOLEAN':
             return <span style={{ color: IDENT_COLOR }}>{kind.data.toString().toUpperCase()}</span>;
         case 'INTEGER':
-        case 'BIT STRING':
         case 'REAL':
             return (
                 <>
-                    <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
-                    &nbsp;
+                    {includeType && (
+                        <>
+                            <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
+                            &nbsp;
+                        </>
+                    )}
                     <span style={{ color: LITERAL_COLOR }}>{kind.data.toString()}</span>
                 </>
             );
@@ -151,19 +204,32 @@ function getValueKindElement(kind: DecodedValueKind) {
             return (
                 <>
                     {joinNodes(kind.data.split('.').map(node => (<span style={{ color: LITERAL_COLOR }}>{node}</span>)), (<span>.</span>))}
-                    {desc && <span>&nbsp; ({desc})</span>}
+                    {desc && <span>&nbsp;({desc})</span>}
                 </>
             );
+        case 'BIT STRING':
+            return <span style={{ color: LITERAL_COLOR }}>{kind.data.toString(2)}</span>;
         case 'OCTET STRING':
-            return 'Binary Data';
+            if (includeType) {
+                return 'Binary Data';
+            } else {
+                return <span style={{ color: LITERAL_COLOR }}>{kind.data}</span>;
+            }
         case 'NULL':
+            if (!includeType) {
+                return null;
+            }
             return 'NULL';
         case 'NumericString':
         case 'PrintableString':
             return (
                 <>
-                    <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
-                    &nbsp;
+                    {includeType && (
+                        <>
+                            <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
+                            &nbsp;
+                        </>
+                    )}
                     <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
                 </>
             );
@@ -215,6 +281,7 @@ const HoverableText = ({ children, hoverElement, style }: React.PropsWithChildre
                         padding: '10px',
                         border: '1px solid lightgrey',
                         borderRadius: '3px',
+                        zIndex: 999,
                     }}>
                     {hoverElement}
                 </div>
