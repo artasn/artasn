@@ -228,12 +228,33 @@ pub enum TagType {
     OctetString = 4,
     Null = 5,
     ObjectIdentifier = 6,
+    ObjectDescriptor = 7,
+    External = 8,
     Real = 9,
     Enumerated = 10,
+    EmbeddedPDV = 11,
+    UTF8String = 12,
+    RelativeOid = 13,
+    Time = 14,
     Sequence = 16,
     Set = 17,
     NumericString = 18,
     PrintableString = 19,
+    TeletexString = 20,
+    VideotexString = 21,
+    IA5String = 22,
+    UTCTime = 23,
+    GeneralizedTime = 24,
+    GraphicString = 25,
+    VisibleString = 26,
+    GeneralString = 27,
+    UniversalString = 28,
+    CharacterString = 29,
+    BMPString = 30,
+    Date = 31,
+    TimeOfDay = 32,
+    DateTime = 33,
+    Duration = 34,
 }
 
 impl TagType {
@@ -256,12 +277,33 @@ impl Display for TagType {
             Self::OctetString => "OCTET STRING",
             Self::Null => "NULL",
             Self::ObjectIdentifier => "OBJECT IDENTIFIER",
+            Self::ObjectDescriptor => "ObjectDescriptor",
+            Self::External => "EXTERNAL",
             Self::Real => "REAL",
             Self::Enumerated => "ENUMERATED",
+            Self::EmbeddedPDV => "EMBEDDED PDV",
+            Self::UTF8String => "UTF8String",
+            Self::RelativeOid => "RELATIVE-OID",
+            Self::Time => "TIME",
             Self::Sequence => "SEQUENCE",
             Self::Set => "SET",
-            Self::NumericString => "NUMERIC STRING",
-            Self::PrintableString => "PRINTABLE STRING",
+            Self::NumericString => "NumericString",
+            Self::PrintableString => "PrintableString",
+            Self::TeletexString => "TeletexString",
+            Self::VideotexString => "VideotexString",
+            Self::IA5String => "IA5String",
+            Self::UTCTime => "UTCTime",
+            Self::GeneralizedTime => "GeneralizedTime",
+            Self::GraphicString => "GraphicString",
+            Self::VisibleString => "VisibleString",
+            Self::GeneralString => "GeneralString",
+            Self::UniversalString => "UniversalString",
+            Self::CharacterString => "CHARACTER STRING",
+            Self::BMPString => "BMPString",
+            Self::Date => "DATE",
+            Self::TimeOfDay => "TIME-OF-DAY",
+            Self::DateTime => "DATE-TIME",
+            Self::Duration => "DURATION",
         })
     }
 }
@@ -287,8 +329,7 @@ pub enum BuiltinType {
     Set(Structure),
     SetOf(StructureOf),
     Choice(Choice),
-    NumericString,
-    PrintableString,
+    CharacterString(TagType),
 }
 
 impl BuiltinType {
@@ -305,8 +346,7 @@ impl BuiltinType {
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
             Self::Choice(_) => return None,
-            Self::NumericString => TagType::NumericString,
-            Self::PrintableString => TagType::PrintableString,
+            Self::CharacterString(tag_type) => *tag_type,
         })
     }
 
@@ -398,22 +438,9 @@ impl BuiltinType {
 
 impl Display for BuiltinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Boolean => "BOOLEAN",
-            Self::Integer(_) => "INTEGER",
-            Self::BitString(_) => "BIT STRING",
-            Self::OctetString(_) => "OCTET STRING",
-            Self::Null => "NULL",
-            Self::ObjectIdentifier => "OBJECT IDENTIFIER",
-            Self::Real => "REAL",
-            Self::Enumerated(_) => "ENUMERATED",
-            Self::Sequence(_) => "SEQUENCE",
-            Self::SequenceOf(_) => "SEQUENCE OF",
-            Self::Set(_) => "SET",
-            Self::SetOf(_) => "SET OF",
-            Self::Choice(_) => "CHOICE",
-            Self::NumericString => "NUMERIC STRING",
-            Self::PrintableString => "PRINTABLE STRING",
-        })
+        match self {
+            Self::Choice(_) => f.write_str("CHOICE"),
+            other => other.tag_type().unwrap().fmt(f),
+        }
     }
 }

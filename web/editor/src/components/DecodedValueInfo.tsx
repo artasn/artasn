@@ -1,6 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
-import { DecodedValue, DecodedValueKind, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
+import { DecodedValue, DecodedValueKind, isCharacterStringType, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
 import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
 import { ChevronRight } from '@mui/icons-material';
@@ -132,12 +132,33 @@ const tagTypeMap: Record<number, string> = {
     4: 'OCTET STRING',
     5: 'NULL',
     6: 'OBJECT IDENTIFIER',
+    7: 'ObjectDescriptor',
+    8: 'EXTERNAL',
     9: 'REAL',
     10: 'ENUMERATED',
+    11: 'EMBEDDED PDV',
+    12: 'UTF8String',
+    13: 'RELATIVE-OID',
+    14: 'TIME',
     16: 'SEQUENCE',
     17: 'SET',
     18: 'NumericString',
     19: 'PrintableString',
+    20: 'TeletexString',
+    21: 'VideotexString',
+    22: 'IA5String',
+    23: 'UTCTime',
+    24: 'GeneralizedTime',
+    25: 'GraphicString',
+    26: 'VisibleString',
+    27: 'GeneralString',
+    28: 'UniversalString',
+    29: 'CHARACTER STRING',
+    30: 'BMPString',
+    31: 'DATE',
+    32: 'TIME-OF-DAY',
+    33: 'DATE-TIME',
+    34: 'DURATION',
 };
 const BRACKET_COLOR = '#0431fa';
 const LITERAL_COLOR = '#098658';
@@ -220,19 +241,25 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
                 return null;
             }
             return 'NULL';
-        case 'NumericString':
-        case 'PrintableString':
-            return (
-                <>
-                    {includeType && (
-                        <>
-                            <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
-                            &nbsp;
-                        </>
-                    )}
-                    <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
-                </>
-            );
+        case 'UTCTime':
+            const { year, month, day, hour, minute, second, tz } = kind.data;
+            const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+            // TODO: tz
+            return date.toUTCString();
+        default:
+            if (isCharacterStringType(kind.type)) {
+                return (
+                    <>
+                        {includeType && (
+                            <>
+                                <span style={{ color: IDENT_COLOR }}>{kind.type}</span>
+                                &nbsp;
+                            </>
+                        )}
+                        <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
+                    </>
+                );
+            }
     }
 }
 

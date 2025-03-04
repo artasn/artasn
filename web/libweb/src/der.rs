@@ -2,6 +2,7 @@ use std::io;
 
 use asn1chef::encoding::{
     DecodedValue, DecodedValueForm, DecodedValueKind, DerReader, TlvElement, TlvPos, TlvTag,
+    UTCTimeZone, UTCTimeZoneSign,
 };
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
@@ -49,30 +50,69 @@ fn serialize_decoded_value_form(form: DecodedValueForm) -> JsValue {
 
 fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
     let obj = Object::new();
-    let (field, ty, data) = match kind {
-        DecodedValueKind::Raw(data) => ("data", "RAW", hex::encode_upper(data).into()),
-        DecodedValueKind::Boolean(data) => ("data", "BOOLEAN", data.into()),
+    let (field, ty, data): (&'static str, JsValue, JsValue) = match kind {
+        DecodedValueKind::Raw(data) => ("data", "RAW".into(), hex::encode_upper(data).into()),
+        DecodedValueKind::Boolean(data) => ("data", "BOOLEAN".into(), data.into()),
         DecodedValueKind::Integer(data) => {
             let int_str = data.to_string().into();
             let bigint = BigInt::new(&int_str).expect("INTEGER -> bigint");
-            ("data", "INTEGER", bigint.into())
+            ("data", "INTEGER".into(), bigint.into())
         }
         DecodedValueKind::BitString(data) => {
             let bit_str = data.to_string().into();
             let bigint = BigInt::new(&bit_str).expect("BIT STRING -> bigint");
-            ("data", "BIT STRING", bigint.into())
+            ("data", "BIT STRING".into(), bigint.into())
         }
-        DecodedValueKind::OctetString(data) => {
-            ("data", "OCTET STRING", hex::encode_upper(data).into())
-        }
-        DecodedValueKind::Null => ("data", "NULL", JsValue::null()),
+        DecodedValueKind::OctetString(data) => (
+            "data",
+            "OCTET STRING".into(),
+            hex::encode_upper(data).into(),
+        ),
+        DecodedValueKind::Null => ("data", "NULL".into(), JsValue::null()),
         DecodedValueKind::ObjectIdentifier(data) => {
-            ("data", "OBJECT IDENTIFIER", data.to_string().into())
+            ("data", "OBJECT IDENTIFIER".into(), data.to_string().into())
         }
-        DecodedValueKind::Real(data) => ("data", "REAL", data.to_string().into()),
-        DecodedValueKind::PrintableString(str) => ("data", "PrintableString", str.into()),
+        DecodedValueKind::Real(data) => ("data", "REAL".into(), data.to_string().into()),
+        DecodedValueKind::CharacterString(tag_type, str) => {
+            ("data", tag_type.to_string().into(), str.into())
+        }
+        DecodedValueKind::UTCTime {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            tz,
+        } => {
+            let obj = Object::new();
+            Reflect::set(&obj, &"year".into(), &year.0.into()).unwrap();
+            Reflect::set(&obj, &"month".into(), &month.0.into()).unwrap();
+            Reflect::set(&obj, &"day".into(), &day.0.into()).unwrap();
+            Reflect::set(&obj, &"hour".into(), &hour.0.into()).unwrap();
+            Reflect::set(&obj, &"minute".into(), &minute.0.into()).unwrap();
+            if let Some(second) = second {
+                Reflect::set(&obj, &"second".into(), &second.0.into()).unwrap();
+            }
+            let tz: JsValue = match tz {
+                UTCTimeZone::Z => "Z".into(),
+                UTCTimeZone::Offset { sign, hour, minute } => {
+                    let obj = Object::new();
+                    let sign = match sign {
+                        UTCTimeZoneSign::Plus => "+",
+                        UTCTimeZoneSign::Minus => "-",
+                    };
+                    Reflect::set(&obj, &"sign".into(), &sign.into()).unwrap();
+                    Reflect::set(&obj, &"hour".into(), &hour.0.into()).unwrap();
+                    Reflect::set(&obj, &"minute".into(), &minute.0.into()).unwrap();
+                    obj.into()
+                }
+            };
+            Reflect::set(&obj, &"tz".into(), &tz).unwrap();
+            ("data", "UTCTime".into(), obj.into())
+        }
     };
-    Reflect::set(&obj, &"type".into(), &ty.into()).unwrap();
+    Reflect::set(&obj, &"type".into(), &ty).unwrap();
     Reflect::set(&obj, &field.into(), &data).unwrap();
     obj.into()
 }

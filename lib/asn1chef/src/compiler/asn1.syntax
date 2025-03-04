@@ -384,6 +384,10 @@ rule Constraints {
     operator )
 }
 
+rule Boolean {
+    keyword BOOLEAN
+}
+
 rule Integer {
     captures {
         value_constraints = optional: Constraints
@@ -448,7 +452,49 @@ rule OctetString {
     }
 }
 
-variant SequenceKind = SingleSequence {
+rule Null {
+    keyword NULL
+}
+
+rule ObjectIdentifier {
+    keyword OBJECT
+    keyword IDENTIFIER
+}
+
+rule ObjectDescriptor {
+    keyword ObjectDescriptor
+}
+
+rule External {
+    keyword EXTERNAL
+}
+
+rule Real {
+    keyword REAL
+}
+
+rule Enumerated {
+    keyword ENUMERATED
+}
+
+rule EmbeddedPDV {
+    keyword EMBEDDED
+    keyword PDV
+}
+
+rule UTF8String {
+    keyword UTF8String
+}
+
+rule RelativeOid {
+    keyword RELATIVE-OID
+}
+
+rule Time {
+    keyword TIME
+}
+
+variant StructureKind = SingleStructure {
     captures {
         components = repeated: StructureComponent
     }
@@ -462,7 +508,7 @@ variant SequenceKind = SingleSequence {
         components = StructureComponent
     }
     operator }
-} | SequenceOf {
+} | StructureOf {
     captures {
         size_constraints = optional: SizeConstraints
         ty = boxed Type
@@ -478,11 +524,21 @@ variant SequenceKind = SingleSequence {
 
 rule Sequence {
     captures {
-        kind = SequenceKind
+        kind = StructureKind
     }
     keyword SEQUENCE
     persist
-    kind = SequenceKind
+    kind = StructureKind
+    return kind
+}
+
+rule Set {
+    captures {
+        kind = StructureKind
+    }
+    keyword SET
+    persist
+    kind = StructureKind
     return kind
 }
 
@@ -517,10 +573,72 @@ rule PrintableString {
     keyword PrintableString
 }
 
-variant BuiltinType = BitString | OctetString | Integer | Sequence | ObjectIdentifier {
-    keyword OBJECT
-    keyword IDENTIFIER
-} | NumericString | PrintableString;
+rule TeletexString {
+    keyword TeletexString
+}
+
+rule VideotexString {
+    keyword VideotexString
+}
+
+rule IA5String {
+    keyword IA5String
+}
+
+rule UTCTime {
+    keyword UTCTime
+}
+
+rule GeneralizedTime {
+    keyword GeneralizedTime
+}
+
+rule GraphicString {
+    keyword GraphicString
+}
+
+rule VisibleString {
+    keyword VisibleString
+}
+
+rule GeneralString {
+    keyword GeneralString
+}
+
+rule UniversalString {
+    keyword UniversalString
+}
+
+rule CharacterString {
+    keyword CHARACTER
+    keyword STRING
+}
+
+rule BMPString {
+    keyword BMPString
+}
+
+rule Date {
+    keyword DATE
+}
+
+rule TimeOfDay {
+    keyword TIME-OF-DAY
+}
+
+rule DateTime {
+    keyword DATE-TIME
+}
+
+rule Duration {
+    keyword DURATION
+}
+
+variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor |
+    External | Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Sequence | Set |
+    NumericString | PrintableString | TeletexString | VideotexString | IA5String | UTCTime | 
+    GeneralizedTime | GraphicString | VisibleString | GeneralString | UniversalString | CharacterString |
+    BMPString | Date | TimeOfDay | DateTime | Duration;
 
 variant Class = Universal {
     keyword UNIVERSAL

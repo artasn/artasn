@@ -377,12 +377,44 @@ fn parse_size_constraints(
     })
 }
 
+fn parse_structure_type(
+    oid: &ModuleIdentifier,
+    tag_type: TagType,
+    structure: &AstElement<AstStructureKind>,
+) -> Result<BuiltinType> {
+    Ok(match &structure.element {
+        AstStructureKind::SingleStructure(structure) => BuiltinType::Sequence(Structure {
+            ty: tag_type,
+            components: parse_structure_components(oid, &structure.element.components)?,
+        }),
+        AstStructureKind::StructureOf(structure_of) => BuiltinType::SequenceOf(StructureOf {
+            ty: tag_type,
+            size_constraints: parse_size_constraints(
+                oid,
+                structure_of.element.size_constraints.as_ref(),
+            )?,
+            component_type: Box::new(parse_type(
+                oid,
+                &structure_of.element.ty,
+                TypeContext::Contextless,
+            )?),
+        }),
+    })
+}
+
 fn parse_builtin_type(
     oid: &ModuleIdentifier,
     builtin: &AstElement<AstBuiltinType>,
 ) -> Result<BuiltinType> {
     Ok(match &builtin.element {
-        AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
+        AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
+        AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
+            named_values: None, // TODO
+            value_constraints: match &integer.element.value_constraints {
+                Some(sc) => Some(parse_constraints(oid, ConstraintsKind::Value, sc)?),
+                None => None,
+            },
+        }),
         AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
             named_bits: None, // TODO
             size_constraints: parse_size_constraints(
@@ -404,33 +436,45 @@ fn parse_builtin_type(
                     .map(|sc| &sc.element.0),
             )?,
         }),
-        AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
-            named_values: None, // TODO
-            value_constraints: match &integer.element.value_constraints {
-                Some(sc) => Some(parse_constraints(oid, ConstraintsKind::Value, sc)?),
-                None => None,
-            },
-        }),
-        AstBuiltinType::Sequence(sequence) => match &sequence.element.0.element {
-            AstSequenceKind::SingleSequence(seq) => BuiltinType::Sequence(Structure {
-                ty: TagType::Sequence,
-                components: parse_structure_components(oid, &seq.element.components)?,
-            }),
-            AstSequenceKind::SequenceOf(seq_of) => BuiltinType::SequenceOf(StructureOf {
-                ty: TagType::Sequence,
-                size_constraints: parse_size_constraints(
-                    oid,
-                    seq_of.element.size_constraints.as_ref(),
-                )?,
-                component_type: Box::new(parse_type(
-                    oid,
-                    &seq_of.element.ty,
-                    TypeContext::Contextless,
-                )?),
-            }),
-        },
-        AstBuiltinType::NumericString(_) => BuiltinType::NumericString,
-        AstBuiltinType::PrintableString(_) => BuiltinType::PrintableString,
+        AstBuiltinType::Null(_) => BuiltinType::Null,
+        AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
+        AstBuiltinType::ObjectDescriptor(_) => todo!("ObjectDescriptor"),
+        AstBuiltinType::External(_) => todo!("External"),
+        AstBuiltinType::Real(_) => todo!("Real"),
+        AstBuiltinType::Enumerated(_) => todo!("Enumerated"),
+        AstBuiltinType::EmbeddedPDV(_) => todo!("EmbeddedPDV"),
+        AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
+        AstBuiltinType::RelativeOid(_) => todo!("RelativeOid"),
+        AstBuiltinType::Time(_) => todo!("Time"),
+        AstBuiltinType::Sequence(sequence) => {
+            parse_structure_type(oid, TagType::Sequence, &sequence.element.0)?
+        }
+        AstBuiltinType::Set(sequence) => {
+            parse_structure_type(oid, TagType::Set, &sequence.element.0)?
+        }
+        AstBuiltinType::NumericString(_) => BuiltinType::CharacterString(TagType::NumericString),
+        AstBuiltinType::PrintableString(_) => {
+            BuiltinType::CharacterString(TagType::PrintableString)
+        }
+        AstBuiltinType::TeletexString(_) => BuiltinType::CharacterString(TagType::TeletexString),
+        AstBuiltinType::VideotexString(_) => BuiltinType::CharacterString(TagType::VideotexString),
+        AstBuiltinType::IA5String(_) => BuiltinType::CharacterString(TagType::IA5String),
+        AstBuiltinType::UTCTime(_) => todo!("UTCTime"),
+        AstBuiltinType::GeneralizedTime(_) => todo!("GeneralizedTime"),
+        AstBuiltinType::GraphicString(_) => BuiltinType::CharacterString(TagType::GraphicString),
+        AstBuiltinType::VisibleString(_) => BuiltinType::CharacterString(TagType::VisibleString),
+        AstBuiltinType::GeneralString(_) => BuiltinType::CharacterString(TagType::GeneralString),
+        AstBuiltinType::UniversalString(_) => {
+            BuiltinType::CharacterString(TagType::UniversalString)
+        }
+        AstBuiltinType::CharacterString(_) => {
+            BuiltinType::CharacterString(TagType::CharacterString)
+        }
+        AstBuiltinType::BMPString(_) => BuiltinType::CharacterString(TagType::BMPString),
+        AstBuiltinType::Date(_) => todo!("Date"),
+        AstBuiltinType::TimeOfDay(_) => todo!("TimeOfDay"),
+        AstBuiltinType::DateTime(_) => todo!("DateTime"),
+        AstBuiltinType::Duration(_) => todo!("Duration"),
     })
 }
 
@@ -702,7 +746,7 @@ fn parse_sequence_value(
             is_default,
         });
     }
-    Ok(Value::Sequence(SequenceValue { components }))
+    Ok(Value::Sequence(StructureValue { components }))
 }
 
 fn parse_character_string(
@@ -719,23 +763,38 @@ fn parse_character_string(
                     tag_type
                 )),
                 loc: str_lit.loc,
-            })
+            });
         }
     };
     let validator = match tag_type {
+        TagType::UTF8String
+        | TagType::UniversalString
+        | TagType::GeneralString
+        | TagType::BMPString
+        | TagType::CharacterString => |_: char| true,
         TagType::NumericString => |ch: char| ch.is_ascii_digit() || ch == ' ',
         TagType::PrintableString => {
             |ch: char| ch.is_ascii_alphanumeric() || " '()+,-./:=?".contains(ch)
         }
+        TagType::TeletexString | TagType::VideotexString => {
+            |ch: char| ch.is_ascii_graphic() || ch == ' ' || ch == '\x7f'
+        }
+        TagType::VisibleString => |ch: char| ch.is_ascii_graphic() || ch == ' ',
+        TagType::IA5String => |ch: char| ch <= '\x7f',
+        TagType::GraphicString => |ch: char| ch == ' ' || ch.is_alphanumeric(),
         _ => unreachable!(),
     };
     let invalid = cstring.chars().map(validator).any(|valid| !valid);
-    if invalid {}
-    Ok(match tag_type {
-        TagType::NumericString => Value::NumericString(cstring),
-        TagType::PrintableString => Value::PrintableString(cstring),
-        _ => unreachable!(),
-    })
+    if invalid {
+        return Err(Error {
+            kind: ErrorKind::Ast(format!(
+                "provided cstring does not meet the character constraints for {}",
+                tag_type
+            )),
+            loc: str_lit.loc,
+        });
+    }
+    Ok(Value::CharacterString(tag_type, cstring))
 }
 
 fn parse_value(
@@ -786,11 +845,8 @@ fn parse_value(
                                 .to_bytes_be(),
                         )
                     }
-                    BuiltinType::NumericString => {
-                        parse_character_string(str_lit, TagType::NumericString)?
-                    }
-                    BuiltinType::PrintableString => {
-                        parse_character_string(str_lit, TagType::PrintableString)?
+                    BuiltinType::CharacterString(tag_type) => {
+                        parse_character_string(str_lit, *tag_type)?
                     }
                     other_type => {
                         return Err(Error {

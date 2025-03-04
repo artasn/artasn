@@ -49,6 +49,25 @@ export enum TagSource {
     KindSpecified = 'KindSpecified',
 }
 
+export enum CharacterStringType {
+    UTF8String = 'UTF8String',
+    NumericString = 'NumericString',
+    PrintableString = 'PrintableString',
+    TeletexString = 'TeletexString',
+    VideotexString = 'VideotexString',
+    IA5String = 'IA5String',
+    GraphicString = 'GraphicString',
+    VisibleString = 'VisibleString',
+    GeneralString = 'GeneralString',
+    UniversalString = 'UniversalString',
+    CharacterString = 'CHARACTER STRING',
+    BMPString = 'BMPString',
+};
+
+export function isCharacterStringType(type: string): type is CharacterStringType {
+    return Object.values(CharacterStringType).includes(type as CharacterStringType);
+}
+
 export type BuiltinType = {
     type: 'BOOLEAN';
 } | {
@@ -72,9 +91,7 @@ export type BuiltinType = {
     type: 'SEQUENCE OF';
     componentType: TaggedType;
 } | {
-    type: 'NumericString';
-} | {
-    type: 'PrintableString';
+    type: CharacterStringType;
 };
 
 export interface StructureComponent {
@@ -128,10 +145,7 @@ export type Value = {
     type: 'SEQUENCE OF';
     elements: ValueReference[];
 } | {
-    type: 'NumericString';
-    value: string;
-} | {
-    type: 'PrintableString';
+    type: CharacterStringType;
     value: string;
 };
 
@@ -202,9 +216,21 @@ export type DecodedValueKind = {
     type: 'REAL';
     data: number;
 } | {
-    type: 'NumericString';
+    type: CharacterStringType;
     data: string;
 } | {
-    type: 'PrintableString';
-    data: string;
+    type: 'UTCTime';
+    data: {
+        year: number;
+        month: number;
+        day: number;
+        hour: number;
+        minute: number;
+        second?: number;
+        tz: 'Z' | {
+            sign: '+' | '-';
+            hour: number;
+            minute: number;
+        };
+    };
 };

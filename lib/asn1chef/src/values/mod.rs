@@ -1,6 +1,6 @@
 mod simple;
 
-use num::{bigint::Sign, BigInt, BigUint};
+use num::{BigInt, BigUint};
 pub use simple::*;
 
 use crate::{
@@ -23,11 +23,12 @@ pub enum Value {
     ObjectIdentifier(ObjectIdentifier),
     Real(f64),
     Enumerated(EnumeratedValue),
-    Sequence(SequenceValue),
+    Sequence(StructureValue),
     SequenceOf(Vec<AstElement<valref!()>>),
+    Set(StructureValue),
+    SetOf(Vec<AstElement<valref!()>>),
     Choice(ChoiceValue),
-    NumericString(String),
-    PrintableString(String),
+    CharacterString(TagType, String),
 }
 
 impl Value {
@@ -42,31 +43,13 @@ impl Value {
             Self::Real(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
+            Self::Set(_) | Self::SetOf(_) => TagType::Set,
             Self::Choice(choice) => choice
                 .value
                 .resolve()
                 .expect("CHOICE value failed to resolve")
                 .tag_type(),
-            Self::NumericString(_) => TagType::PrintableString,
-            Self::PrintableString(_) => TagType::PrintableString,
-        }
-    }
-
-    pub fn type_name(&self) -> &'static str {
-        match self {
-            Self::Boolean(_) => "BOOLEAN",
-            Self::Integer(_) => "INTEGER",
-            Self::BitString(_) => "BIT STRING",
-            Self::OctetString(_) => "OCTET STRING",
-            Self::Null => "NULL",
-            Self::ObjectIdentifier(_) => "OBJECT IDENTIFIER",
-            Self::Real(_) => "REAL",
-            Self::Enumerated(_) => "ENUMERATED",
-            Self::Sequence(_) => "SEQUENCE",
-            Self::SequenceOf(_) => "SEQUENCE OF",
-            Self::Choice(_) => "CHOICE",
-            Self::NumericString(_) => "NumericString",
-            Self::PrintableString(_) => "PrintableString",
+            Self::CharacterString(tag_type, _) => *tag_type,
         }
     }
 
@@ -76,6 +59,21 @@ impl Value {
     pub fn der_encode(&self, buf: &mut Vec<u8>, tagged_type: &ResolvedType) -> Result<()> {
         let start_len = buf.len();
         match self {
+            Self::Boolean(b) => {
+                if *b {
+                    buf.push(0x01);
+                } else {
+                    buf.push(0x00);
+                }
+            }
+            Self::Integer(num) => encoding::der_encode_integer(buf, num.clone()),
+            Self::BitString(bit_string) => {
+                let le_bytes = bit_string.to_bytes_le();
+                buf.extend(&le_bytes);
+                buf.push(0x00); // TODO: implement support for bit strings with bit length not a multiple of 8
+            }
+            Self::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
+            Self::Null => (),
             Self::ObjectIdentifier(oid) => {
                 let oid = oid.resolve_oid()?.0;
 
@@ -88,66 +86,39 @@ impl Value {
                         kind: ErrorKind::Ast(
                             "illegal OBJECT IDENTIFIER with less than two nodes".to_string(),
                         ),
-                        loc: Loc::default(),
+                        loc: Loc::default(), // TODO: add loc info to the entire oid, not just its elements
                     });
                 }
 
                 let prefix = oid[0] * 40 + oid[1];
                 encoding::write_vlq(prefix, buf);
             }
-            Self::Integer(num) => {
-                const SIGN_MASK: u8 = 0b1000_0000;
-
-                let mut num = num.clone();
-                let sign = num.sign();
-                if sign == Sign::Minus {
-                    // add one to the value for two's complement negative representation
-                    num += 1;
-                }
-
-                if num == BigInt::ZERO {
-                    if sign == Sign::Minus {
-                        // fast encode for -1
-                        buf.extend_from_slice(&[0xff]);
-                    } else {
-                        // fast encode for 0
-                        buf.extend_from_slice(&[0x00]);
+            Self::Enumerated(enumerated) => {
+                let resolved = enumerated.item.resolve()?;
+                let num = match resolved {
+                    Self::Integer(num) => num.clone(),
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(
+                                "ENUMERATED value must be of type INTEGER".to_string(),
+                            ),
+                            loc: enumerated.item.loc,
+                        })
                     }
-                } else {
-                    let (_, mut bytes) = num.to_bytes_le();
-
-                    // invert all bits when the number is negative
-                    if sign == Sign::Minus {
-                        for i in 0..bytes.len() {
-                            bytes[i] = !bytes[i];
-                        }
-                    }
-
-                    // write the bytes in little-endian order,
-                    // such that when the DER is reversed after encoding,
-                    // the bytes are in big-endian order
-                    buf.extend_from_slice(&bytes);
-
-                    let msb = bytes[bytes.len() - 1];
-                    if sign != Sign::Minus && msb & SIGN_MASK == SIGN_MASK {
-                        // when the sign bit is set in the msb, but the number is positive, add a padding byte without the sign bit
-                        buf.extend_from_slice(&[0x00]);
-                    } else if sign == Sign::Minus && msb & SIGN_MASK != SIGN_MASK {
-                        // when the sign bit is not set in the msb, but the number is negative, add a padding byte containing the sign bit
-                        buf.extend_from_slice(&[0xff]);
-                    }
-                }
+                };
+                encoding::der_encode_integer(buf, num);
             }
-            Self::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
-            Self::Sequence(sequence) => {
-                // ast.rs guarantees all components in SEQUENCE type are provided in value,
-                // and that the value provides only components in the SEQUENCE type,
+            Self::Sequence(structure) | Self::Set(structure) => {
+                // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
+                // and that the value provides only components in the SEQUENCE/SET type,
                 // and that the component values are in the same order as in the type definition
                 let ty_components = match &tagged_type.ty {
-                    BuiltinType::Sequence(seq) => &seq.components,
+                    BuiltinType::Sequence(structure) | BuiltinType::Set(structure) => {
+                        &structure.components
+                    }
                     _ => unreachable!(),
                 };
-                for component in sequence.components.iter().rev() {
+                for component in structure.components.iter().rev() {
                     // default values aren't encoded
                     if component.is_default {
                         continue;
@@ -156,27 +127,25 @@ impl Value {
                     let value_ty = ty_components
                         .iter()
                         .find(|ty_component| ty_component.name.element == component.name.element)
-                        .expect("find type component matching value component for SEQUENCE")
+                        .expect("find type component matching value component for SEQUENCE/SET")
                         .component_type
                         .resolve()?;
                     value.der_encode(buf, &value_ty)?;
                 }
             }
-            Self::SequenceOf(sequence) => {
+            Self::SequenceOf(structure) | Self::SetOf(structure) => {
                 let component_type = match &tagged_type.ty {
-                    BuiltinType::SequenceOf(seq_ty) => &seq_ty.component_type,
+                    BuiltinType::SequenceOf(structure_ty) => &structure_ty.component_type,
                     other => unreachable!("value is SequenceOf but type is {:?}", other),
                 };
                 let component_type = component_type.resolve()?;
-                for element in sequence.iter().rev() {
+                for element in structure.iter().rev() {
                     let resolved = element.resolve()?;
                     resolved.der_encode(buf, &component_type)?;
                 }
             }
-            Self::NumericString(str) | Self::PrintableString(str) => {
-                for ch in str.chars().rev() {
-                    buf.push(ch as u8);
-                }
+            Self::CharacterString(tag_type, str) => {
+                encoding::der_encode_character_string(buf, *tag_type, str);
             }
             other => todo!("{:#02X?}", other),
         }

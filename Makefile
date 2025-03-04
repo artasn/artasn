@@ -1,4 +1,4 @@
-default: test-parsegen build
+default: test build
 
 CARGO=cargo
 
@@ -14,7 +14,7 @@ clean:
 
 build: build-cli build-editor
 
-.PHONY: .install-cargo .install-wasm .install-wasm-pack test-parsegen build-cli build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor
+.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor test
 
 .install-cargo:
 	$(shell which cargo > /dev/null || (echo "Rust and Cargo are required to build $(PROG). Visit https://rustup.rs/ to do so") && exit 1)
@@ -85,7 +85,7 @@ dev-editor: build-editor
 	cd web/editor && \
 	yarn dev
 
-test-parsegen:
+test:
 	cd lib && \
-	$(CARGO) test --package parsegen --release -- --nocapture && \
+	$(CARGO) test -- --nocapture && \
 	cd ..

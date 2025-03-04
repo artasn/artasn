@@ -6,6 +6,11 @@ use crate::types::{Class, TypeForm};
 mod parse;
 pub use parse::*;
 
+mod values;
+pub use values::*;
+
+pub mod strings;
+
 const MAX_VLQ_LEN: usize = 10;
 
 // Encodes a u64 to the least amount of little-endian bytes required to encode its full value.
@@ -408,7 +413,7 @@ mod test {
 
     #[test]
     fn test_der_decode() {
-        let reader = DerReader::new(include_bytes!("./test/LetsEncryptX3.der"), 0);
+        let reader = DerReader::new(include_bytes!("../../test-data/der/LetsEncryptX3.der"), 0);
         assert!(reader
             .into_iter()
             .map(|tlv| DecodedValue::der_decode(tlv?))

@@ -23,7 +23,7 @@ pub struct SequenceValueComponent {
 }
 
 #[derive(Debug, Clone)]
-pub struct SequenceValue {
+pub struct StructureValue {
     pub components: Vec<SequenceValueComponent>,
 }
 

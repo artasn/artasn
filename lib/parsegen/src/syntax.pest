@@ -16,7 +16,7 @@ rule_definition = {
 variant_definition = {
     "variant" ~ ident ~ "=" ~
     variant ~ 
-    ("|" ~ variant)* ~ 
+    ("|" ~ NEWLINE* ~ variant)* ~ 
     ";"
 }
 
@@ -70,6 +70,6 @@ optional_statement = { optional ~ statement }
 not_statement = { "not" ~ statement }
 def_statement = { ident }
 
-ident = @{ (ASCII_ALPHANUMERIC | "_")+ }
+ident = @{ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 operator = { (!NEWLINE ~ ANY)+ }
 optional = { "optional" }

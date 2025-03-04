@@ -204,7 +204,12 @@ fn serialize_valuereference(valref: &ValueReference<{ TagType::Any as u8 }>) -> 
 
 fn serialize_value(value: &Value) -> JsValue {
     let obj = Object::new();
-    Reflect::set(&obj, &"type".into(), &value.type_name().into()).unwrap();
+    Reflect::set(&obj, &"type".into(), &match value {
+        Value::SequenceOf(_) => String::from("SEQUENCE OF"),
+        Value::SetOf(_) => String::from("SET OF"),
+        Value::Choice(_) => String::from("CHOICE"),
+        other => other.tag_type().to_string(),
+    }.into()).unwrap();
     let (field, data) = match value {
         Value::Boolean(boolean) => ("value", (*boolean).into()),
         Value::Integer(int) => {
@@ -245,7 +250,7 @@ fn serialize_value(value: &Value) -> JsValue {
             }
             ("elements", elements.into())
         }
-        Value::NumericString(str) | Value::PrintableString(str) => ("value", str.into()),
+        Value::CharacterString(_, str) => ("value", str.into()),
         other => todo!("{:#?}", other),
     };
     Reflect::set(&obj, &field.into(), &data).unwrap();

@@ -3,7 +3,7 @@ import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { getWebFS } from '../webfs';
 import * as compiler from '../compiler';
 import { Box, Card, Checkbox, FormControlLabel } from '@mui/material';
-import { CompileError, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource } from '../wasm-definitions';
+import { CompileError, CharacterStringType, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource, isCharacterStringType } from '../wasm-definitions';
 import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
@@ -61,10 +61,10 @@ function getValueString(ref: ValueReference): string {
                 return ref.value.toUpperCase();
             case 'NULL':
                 return 'NULL';
-            case 'NumericString':
-            case 'PrintableString':
-                return `"${ref.value}"`;
             default:
+                if (isCharacterStringType(ref.type)) {
+                    return `"${(ref as any).value}"`;
+                }
                 return '';
         }
     }
