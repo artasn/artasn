@@ -1,0 +1,60 @@
+DecodeTestModule DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+SimpleSequence ::= SEQUENCE {
+    num INTEGER,
+    str UTF8String,
+    bool BOOLEAN
+}
+
+ss SimpleSequence ::= {
+    num 14,
+    str "Hello World",
+    bool TRUE
+}
+
+SameTagSequence ::= SEQUENCE {
+    num1 INTEGER,
+    num2 INTEGER,
+    num3 INTEGER,
+    num4 INTEGER
+}
+
+sts SameTagSequence ::= {
+    num1 8,
+    num2 44,
+    num3 749,
+    num4 13
+}
+
+OptionalSequence ::= SEQUENCE {
+    optNum1 INTEGER OPTIONAL,
+    str UTF8String,
+    optNum2 [0] INTEGER DEFAULT 222,
+    num INTEGER
+}
+
+os1 OptionalSequence ::= {
+    optNum1 1,
+    str "Hello World",
+    optNum2 1337,
+    num 4
+}
+
+os2 OptionalSequence ::= {
+    optNum1 1,
+    str "Hello World",
+    num 4
+}
+
+os3 OptionalSequence ::= {
+    str "Hello World",
+    optNum2 1337,
+    num 4
+}
+
+os4 OptionalSequence ::= {
+    str "Hello World",
+    num 4
+}
+
+END

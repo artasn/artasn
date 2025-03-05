@@ -1,4 +1,4 @@
-use std::panic;
+use std::{num::ParseIntError, panic};
 
 use asn1chef::{
     compiler::{CompileError, Compiler},
@@ -7,7 +7,7 @@ use asn1chef::{
     values::{Oid, Value, ValueReference, ValueResolve},
 };
 use js_sys::{Array, Object, Reflect};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 mod der;
@@ -47,7 +47,7 @@ impl JsCompileError {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ModuleIdentifier {
     pub name: String,
     pub oid: Option<String>,
@@ -62,7 +62,24 @@ impl ModuleIdentifier {
     }
 }
 
-#[derive(Serialize)]
+impl TryInto<module::ModuleIdentifier> for ModuleIdentifier {
+    type Error = ParseIntError;
+
+    fn try_into(self) -> Result<module::ModuleIdentifier, Self::Error> {
+        Ok(module::ModuleIdentifier {
+            name: self.name,
+            oid: match self.oid {
+                Some(oid) => Some(Oid(oid
+                    .split(".")
+                    .map(|node| node.parse::<u64>())
+                    .collect::<Result<Vec<u64>, ParseIntError>>()?)),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct QualifiedIdentifier {
     pub module: ModuleIdentifier,
     pub name: String,
@@ -74,6 +91,17 @@ impl QualifiedIdentifier {
             module: ModuleIdentifier::new(&ident.module),
             name: ident.name.clone(),
         }
+    }
+}
+
+impl TryInto<module::QualifiedIdentifier> for QualifiedIdentifier {
+    type Error = ParseIntError;
+
+    fn try_into(self) -> Result<module::QualifiedIdentifier, Self::Error> {
+        Ok(module::QualifiedIdentifier {
+            module: self.module.try_into()?,
+            name: self.name,
+        })
     }
 }
 
@@ -204,12 +232,18 @@ fn serialize_valuereference(valref: &ValueReference<{ TagType::Any as u8 }>) -> 
 
 fn serialize_value(value: &Value) -> JsValue {
     let obj = Object::new();
-    Reflect::set(&obj, &"type".into(), &match value {
-        Value::SequenceOf(_) => String::from("SEQUENCE OF"),
-        Value::SetOf(_) => String::from("SET OF"),
-        Value::Choice(_) => String::from("CHOICE"),
-        other => other.tag_type().to_string(),
-    }.into()).unwrap();
+    Reflect::set(
+        &obj,
+        &"type".into(),
+        &match value {
+            Value::SequenceOf(_) => String::from("SEQUENCE OF"),
+            Value::SetOf(_) => String::from("SET OF"),
+            Value::Choice(_) => String::from("CHOICE"),
+            other => other.tag_type().to_string(),
+        }
+        .into(),
+    )
+    .unwrap();
     let (field, data) = match value {
         Value::Boolean(boolean) => ("value", (*boolean).into()),
         Value::Integer(int) => {

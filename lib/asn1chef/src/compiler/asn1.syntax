@@ -765,6 +765,12 @@ rule IntegerValue {
     value = Number
 }
 
-variant BuiltinValue = StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
+variant BooleanValue = True {
+    keyword TRUE
+} | False {
+    keyword FALSE
+};
+
+variant BuiltinValue = BooleanValue | StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

@@ -357,7 +357,7 @@ const ProjectView = () => {
                     maxWidth: '100%',
                     fontSize: '1rem',
                     userSelect: 'text',
-                }}><DecodedValueInfo mode="tlv" encodedValue={derValue} /></Card>
+                }}><DecodedValueInfo viewMode="components" encodedValue={derValue} /></Card>
             </Box>
         </Box>
     );

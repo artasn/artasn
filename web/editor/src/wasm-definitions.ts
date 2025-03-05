@@ -175,12 +175,12 @@ export interface TlvLen {
     pos: TlvPos;
     len: number;
 }
-
 export interface DecodedValue {
     tag: TlvTag;
     len: TlvLen;
     valuePos: TlvPos;
     form: DecodedValueForm;
+    metadata?: DecodedValueMetadata;
 }
 
 export type DecodedValueForm = {
@@ -233,4 +233,16 @@ export type DecodedValueKind = {
             minute: number;
         };
     };
+};
+
+export interface DecodedValueMetadata {
+    typeIdent?: QualifiedIdentifier;
+    componentName?: string;
+}
+
+export type DecodeOptions = {
+    mode: 'contextless';
+} | {
+    mode: 'specificType';
+    ident: QualifiedIdentifier;
 };

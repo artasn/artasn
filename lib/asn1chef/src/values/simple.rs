@@ -106,7 +106,7 @@ pub enum ObjectIdentifierComponent {
     IntegerLiteral(AstElement<u64>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Oid(pub Vec<u64>);
 
 impl Display for Oid {

@@ -1,5 +1,5 @@
 import init, * as lib from '../wasm/libasn1chef';
-import { CompileError, DecodedValue, ModuleIdentifier, QualifiedIdentifier, TypeDefinition, ValueDefinition } from '../wasm-definitions';
+import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TypeDefinition, ValueDefinition } from '../wasm-definitions';
 
 let libweb: number | null = null;
 
@@ -44,8 +44,8 @@ export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string
     return lib.context_der_encode(libweb, ident.module.name, ident.module.oid, ident.name);
 }
 
-export async function derDecodeValue(derHex: string): Promise<DecodedValue[] | string> {
-    return lib.der_decode(derHex);
+export async function derDecodeValue(derHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
+    return lib.context_der_decode(derHex, options);
 }
 
 export async function ensureLoaded(): Promise<void> {

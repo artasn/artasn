@@ -15,7 +15,7 @@ pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 regex = "1.11"
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
 widestring = "1.1"
 
 [build-dependencies]

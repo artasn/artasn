@@ -72,6 +72,21 @@ pub struct Tag {
     pub source: TagSource,
 }
 
+impl Display for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.class == Class::ContextSpecific {
+            f.write_fmt(format_args!("[{}]", self.num))?;
+        } else {
+            f.write_fmt(format_args!("[{} {}]", self.class, self.num))?;
+        }
+        if self.source == TagSource::KindSpecified {
+            f.write_fmt(format_args!(" {}", self.kind))?;
+        }
+
+        Ok(())
+    }
+}
+
 pub struct TagContext<'a> {
     // True if the tag is the outer of an EXPLICIT definition.
     pub is_outer_explicit: bool,
@@ -201,14 +216,7 @@ impl Display for TaggedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(tag) = self.tag.as_ref() {
             if tag.source != TagSource::TagImplied {
-                if tag.class == Class::ContextSpecific {
-                    f.write_fmt(format_args!("[{}] ", tag.num))?;
-                } else {
-                    f.write_fmt(format_args!("[{} {}] ", tag.class, tag.num))?;
-                }
-                if tag.source == TagSource::KindSpecified {
-                    f.write_fmt(format_args!("{} ", tag.kind))?;
-                }
+                f.write_fmt(format_args!("{} ", tag))?;
             }
         }
 

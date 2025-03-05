@@ -61,7 +61,7 @@ impl Value {
         match self {
             Self::Boolean(b) => {
                 if *b {
-                    buf.push(0x01);
+                    buf.push(0xff);
                 } else {
                     buf.push(0x00);
                 }

@@ -422,7 +422,7 @@ const DecodeView = () => {
                     paddingBottom: '40px',
                 }}>
                 {derValue && (parseTLV ? (
-                    <DecodedValueInfo mode={decodeViewMode} encodedValue={derValue} />
+                    <DecodedValueInfo viewMode={decodeViewMode} encodedValue={derValue} />
                 ) : (
                     <div
                         ref={ref => setRawViewElement(ref)}

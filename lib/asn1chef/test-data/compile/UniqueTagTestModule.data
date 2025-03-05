@@ -1,0 +1,5 @@
+[
+    "compile error: SEQUENCE components 'num1' and components 'num2' must have distinct tags at UniqueTagTestModule.asn:43:5",
+    "compile error: SEQUENCE components 'num1' and components 'num2' must have distinct tags at UniqueTagTestModule.asn:48:5",
+    "compile error: SEQUENCE components 'num1' and components 'num2' must have distinct tags at UniqueTagTestModule.asn:53:5"
+]

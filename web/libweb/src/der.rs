@@ -1,11 +1,14 @@
-use std::io;
-
-use asn1chef::encoding::{
-    DecodedValue, DecodedValueForm, DecodedValueKind, DerReader, TlvElement, TlvPos, TlvTag,
-    UTCTimeZone, UTCTimeZoneSign,
+use asn1chef::{
+    compiler::context,
+    encoding::{
+        DecodeMode, DecodeResult, DecodedValue, DecodedValueForm, DecodedValueKind,
+        DecodedValueMetadata, DerReader, TlvElement, TlvPos, TlvTag, UTCTimeZone, UTCTimeZoneSign,
+    },
 };
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
+
+use crate::QualifiedIdentifier;
 
 fn serialize_tlv_pos(loc: TlvPos) -> JsValue {
     let obj = Object::new();
@@ -117,6 +120,24 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
     obj.into()
 }
 
+fn serialize_decoded_value_metadata(metadata: &DecodedValueMetadata) -> JsValue {
+    let obj = Object::new();
+    if let Some(type_ident) = &metadata.type_ident {
+        Reflect::set(
+            &obj,
+            &"typeIdent".into(),
+            &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&type_ident))
+                .expect("serialize typeIdent")
+                .into(),
+        )
+        .unwrap();
+    }
+    if let Some(component_name) = &metadata.component_name {
+        Reflect::set(&obj, &"componentName".into(), &component_name.into()).unwrap();
+    }
+    obj.into()
+}
+
 fn serialize_decoded_value(value: DecodedValue) -> JsValue {
     let obj = Object::new();
     Reflect::set(&obj, &"tag".into(), &serialize_tlv_tag(value.tag)).unwrap();
@@ -133,11 +154,19 @@ fn serialize_decoded_value(value: DecodedValue) -> JsValue {
         &serialize_decoded_value_form(value.form),
     )
     .unwrap();
+    if let Some(metadata) = &value.metadata {
+        Reflect::set(
+            &obj,
+            &"metadata".into(),
+            &serialize_decoded_value_metadata(metadata),
+        )
+        .unwrap();
+    }
     obj.into()
 }
 
 #[wasm_bindgen]
-pub fn der_decode(der_hex: &str) -> JsValue {
+pub fn context_der_decode(der_hex: &str, options: &JsValue) -> JsValue {
     let der = match hex::decode(der_hex) {
         Ok(der) => der,
         Err(err) => return err.to_string().into(),
@@ -148,10 +177,39 @@ pub fn der_decode(der_hex: &str) -> JsValue {
         Ok(tlvs) => tlvs,
         Err(err) => return err.to_string().into(),
     };
+
+    let decode_mode_kind = Reflect::get(options, &"mode".into())
+        .expect("missing mode property")
+        .as_string()
+        .expect("typeof mode !== 'string'");
+    let mode = match decode_mode_kind.as_str() {
+        "contextless" => DecodeMode::Contextless,
+        "specificType" => {
+            let ident = Reflect::get(options, &"ident".into()).expect("missing ident property");
+            let ident: crate::QualifiedIdentifier =
+                serde_wasm_bindgen::from_value(ident).expect("deserialize ident");
+            let ident = ident.try_into().expect("convert ident");
+            let source = match context().lookup_type(&ident) {
+                Some(source) => source,
+                None => return format!("no such type: {}", ident).into(),
+            };
+            let resolved = match source.resolve() {
+                Ok(resolved) => resolved,
+                Err(err) => return err.kind.message().into(),
+            };
+            DecodeMode::SpecificType {
+                source_ident: Some(ident),
+                component_name: None,
+                resolved,
+            }
+        }
+        other => panic!("{}", other),
+    };
+
     let values = match tlvs
         .into_iter()
-        .map(|tlv| DecodedValue::der_decode(tlv))
-        .collect::<io::Result<Vec<DecodedValue>>>()
+        .map(|tlv| DecodedValue::der_decode(tlv, &mode))
+        .collect::<DecodeResult<Vec<DecodedValue>>>()
     {
         Ok(values) => values,
         Err(err) => return err.to_string().into(),

@@ -12,6 +12,9 @@ use std::fmt::Display;
 
 pub mod oid_tree;
 
+#[cfg(test)]
+pub mod test;
+
 struct SourceFile {
     path: String,
     code: String,
@@ -197,6 +200,7 @@ impl Compiler {
         stage!(register_all_modules);
         stage!(register_all_types);
         stage!(register_all_values);
+        stage!(verify_all_types);
         stage!(verify_all_values);
 
         Vec::new()

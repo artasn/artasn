@@ -5,7 +5,7 @@ use crate::{
     values::{Oid, Value},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleIdentifier {
     pub name: String,
     pub oid: Option<Oid>,
@@ -46,7 +46,7 @@ impl Display for ModuleIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedIdentifier {
     pub module: ModuleIdentifier,
     pub name: String,

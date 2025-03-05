@@ -1,9 +1,9 @@
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
-    types::TaggedType,
+    types::{Class, TaggedType},
     values::valref,
 };
-use std::{collections::HashMap, mem::MaybeUninit};
+use std::{collections::BTreeMap, mem::MaybeUninit};
 
 use super::parser::AstElement;
 
@@ -31,9 +31,9 @@ pub struct DeclaredValue {
 
 #[derive(Debug)]
 pub struct Context {
-    modules: HashMap<ModuleIdentifier, ModuleHeader>,
-    types: HashMap<QualifiedIdentifier, TaggedType>,
-    values: HashMap<QualifiedIdentifier, DeclaredValue>,
+    modules: BTreeMap<ModuleIdentifier, ModuleHeader>,
+    types: BTreeMap<QualifiedIdentifier, TaggedType>,
+    values: BTreeMap<QualifiedIdentifier, DeclaredValue>,
 }
 
 impl Default for Context {
@@ -45,10 +45,16 @@ impl Default for Context {
 impl Context {
     pub fn new() -> Context {
         Context {
-            modules: HashMap::new(),
-            types: HashMap::new(),
-            values: HashMap::new(),
+            modules: BTreeMap::new(),
+            types: BTreeMap::new(),
+            values: BTreeMap::new(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.modules.clear();
+        self.types.clear();
+        self.values.clear();
     }
 
     pub fn list_modules(&self) -> Vec<&ModuleHeader> {
@@ -93,28 +99,12 @@ impl Context {
         self.values.get(ident)
     }
 
-    // pub fn construct_modules(&self) -> anyhow::Result<Vec<Module>> {
-    //     let mut modules = Vec::new();
-    //     for header in &self.modules {
-    //         let types = self
-    //             .types
-    //             .iter()
-    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.oid, &key.module))
-    //             .map(|(_, typeref)| typeref.resolve().cloned())
-    //             .collect::<anyhow::Result<Vec<TaggedType>>>()?;
-    //         let values = self
-    //             .values
-    //             .iter()
-    //             .filter(|(key, _)| ModuleIdentifier::compare(&header.oid, &key.module))
-    //             .map(|(_, valref)| valref.resolve().cloned())
-    //             .collect::<anyhow::Result<Vec<Value>>>()?;
-
-    //         modules.push(Module {
-    //             header: header.clone(),
-    //             types,
-    //             values,
-    //         });
-    //     }
-    //     Ok(modules)
-    // }
+    pub fn lookup_type_by_tag<'a>(&'a self, class: Class, num: u16) -> Option<&'a TaggedType> {
+        self.types.values().find(|ty| {
+            ty.tag
+                .as_ref()
+                .map(|tag| tag.class == class && tag.num == num)
+                .unwrap_or(false)
+        })
+    }
 }

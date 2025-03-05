@@ -1,0 +1,58 @@
+UniqueTagTestModule DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Compliant1 ::= SEQUENCE {
+    num INTEGER
+}
+
+Compliant2 ::= SEQUENCE {
+    num INTEGER OPTIONAL
+}
+
+Compliant3 ::= SEQUENCE {
+    num1 INTEGER,
+    num2 INTEGER
+}
+
+Compliant4 ::= SEQUENCE {
+    num1 INTEGER,
+    num2 INTEGER OPTIONAL
+}
+
+Compliant5 ::= SEQUENCE {
+    num1 INTEGER OPTIONAL,
+    bytes OCTET STRING,
+    num2 INTEGER OPTIONAL
+}
+
+Compliant6 ::= SEQUENCE {
+    num INTEGER OPTIONAL,
+    bytes OCTET STRING OPTIONAL
+}
+
+Compliant7 ::= SEQUENCE {
+    num1 [0] INTEGER OPTIONAL,
+    num2 [1] INTEGER
+}
+
+Compliant8 ::= SEQUENCE {
+    num1 [0] INTEGER OPTIONAL,
+    num2 [1] INTEGER OPTIONAL
+}
+
+Noncompliant1 ::= SEQUENCE {
+    num1 INTEGER OPTIONAL,
+    num2 INTEGER
+}
+
+Noncompliant2 ::= SEQUENCE {
+    num1 INTEGER OPTIONAL,
+    num2 INTEGER OPTIONAL
+}
+
+Noncompliant3 ::= SEQUENCE {
+    num1 INTEGER OPTIONAL,
+    bytes OCTET STRING OPTIONAL,
+    num2 INTEGER
+}
+
+END

@@ -1,6 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
-import { DecodedValue, DecodedValueKind, isCharacterStringType, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
+import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
 import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
 import { ChevronRight } from '@mui/icons-material';
@@ -9,10 +9,10 @@ export type DecodedValueViewMode = 'tlv' | 'components';
 
 export interface DecodedValueInfoProps {
     encodedValue: string;
-    mode: DecodedValueViewMode;
+    viewMode: DecodedValueViewMode;
 }
 
-const DecodedValueInfo = ({ encodedValue, mode }: DecodedValueInfoProps) => {
+const DecodedValueInfo = ({ encodedValue, viewMode }: DecodedValueInfoProps) => {
     const [values, setValues] = useState<{
         values: DecodedValue[]
     } | {
@@ -22,7 +22,18 @@ const DecodedValueInfo = ({ encodedValue, mode }: DecodedValueInfoProps) => {
     });
 
     useEffect(() => {
-        compiler.derDecodeValue(encodedValue).then(res => {
+        // const options = { mode: 'contextless' };
+        const options: DecodeOptions = {
+            mode: 'specificType',
+            ident: {
+                module: {
+                    name: 'CycleB',
+                    oid: '2.1337.1.1.66'
+                },
+                name: 'FileHeader',
+            }
+        };
+        compiler.derDecodeValue(encodedValue, options).then(res => {
             if (typeof res === 'string') {
                 setValues({
                     error: res,
@@ -48,7 +59,7 @@ const DecodedValueInfo = ({ encodedValue, mode }: DecodedValueInfoProps) => {
             {values.values.map(value =>
                 <ValueComponent
                     key={stringifyJSON(value)}
-                    mode={mode}
+                    mode={viewMode}
                     encodedValue={encodedValue}
                     value={value}
                     style={value.form.type === 'constructed'
@@ -106,7 +117,14 @@ const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProp
                     </>
                 ) : (
                     <>
-                        {getTagElement(value.tag)}
+                        {value.metadata?.componentName && (
+                            <span>{value.metadata.componentName}&nbsp;</span>
+                        )}
+                        {value.metadata?.typeIdent ? (
+                            <span style={{ color: 'gray' }}>{value.metadata.typeIdent.name}</span>
+                        ) : (
+                            getTagElement(value.tag)
+                        )}
                         &nbsp;
                         {value.form.type == 'primitive' && getValueKindElement(value.form.kind, false)}
                     </>

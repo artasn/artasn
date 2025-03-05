@@ -805,6 +805,10 @@ fn parse_value(
     Ok(AstElement::new(
         match value.element {
             AstValue::BuiltinValue(ref builtin) => ValueReference::Value(match &builtin.element {
+                AstBuiltinValue::BooleanValue(b) => match b.element {
+                    AstBooleanValue::True(_) => Value::Boolean(true),
+                    AstBooleanValue::False(_) => Value::Boolean(false),
+                },
                 AstBuiltinValue::StringLiteral(ref str_lit) => match &target_type.ty {
                     BuiltinType::BitString(_) => {
                         let radix = match str_lit.element.kind {
@@ -935,6 +939,117 @@ pub fn register_all_values(program: &AstElement<AstProgram>) -> Result<Vec<Error
     Ok(errors)
 }
 
+// See X.680 sections 25.6, 25.6.1, and 27.3 to see exactly what is being enforced here.
+fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
+    if structure.components.len() <= 1 {
+        return Ok(());
+    }
+
+    match structure.ty {
+        TagType::Sequence => {
+            struct ComponentData<'a> {
+                pub name: &'a AstElement<String>,
+                pub class: Class,
+                pub num: u16,
+            }
+
+            let mut consecutive_optionals: Vec<ComponentData<'_>> = Vec::new();
+            for i in 0..structure.components.len() {
+                let component = &structure.components[i];
+                let tag = component.component_type.resolve()?.tag;
+
+                let illegal_component = 'block: {
+                    for data in &consecutive_optionals {
+                        if data.class == tag.class && data.num == tag.num {
+                            break 'block Some(data);
+                        }
+                    }
+
+                    None
+                };
+                if let Some(illegal_component) = illegal_component {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "SEQUENCE components '{}' and components '{}' must have distinct tags",
+                            illegal_component.name.element, component.name.element
+                        )),
+                        loc: illegal_component.name.loc,
+                    });
+                }
+
+                if component.optional || component.default_value.is_some() {
+                    consecutive_optionals.push(ComponentData {
+                        name: &component.name,
+                        class: tag.class,
+                        num: tag.num,
+                    });
+                } else {
+                    consecutive_optionals.clear();
+                }
+            }
+        }
+        TagType::Set => {
+            for i in 0..structure.components.len() {
+                for j in 0..structure.components.len() {
+                    if i == j {
+                        continue;
+                    }
+
+                    let a = &structure.components[i];
+                    let b = &structure.components[j];
+                    let tag_a = a.component_type.resolve()?.tag;
+                    let tag_b = b.component_type.resolve()?.tag;
+                    if tag_a.class == tag_b.class && tag_a.num == tag_b.num {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "SET components '{}' and components '{}' must have distinct tags",
+                                a.name.element, b.name.element
+                            )),
+                            loc: a.name.loc,
+                        });
+                    }
+                }
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
+fn verify_type(declared_type: &TaggedType) -> Result<()> {
+    let resolved_ty = declared_type.resolve()?;
+    match &resolved_ty.ty {
+        BuiltinType::Sequence(structure) | BuiltinType::Set(structure) => {
+            verify_unique_component_tags(structure)?
+        }
+        _ => (),
+    }
+
+    Ok(())
+}
+
+/// Fourth stage: verify all types.
+pub fn verify_all_types(program: &AstElement<AstProgram>) -> Result<Vec<Error>> {
+    let mut errors = Vec::new();
+
+    for module in &program.element.0 {
+        let oid = module_ast_to_module_ident(&module.element.header)?;
+
+        for (ident, tagged_type) in context().list_types() {
+            if ident.module != oid {
+                continue;
+            }
+
+            if let Err(err) = verify_type(tagged_type) {
+                errors.push(err);
+            }
+        }
+    }
+
+    Ok(errors)
+}
+
 fn verify_value(declared_value: &DeclaredValue) -> Result<()> {
     let resolved_ty = declared_value.ty.resolve()?;
     resolved_ty
@@ -944,7 +1059,7 @@ fn verify_value(declared_value: &DeclaredValue) -> Result<()> {
     Ok(())
 }
 
-/// Fourth stage: verify all declared values.
+/// Fifth stage: verify all declared values.
 pub fn verify_all_values(program: &AstElement<AstProgram>) -> Result<Vec<Error>> {
     let mut errors = Vec::new();
 
