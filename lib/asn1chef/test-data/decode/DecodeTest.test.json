@@ -1,0 +1,61 @@
+{
+    "module": "DecodeTest",
+    "tests": ["Decode"],
+    "values": [
+        {
+            "name": "ss",
+            "der": "301302010E0C0B48656C6C6F20576F726C640101FF",
+            "value": {
+                "num": 14,
+                "str": "Hello World",
+                "bool": true
+            }
+        },
+        {
+            "name": "sts",
+            "der": "300D02010802012C020202ED02010D",
+            "value": {
+                "num1": 8,
+                "num2": 44,
+                "num3": 749,
+                "num4": 13
+            }
+        },
+        {
+            "name": "os1",
+            "der": "30170201010C0B48656C6C6F20576F726C6480020539020104",
+            "value": {
+                "optNum1": 1,
+                "str": "Hello World",
+                "optNum2": 1337,
+                "num": 4
+            }
+        },
+        {
+            "name": "os2",
+            "der": "30130201010C0B48656C6C6F20576F726C64020104",
+            "value": {
+                "optNum1": 1,
+                "str": "Hello World",
+                "num": 4
+            }
+        },
+        {
+            "name": "os3",
+            "der": "30140C0B48656C6C6F20576F726C6480020539020104",
+            "value": {
+                "str": "Hello World",
+                "optNum2": 1337,
+                "num": 4
+            }
+        },
+        {
+            "name": "os4",
+            "der": "30100C0B48656C6C6F20576F726C64020104",
+            "value": {
+                "str": "Hello World",
+                "num": 4
+            }
+        }
+    ]
+}

@@ -1,0 +1,9 @@
+Real DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Real ::= [UNIVERSAL 9] SEQUENCE {
+    mantissa INTEGER,
+    base INTEGER (2 | 10),
+    exponent INTEGER
+}
+
+END

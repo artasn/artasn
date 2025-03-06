@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let errors = compiler.compile();
-    if errors.len() > 0 {
+    if !errors.is_empty() {
         for error in errors {
             println!("{error}");
         }

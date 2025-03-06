@@ -1,4 +1,4 @@
-use crate::{compiler::parser::AstElement, values::valref};
+use crate::{compiler::parser::AstElement, values::Value};
 
 use super::{Constraints, TagType, TaggedType};
 
@@ -8,7 +8,7 @@ pub struct StructureComponent {
     pub name: AstElement<String>,
     pub component_type: Box<TaggedType>,
     pub optional: bool,
-    pub default_value: Option<Box<AstElement<valref!()>>>,
+    pub default_value: Option<Box<AstElement<Value>>>,
 }
 
 #[derive(Debug, Clone)]

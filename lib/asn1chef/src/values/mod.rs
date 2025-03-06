@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Value {
+pub enum BuiltinValue {
     Boolean(bool),
     Integer(BigInt),
     BitString(BigUint),
@@ -22,16 +22,16 @@ pub enum Value {
     Null,
     ObjectIdentifier(ObjectIdentifier),
     Real(f64),
-    Enumerated(EnumeratedValue),
+    Enumerated(Box<AstElement<Value>>),
     Sequence(StructureValue),
-    SequenceOf(Vec<AstElement<valref!()>>),
+    SequenceOf(Vec<AstElement<Value>>),
     Set(StructureValue),
-    SetOf(Vec<AstElement<valref!()>>),
+    SetOf(Vec<AstElement<Value>>),
     Choice(ChoiceValue),
     CharacterString(TagType, String),
 }
 
-impl Value {
+impl BuiltinValue {
     pub fn tag_type(&self) -> TagType {
         match self {
             Self::Boolean(_) => TagType::Boolean,
@@ -77,32 +77,36 @@ impl Value {
             Self::ObjectIdentifier(oid) => {
                 let oid = oid.resolve_oid()?.0;
 
-                if oid.len() > 2 {
-                    for node in oid.iter().skip(2).rev() {
-                        encoding::write_vlq(*node, buf);
+                match oid.len() {
+                    2.. => {
+                        for node in oid.iter().skip(2).rev() {
+                            encoding::write_vlq(*node, buf);
+                        }
                     }
-                } else if oid.len() < 2 {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(
-                            "illegal OBJECT IDENTIFIER with less than two nodes".to_string(),
-                        ),
-                        loc: Loc::default(), // TODO: add loc info to the entire oid, not just its elements
-                    });
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(
+                                "illegal OBJECT IDENTIFIER with less than two nodes".to_string(),
+                            ),
+                            loc: Loc::default(), // TODO: add loc info to the entire oid, not just its elements
+                        });
+                    }
                 }
 
                 let prefix = oid[0] * 40 + oid[1];
                 encoding::write_vlq(prefix, buf);
             }
             Self::Enumerated(enumerated) => {
-                let resolved = enumerated.item.resolve()?;
+                let resolved = enumerated.resolve()?;
                 let num = match resolved {
                     Self::Integer(num) => num.clone(),
-                    _ => {
+                    other => {
                         return Err(Error {
-                            kind: ErrorKind::Ast(
-                                "ENUMERATED value must be of type INTEGER".to_string(),
-                            ),
-                            loc: enumerated.item.loc,
+                            kind: ErrorKind::Ast(format!(
+                                "ENUMERATED value must be of type INTEGER, but found {}",
+                                other.tag_type()
+                            )),
+                            loc: enumerated.loc,
                         })
                     }
                 };
@@ -254,120 +258,56 @@ impl Value {
     // }
 }
 
-macro_rules! valref {
-    () => {
-        crate::values::ValueReference<{crate::types::TagType::Any as u8}>
-    };
-    ($tag:ident) => {
-        crate::values::ValueReference<{crate::types::TagType::$tag as u8}>
-    }
-}
-pub(crate) use valref;
-
 #[derive(Debug, Clone)]
-pub enum ValueReference<const TYPE_TAG: u8> {
-    Value(Value),
+pub enum Value {
+    BuiltinValue(BuiltinValue),
     Reference(QualifiedIdentifier),
 }
 
-impl<const TYPE_TAG: u8> ValueReference<TYPE_TAG> {
-    /// Casts `&'a self` to `&'a ValueReference<{ TagType::Any as u8 }>`.
-    ///
-    /// See [`ValueReference::as_type`] for implementation details.
-    pub fn as_any(&self) -> &ValueReference<{ TagType::Any as u8 }> {
-        self.as_type()
-    }
-
-    /// Casts `&'a self` to `&'a ValueReference<NEW_TAG>`.
-    ///
-    /// The returned reference is identical to `&self` (including pointing to the same memory),
-    /// except for the modified compile-time `<const TAG_TYPE: u8>` generic parameter.
-    pub fn as_type<const NEW_TAG: u8>(&self) -> &ValueReference<NEW_TAG> {
-        // since the `<TYPE_TAG>` generic parameter type is only present at compile-time,
-        // we can safely transmute a &ValueReference<X> -> &ValueReference<Y>,
-        // because the runtime memory representations of both these types are identical
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
 pub trait ValueResolve {
-    fn resolve(&self) -> Result<&Value>;
+    fn resolve(&self) -> Result<&BuiltinValue>;
 }
 
-impl<const TYPE_TAG: u8> ValueResolve for AstElement<ValueReference<TYPE_TAG>> {
-    fn resolve(&self) -> Result<&Value> {
-        let mut valref = self.as_ref().map(|valref| valref.as_any());
-        let value = loop {
+impl ValueResolve for AstElement<Value> {
+    fn resolve(&self) -> Result<&BuiltinValue> {
+        let mut valref = self;
+        loop {
             match &valref.element {
-                ValueReference::<{ TagType::Any as u8 }>::Value(value) => break value,
-                ValueReference::<{ TagType::Any as u8 }>::Reference(ident) => {
-                    valref = context()
+                Value::BuiltinValue(value) => return Ok(value),
+                Value::Reference(ident) => {
+                    valref = &context()
                         .lookup_value(ident)
                         .ok_or_else(|| Error {
-                            kind: ErrorKind::Ast(format!("undefined reference to value '{ident}")),
-                            loc: self.loc,
+                            kind: ErrorKind::Ast(format!(
+                                "undefined reference to value '{}'",
+                                ident
+                            )),
+                            loc: valref.loc,
                         })?
-                        .value
-                        .as_ref();
+                        .value;
                 }
             }
-        };
-        let tag_type = value.tag_type();
-        let ref_type = TagType::try_from(TYPE_TAG as u16).expect("<const TYPE_TAG: u8> -> TypeTag");
-        if !TagType::compare(tag_type, ref_type) {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!("expecting {}, got {}", ref_type, tag_type)),
-                loc: self.loc,
-            });
         }
-        Ok(value)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        compiler::{context, test},
-        module::{ModuleIdentifier, QualifiedIdentifier},
-        values::ValueResolve,
-    };
+    use crate::compiler::test;
 
     #[test]
     pub fn test_encode_universal_types() {
         let module_file = include_str!("../../test-data/encode/UniversalTypeTest.asn");
-        test::compile_module("UniversalTypeTest.data", module_file);
+        let test_file = include_str!("../../test-data/encode/UniversalTypeTest.test.json");
 
-        let der = include_bytes!("../../test-data/encode/UniversalTypeTest.der");
+        test::execute_json_test(module_file, test_file);
+    }
 
-        let declared_value = context()
-            .lookup_value(&QualifiedIdentifier {
-                module: ModuleIdentifier {
-                    name: "UniversalTypeTest".to_string(),
-                    oid: None,
-                },
-                name: "sequenceValue".to_string(),
-            })
-            .expect("value does not exist");
-        let tagged_type = declared_value
-            .ty
-            .resolve()
-            .expect("failed to resolve sequenceValue type");
-        let value = declared_value
-            .value
-            .resolve()
-            .expect("failed to resolve sequenceValue value");
+    #[test]
+    pub fn test_enumerated_encoding() {
+        let module_file = include_str!("../../test-data/encode/EnumeratedTest.asn");
+        let test_file = include_str!("../../test-data/encode/EnumeratedTest.test.json");
 
-        let mut buf = Vec::with_capacity(der.len());
-        value
-            .der_encode(&mut buf, &tagged_type)
-            .expect("failed to encode sequenceValue");
-        let buf = buf.into_iter().rev().collect::<Vec<u8>>();
-
-        assert!(
-            der == buf.as_slice(),
-            "input  = {}\noutput = {}",
-            hex::encode_upper(&der),
-            hex::encode_upper(&buf)
-        );
+        test::execute_json_test(module_file, test_file);
     }
 }

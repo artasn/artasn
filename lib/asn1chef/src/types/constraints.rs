@@ -4,12 +4,12 @@ use num::BigInt;
 
 use crate::{
     compiler::parser::{AstElement, Result},
-    values::{valref, Value, ValueResolve},
+    values::{BuiltinValue, Value, ValueResolve},
 };
 
 #[derive(Debug, Clone)]
 pub enum Constraint {
-    ConstantSeries(Vec<AstElement<valref!(Integer)>>),
+    ConstantSeries(Vec<AstElement<Value>>),
     Range(Range),
 }
 
@@ -21,15 +21,15 @@ pub struct Range {
 
 #[derive(Debug, Clone)]
 pub enum RangeLowerBound {
-    Constant(AstElement<valref!(Integer)>),
-    GtConstant(AstElement<valref!(Integer)>),
+    Constant(AstElement<Value>),
+    GtConstant(AstElement<Value>),
     Min,
 }
 
 #[derive(Debug, Clone)]
 pub enum RangeUpperBound {
-    Constant(AstElement<valref!(Integer)>),
-    LtConstant(AstElement<valref!(Integer)>),
+    Constant(AstElement<Value>),
+    LtConstant(AstElement<Value>),
     Max,
 }
 
@@ -60,11 +60,11 @@ impl Constraints {
             ( $value:expr, $op:tt, $constant:expr ) => {{
                 let constant = $constant.resolve()?;
                 match constant {
-                    Value::Integer(integer) => {
+                    BuiltinValue::Integer(integer) => {
                         $value $op integer
                     }
-                    // the valref!(Integer) type will ensure the value
-                    // is a Value::Integer when resolve() is called
+                    // the ValueReference type will ensure the value
+                    // is a AstElement<Value>::Integer when resolve() is called
                     _ => unreachable!(),
                 }
             }};

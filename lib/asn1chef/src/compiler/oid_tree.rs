@@ -32,7 +32,7 @@ impl OidTreeNode {
         None
     }
 
-    pub fn get_node<'a>(&'a self, num: u64) -> Option<&'a OidTreeNode> {
+    pub fn get_node(&self, num: u64) -> Option<&OidTreeNode> {
         if let Some(children) = &self.children {
             for child_node in children {
                 if child_node.node == num {
@@ -56,7 +56,7 @@ pub enum OidTreeNodeSearch {
 }
 
 pub fn search(searches: Vec<OidTreeNodeSearch>) -> Result<Oid> {
-    if searches.len() == 0 {
+    if searches.is_empty() {
         panic!("oid has no nodes");
     }
 
@@ -79,8 +79,7 @@ pub fn search(searches: Vec<OidTreeNodeSearch>) -> Result<Oid> {
             get_root_node(num)
         }
     };
-    for i in 1..searches.len() {
-        let search = &searches[i];
+    for search in searches.iter().skip(1) {
         match search {
             OidTreeNodeSearch::Name(name) => {
                 let next_node = (match current_node {
@@ -112,27 +111,14 @@ pub fn search(searches: Vec<OidTreeNodeSearch>) -> Result<Oid> {
 }
 
 pub fn lookup_root_node<'a>(name: &str) -> Option<&'a OidTreeNode> {
-    for root_node in ROOT_NODES.iter() {
-        if root_node.name == name
+    ROOT_NODES.iter().find(|&root_node| root_node.name == name
             || root_node
                 .aliases
                 .as_ref()
                 .map(|aliases| aliases.contains(&name))
-                .unwrap_or(false)
-        {
-            return Some(root_node);
-        }
-    }
-
-    None
+                .unwrap_or(false))
 }
 
 pub fn get_root_node<'a>(num: u64) -> Option<&'a OidTreeNode> {
-    for root_node in ROOT_NODES.iter() {
-        if root_node.node == num {
-            return Some(root_node);
-        }
-    }
-
-    None
+    ROOT_NODES.iter().find(|&root_node| root_node.node == num)
 }

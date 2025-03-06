@@ -1,6 +1,6 @@
 use std::io;
 
-use num::{bigint::Sign, BigInt, BigUint};
+use num::{BigInt, BigUint};
 use widestring::{Utf16String, Utf32String};
 
 use super::*;
@@ -66,7 +66,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
     Ok(match tag_type {
         TagType::Any => DecodedValueKind::Raw(value.to_vec()),
         TagType::Boolean => {
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "BOOLEAN must have a value",
@@ -80,24 +80,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
 
             DecodedValueKind::Boolean(value[0] != 0)
         }
-        TagType::Integer => {
-            const SIGN_MASK: u8 = 0b1000_0000;
-
-            if value.len() == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "INTEGER must have a value",
-                ));
-            }
-
-            let sign = if value[0] & SIGN_MASK == SIGN_MASK {
-                Sign::Minus
-            } else {
-                Sign::Plus
-            };
-
-            DecodedValueKind::Integer(BigInt::from_bytes_be(sign, value))
-        }
+        TagType::Integer => DecodedValueKind::Integer(der_decode_integer(value)?),
         TagType::BitString => {
             if value.len() < 2 {
                 return Err(io::Error::new(
@@ -117,7 +100,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
         }
         TagType::OctetString => DecodedValueKind::OctetString(value.to_vec()),
         TagType::Null => {
-            if value.len() != 0 {
+            if !value.is_empty() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "NULL cannot have a value",
@@ -129,7 +112,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
         TagType::ObjectIdentifier => {
             let mut nodes = Vec::new();
             let mut offset = 0;
-            let (first_node, len) = read_vlq(&value)?;
+            let (first_node, len) = read_vlq(value)?;
             offset += len;
             if first_node >= 80 {
                 nodes.push(2);
@@ -145,6 +128,16 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             }
             DecodedValueKind::ObjectIdentifier(Oid(nodes))
         }
+        TagType::Enumerated => {
+            let int = der_decode_integer(value)?;
+            let int: i64 = int.try_into().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ENUMERATED value out of bounds for signed 64-bit integer",
+                )
+            })?;
+            DecodedValueKind::Enumerated(int)
+        }
         TagType::NumericString
         | TagType::PrintableString
         | TagType::IA5String
@@ -157,7 +150,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
         | TagType::BMPString
         | TagType::CharacterString
         | TagType::UniversalString => {
-            let str = if value.len() == 0 {
+            let str = if value.is_empty() {
                 String::new()
             } else {
                 let err = io::Error::new(
@@ -222,7 +215,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             ));
         }
         TagType::UTCTime => {
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "UTCTime must have a value",
@@ -321,7 +314,7 @@ fn get_component_by_tag<'a>(
                     let component_type = component
                         .component_type
                         .resolve()
-                        .map_err(|err| DecodeError::Parser(err))?;
+                        .map_err(DecodeError::Parser)?;
 
                     let tag_matches = tag_eq_tlv(&component_type.tag, &tlv_tag.element);
                     if !tag_matches {
@@ -362,8 +355,9 @@ impl DecodedValue {
             TypeForm::Primitive => {
                 let kind = match tlv.tag.element.class {
                     Class::Universal => match TagType::try_from(tlv.tag.element.num) {
-                        Ok(tag_type) => der_decode_universal(&tlv, tag_type)
-                            .map_err(|err| DecodeError::Io(err))?,
+                        Ok(tag_type) => {
+                            der_decode_universal(&tlv, tag_type).map_err(DecodeError::Io)?
+                        }
                         Err(_) => DecodedValueKind::Raw(tlv.value.element.to_vec()),
                     },
                     _ => match &mode {
@@ -377,7 +371,7 @@ impl DecodedValue {
                                     &tlv,
                                     resolved.ty.tag_type().expect("tag_type"),
                                 )
-                                .map_err(|err| DecodeError::Io(err))?
+                                .map_err(DecodeError::Io)?
                             } else {
                                 return Err(DecodeError::Decoder {
                                     message: format!("DecodeMode is SpecificType but encoded tag {} does not match provided tag {}", tlv.tag.element, resolved.tag),
@@ -393,8 +387,8 @@ impl DecodedValue {
                 let mut index = 0;
                 let mut elements = Vec::new();
                 for tlv in DerReader::new(tlv.value.element, tlv.value.pos.start) {
-                    let tlv = tlv.map_err(|err| DecodeError::Io(err))?;
-                    let component = get_component_by_tag(&mode, &tlv.tag, index)?;
+                    let tlv = tlv.map_err(DecodeError::Io)?;
+                    let component = get_component_by_tag(mode, &tlv.tag, index)?;
                     let mode = match component {
                         Some(data) => {
                             index = data.index + 1;
@@ -409,7 +403,7 @@ impl DecodedValue {
                                 resolved: data
                                     .tagged_type
                                     .resolve()
-                                    .map_err(|err| DecodeError::Parser(err))?,
+                                    .map_err(DecodeError::Parser)?,
                             }
                         }
                         None => {
@@ -490,6 +484,7 @@ pub enum DecodedValueKind {
     Null,
     ObjectIdentifier(Oid),
     Real(f64),
+    Enumerated(i64),
     CharacterString(TagType, String),
     UTCTime {
         year: TwoDigitInteger,

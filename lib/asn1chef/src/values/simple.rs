@@ -2,23 +2,14 @@ use std::fmt::Display;
 
 use num::bigint::Sign;
 
-use crate::{
-    compiler::parser::{AstElement, Error, ErrorKind, Result},
-    types::TaggedType,
-};
+use crate::compiler::parser::{AstElement, Error, ErrorKind, Result};
 
-use super::{valref, Value, ValueResolve};
-
-#[derive(Debug, Clone)]
-pub struct EnumeratedValue {
-    pub ty: TaggedType,
-    pub item: Box<AstElement<valref!(Integer)>>,
-}
+use super::{BuiltinValue, Value, ValueResolve};
 
 #[derive(Debug, Clone)]
 pub struct StructureValueComponent {
     pub name: AstElement<String>,
-    pub value: AstElement<valref!()>,
+    pub value: AstElement<Value>,
     pub is_default: bool,
 }
 
@@ -30,7 +21,7 @@ pub struct StructureValue {
 #[derive(Debug, Clone)]
 pub struct ChoiceValue {
     pub alternative: AstElement<String>,
-    pub value: Box<AstElement<valref!()>>,
+    pub value: Box<AstElement<Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +36,7 @@ impl ObjectIdentifier {
                 ObjectIdentifierComponent::ValueReference(valref) => {
                     let resolved_value = valref.resolve()?;
                     match resolved_value {
-                        Value::Integer(integer) => {
+                        BuiltinValue::Integer(integer) => {
                             let (sign, digits) = integer.to_u64_digits();
                             if sign == Sign::Minus {
                                 return Err(Error {
@@ -67,7 +58,7 @@ impl ObjectIdentifier {
                             }
                             nodes.push(digits[0]);
                         }
-                        Value::ObjectIdentifier(relative_oid) => {
+                        BuiltinValue::ObjectIdentifier(relative_oid) => {
                             if i != 0 {
                                 return Err(Error{
                                     kind: ErrorKind::Ast("relative OBJECT IDENTIFIER can only be used as the first component of another OBJECT IDENTIFIER".to_string()),
@@ -102,7 +93,7 @@ impl ObjectIdentifier {
 pub enum ObjectIdentifierComponent {
     /// Must be either an `OBJECT IDENTIFIER` or `INTEGER` value.
     /// This will be verified when `ObjectIdentifier::resolve_oid` is invoked.
-    ValueReference(AstElement<valref!()>),
+    ValueReference(AstElement<Value>),
     IntegerLiteral(AstElement<u64>),
 }
 

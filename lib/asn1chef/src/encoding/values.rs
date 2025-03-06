@@ -1,3 +1,5 @@
+use std::io;
+
 use num::{bigint::Sign, BigInt};
 use widestring::{Utf16String, Utf32String};
 
@@ -27,8 +29,8 @@ pub fn der_encode_integer(buf: &mut Vec<u8>, mut num: BigInt) {
 
         // invert all bits when the number is negative
         if sign == Sign::Minus {
-            for i in 0..bytes.len() {
-                bytes[i] = !bytes[i];
+            for item in &mut bytes {
+                *item = !*item;
             }
         }
 
@@ -46,6 +48,25 @@ pub fn der_encode_integer(buf: &mut Vec<u8>, mut num: BigInt) {
             buf.push(0xff);
         }
     }
+}
+
+pub fn der_decode_integer(value: &[u8]) -> io::Result<BigInt> {
+    const SIGN_MASK: u8 = 0b1000_0000;
+
+    if value.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "INTEGER must have a value",
+        ));
+    }
+
+    let sign = if value[0] & SIGN_MASK == SIGN_MASK {
+        Sign::Minus
+    } else {
+        Sign::Plus
+    };
+
+    Ok(BigInt::from_bytes_be(sign, value))
 }
 
 pub fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &str) {

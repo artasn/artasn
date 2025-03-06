@@ -1,10 +1,10 @@
 UniversalTypeTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
--- EnumeratedType ::= ENUMERATED {
---     foo (0),
---     bar (1),
---     baz (2)
--- }
+EnumeratedType ::= ENUMERATED {
+    foo (0),
+    bar (1),
+    baz (2)
+}
 
 BasicSequenceType ::= SEQUENCE {
     foo INTEGER OPTIONAL,
@@ -28,7 +28,7 @@ SequenceType ::= SEQUENCE {
     -- objectDescriptor ObjectDescriptor,
     -- external EXTERNAL,
     -- real REAL,
-    -- enumerated EnumeratedType,
+    enumerated EnumeratedType,
     -- embeddedPDV EMBEDDED PDV,
     utf8String UTF8String,
     -- relativeOID RELATIVE-OID,
@@ -64,7 +64,7 @@ sequenceValue SequenceType ::= {
     -- objectDescriptor ObjectDescriptor,
     -- external EXTERNAL,
     -- real REAL,
-    -- enumerated baz,
+    enumerated baz,
     -- embeddedPDV EMBEDDED PDV,
     utf8String "UTF8String",
     -- relativeOID RELATIVE-OID,

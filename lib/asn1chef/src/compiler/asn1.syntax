@@ -473,8 +473,34 @@ rule Real {
     keyword REAL
 }
 
+rule EnumerationItem {
+    captures {
+        name = ValueReference
+        num = optional: Constant
+    }
+    name = ValueReference
+    persist
+    optional {
+        operator (
+        num = Constant
+        operator )
+    }
+}
+
 rule Enumerated {
+    captures {
+        items = repeated: EnumerationItem
+    }
     keyword ENUMERATED
+    persist
+    operator {
+    items = EnumerationItem
+    optional repeated {
+        operator ,
+        items = EnumerationItem
+    }
+    operator }
+    return items
 }
 
 rule EmbeddedPDV {
@@ -704,20 +730,20 @@ rule ValueAssignment {
     value = Value
 }
 
-rule SequenceValue {
+rule StructureValue {
     captures {
-        components = repeated: SequenceValueComponent
+        components = repeated: StructureValueComponent
     }
     operator {
-    components = SequenceValueComponent
+    components = StructureValueComponent
     optional repeated {
         operator ,
-        components = SequenceValueComponent
+        components = StructureValueComponent
     }
     operator }
 }
 
-rule SequenceValueComponent {
+rule StructureValueComponent {
     captures {
         name = ValueReference
         value = Value
@@ -726,7 +752,7 @@ rule SequenceValueComponent {
     value = Value
 }
 
-rule SequenceOfValue {
+rule StructureOfValue {
     captures {
         elements = repeated: Value
     }
@@ -771,6 +797,6 @@ variant BooleanValue = True {
     keyword FALSE
 };
 
-variant BuiltinValue = Null | BooleanValue | StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
+variant BuiltinValue = Null | BooleanValue | StringLiteral | IntegerValue | StructureOfValue | StructureValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

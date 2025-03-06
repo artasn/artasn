@@ -2,7 +2,7 @@ use std::{fmt::Display, marker::PhantomData};
 
 use crate::{
     types::TaggedType,
-    values::{Oid, Value},
+    values::{Oid, BuiltinValue},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -80,7 +80,7 @@ pub enum Exports {
 pub struct Module {
     pub header: ModuleHeader,
     pub types: Vec<TaggedType>,
-    pub values: Vec<Value>,
+    pub values: Vec<BuiltinValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +103,7 @@ impl ModuleHeader {
 
     pub fn resolve_import(&self, symbol: &str) -> Option<QualifiedIdentifier> {
         for import in &self.imports {
-            if &import.name == symbol {
+            if import.name == symbol {
                 return Some(import.clone());
             }
         }

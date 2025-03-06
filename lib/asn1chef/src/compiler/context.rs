@@ -1,7 +1,7 @@
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
     types::{Class, TaggedType},
-    values::valref,
+    values::Value,
 };
 use std::{collections::BTreeMap, mem::MaybeUninit};
 
@@ -25,7 +25,7 @@ pub fn context_mut<'a>() -> &'a mut Context {
 
 #[derive(Debug)]
 pub struct DeclaredValue {
-    pub value: AstElement<valref!()>,
+    pub value: AstElement<Value>,
     pub ty: TaggedType,
 }
 
@@ -99,7 +99,7 @@ impl Context {
         self.values.get(ident)
     }
 
-    pub fn lookup_type_by_tag<'a>(&'a self, class: Class, num: u16) -> Option<&'a TaggedType> {
+    pub fn lookup_type_by_tag(&self, class: Class, num: u16) -> Option<&TaggedType> {
         self.types.values().find(|ty| {
             ty.tag
                 .as_ref()

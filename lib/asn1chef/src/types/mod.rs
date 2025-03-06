@@ -19,7 +19,7 @@ use crate::{
     },
     encoding,
     module::QualifiedIdentifier,
-    values::{valref, Value, ValueResolve},
+    values::{BuiltinValue, Value, ValueResolve},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -359,15 +359,12 @@ impl BuiltinType {
     /// TODO: This needs a lot more checked. See https://stackoverflow.com/a/70213161.
     pub fn form(&self) -> TypeForm {
         match self {
-            Self::Enumerated(_)
-            | Self::Structure(_)
-            | Self::StructureOf(_)
-            | Self::Choice(_) => TypeForm::Constructed,
+            Self::Structure(_) | Self::StructureOf(_) | Self::Choice(_) => TypeForm::Constructed,
             _ => TypeForm::Primitive,
         }
     }
 
-    pub fn ensure_satisfied_by_value(&self, valref: &AstElement<valref!()>) -> Result<()> {
+    pub fn ensure_satisfied_by_value(&self, valref: &AstElement<Value>) -> Result<()> {
         let value = valref.resolve()?;
         let tag_type = self
             .tag_type()
@@ -384,18 +381,18 @@ impl BuiltinType {
         }
 
         let (constraints, item) = match (self, value) {
-            (Self::BitString(bit_string), Value::BitString(value)) => (
+            (Self::BitString(bit_string), BuiltinValue::BitString(value)) => (
                 bit_string.size_constraints.as_ref(),
                 &BigInt::from(value.bits() as i64),
             ),
-            (Self::OctetString(octet_string), Value::OctetString(value)) => (
+            (Self::OctetString(octet_string), BuiltinValue::OctetString(value)) => (
                 octet_string.size_constraints.as_ref(),
                 &BigInt::from(value.len() as i64),
             ),
-            (Self::Integer(integer), Value::Integer(value)) => {
+            (Self::Integer(integer), BuiltinValue::Integer(value)) => {
                 (integer.value_constraints.as_ref(), value)
             }
-            (Self::StructureOf(seq_of), Value::SequenceOf(value)) => (
+            (Self::StructureOf(seq_of), BuiltinValue::SequenceOf(value)) => (
                 seq_of.size_constraints.as_ref(),
                 &BigInt::from(value.len() as i64),
             ),
@@ -406,34 +403,32 @@ impl BuiltinType {
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
                         "value does not satisfy {} constraints of type",
-                        constraints.kind.to_string(),
+                        constraints.kind,
                     )),
                     loc: valref.loc,
                 });
             }
         }
 
-        match (self, value) {
-            (Self::Structure(seq), Value::Sequence(value)) => {
-                for seq_component in &seq.components {
-                    let val_component = value.components.iter().find(|val_component| {
-                        val_component.name.element == seq_component.name.element
+        if let (Self::Structure(seq), BuiltinValue::Sequence(value)) = (self, value) {
+            for seq_component in &seq.components {
+                let val_component = value
+                    .components
+                    .iter()
+                    .find(|val_component| val_component.name.element == seq_component.name.element);
+                if let Some(val_component) = val_component {
+                    let seq_ty = seq_component.component_type.resolve()?;
+                    seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
+                } else if seq_component.default_value.is_none() && !seq_component.optional {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "SEQUENCE missing required component '{}'",
+                            seq_component.name.element
+                        )),
+                        loc: valref.loc,
                     });
-                    if let Some(val_component) = val_component {
-                        let seq_ty = seq_component.component_type.resolve()?;
-                        seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
-                    } else if seq_component.default_value.is_none() && !seq_component.optional {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "SEQUENCE missing required component '{}'",
-                                seq_component.name.element
-                            )),
-                            loc: valref.loc,
-                        });
-                    }
                 }
             }
-            _ => (),
         }
 
         Ok(())

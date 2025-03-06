@@ -15,7 +15,7 @@ pub mod strings;
 const MAX_VLQ_LEN: usize = 10;
 
 // Encodes a u64 to the least amount of little-endian bytes required to encode its full value.
-fn u64_to_le_bytes<'a>(num: u64) -> ([u8; mem::size_of::<u64>()], usize) {
+fn u64_to_le_bytes(num: u64) -> ([u8; mem::size_of::<u64>()], usize) {
     if num == 0 {
         ([0x00; 8], 1)
     } else {
@@ -272,10 +272,7 @@ impl<'a> Iterator for DerReader<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.read_next() {
-            Ok(option) => match option {
-                Some(tlv) => Some(Ok(tlv)),
-                None => None,
-            },
+            Ok(option) => option.map(Ok),
             Err(err) => Some(Err(err)),
         }
     }
@@ -356,13 +353,9 @@ impl<'a> Iterator for DerReader<'a> {
 
 #[cfg(test)]
 mod test {
-    use serde::Deserialize;
-
     use crate::{
-        compiler::{context, test},
-        encoding::{DecodeMode, DecodeResult, DecodedValueForm, DecodedValueKind},
-        module::{ModuleIdentifier, QualifiedIdentifier},
-        types::UntaggedType,
+        compiler::test,
+        encoding::{DecodeMode, DecodeResult},
     };
 
     use super::{read_vlq, write_vlq, DecodeError, DecodedValue, DerReader};
@@ -437,10 +430,7 @@ mod test {
         reader
             .into_iter()
             .map(|tlv| {
-                DecodedValue::der_decode(
-                    tlv.map_err(|err| DecodeError::Io(err))?,
-                    &DecodeMode::Contextless,
-                )
+                DecodedValue::der_decode(tlv.map_err(DecodeError::Io)?, &DecodeMode::Contextless)
             })
             .collect::<DecodeResult<Vec<DecodedValue>>>()
             .unwrap();
@@ -449,91 +439,9 @@ mod test {
     #[test]
     fn test_der_decode_specific_type() {
         let module_file = include_str!("../../test-data/decode/DecodeTest.asn");
-        test::compile_module("DecodeTest.asn", module_file);
+        let test_file = include_str!("../../test-data/decode/DecodeTest.test.json");
 
-        #[derive(Deserialize, Debug)]
-        struct DataFileEntry {
-            pub name: String,
-            pub der: String,
-            pub components: serde_json::Map<String, serde_json::Value>,
-        }
-
-        let data_file = include_str!("../../test-data/decode/DecodeTest.data");
-        let entries: Vec<DataFileEntry> =
-            serde_json::from_str(&data_file).expect("malformed data file");
-
-        for entry in entries {
-            let name = &entry.name;
-            let der = hex::decode(&entry.der).expect("invalid DER hex");
-
-            let value = context()
-                .lookup_value(&QualifiedIdentifier {
-                    module: ModuleIdentifier {
-                        name: "DecodeTest".to_string(),
-                        oid: None,
-                    },
-                    name: name.to_string(),
-                })
-                .expect("value does not exist");
-
-            let mode = DecodeMode::SpecificType {
-                source_ident: match &value.ty.ty {
-                    UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
-                    UntaggedType::BuiltinType(_) => panic!("value type is not a typereference"),
-                },
-                component_name: None,
-                resolved: value.ty.resolve().expect("failed resolving type"),
-            };
-            let reader = DerReader::new(&der, 0);
-            let values = reader
-                .into_iter()
-                .map(|tlv| {
-                    DecodedValue::der_decode(tlv.map_err(|err| DecodeError::Io(err))?, &mode)
-                })
-                .collect::<DecodeResult<Vec<DecodedValue>>>()
-                .unwrap();
-
-            let values = match &values[0].form {
-                DecodedValueForm::Constructed(elements) => elements,
-                DecodedValueForm::Primitive(_) => panic!("unexpected Primitive value"),
-            };
-
-            assert_eq!(values.len(), entry.components.len());
-            for (i, (name, component_value)) in entry.components.iter().enumerate() {
-                let encoded_value = &values[i];
-                let metadata = encoded_value.metadata.as_ref().expect("missing metadata");
-                assert_eq!(
-                    name,
-                    metadata
-                        .component_name
-                        .as_ref()
-                        .expect("missing component name")
-                );
-
-                match &encoded_value.form {
-                    DecodedValueForm::Primitive(kind) => match kind {
-                        DecodedValueKind::Integer(i) => {
-                            assert_eq!(
-                                component_value.as_u64().expect("expecting INTEGER"),
-                                i.iter_u64_digits().next().unwrap()
-                            );
-                        }
-                        DecodedValueKind::Boolean(b) => {
-                            assert_eq!(component_value.as_bool().expect("expecting BOOLEAN"), *b)
-                        }
-                        DecodedValueKind::CharacterString(_, str) => assert_eq!(
-                            component_value
-                                .as_str()
-                                .expect("expecting character string"),
-                            str
-                        ),
-                        other => panic!("unexpected value: {:?}", other),
-                    },
-                    DecodedValueForm::Constructed(_) => panic!("unexpected Constructed value"),
-                }
-            }
-            // println!("{:#?}", values);
-        }
+        test::execute_json_test(module_file, test_file);
     }
 }
 

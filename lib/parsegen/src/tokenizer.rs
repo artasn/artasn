@@ -342,14 +342,14 @@ impl ErrorKind {
     /// Returns true if this error resulted from parsing a single token.
     /// Otherwise returns false (i.e. this error resulted from parsing a multi-token rule).
     pub fn is_token_err(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::InvalidStringIndicator(_)
-            | Self::IllegalStringCharacter { .. }
-            | Self::MalformedIdentifier { .. }
-            | Self::MalformedNumber { .. }
-            | Self::UnterminatedString => true,
-            _ => false,
-        }
+                | Self::IllegalStringCharacter { .. }
+                | Self::MalformedIdentifier { .. }
+                | Self::MalformedNumber { .. }
+                | Self::UnterminatedString
+        )
     }
 
     pub fn message(&self) -> String {
@@ -416,7 +416,9 @@ impl ErrorKind {
             ErrorKind::VariantUnmatched { variant } => {
                 format!("unmatched variant '{}'", variant)
             }
-            ErrorKind::ExpectingNegative => format!("expecting provided token not to be present"),
+            ErrorKind::ExpectingNegative => {
+                "expecting provided token not to be present".to_string()
+            }
             ErrorKind::Ast(message) => message.clone(),
         }
     }
@@ -684,10 +686,10 @@ impl Tokenizer {
                     loc,
                 }))
             } else {
-                return Err(Error {
+                Err(Error {
                     kind: ErrorKind::NumberTooLarge { number: num },
                     loc,
-                });
+                })
             }
         } else {
             Ok(None)
@@ -702,30 +704,28 @@ impl Tokenizer {
                 if Self::is_name_char(self.current_char()) {
                     name.write_char(self.current_char()).unwrap();
                     self.cursor += 1;
-                } else {
-                    if self.current_char() == '\n' {
-                        if let Some(last_char) = name.chars().last() {
-                            if last_char == '-' {
-                                // if we get a hyphen followed by a newline
-                                // the identifier can still be parsed as a multi-line identifier
-                                // skip all the whitespace and continue parsing
-                                //
-                                // TODO: check is this is compliant with the X.680 standard;
-                                // this occurs in RFC3126 module 'ETS-ElectronicSignatureFormats-88syntax':
-                                // FROM PKIX1Explicit88
-                                //      {iso(1) identified-organization(3) dod(6) internet(1)
-                                //      security(5) mechanisms(5) pkix(7) id-mod(0) id-pkix1-explicit-
-                                //      88(1)}
-                                self.skip_whitespace();
-                            } else {
-                                break;
-                            }
+                } else if self.current_char() == '\n' {
+                    if let Some(last_char) = name.chars().last() {
+                        if last_char == '-' {
+                            // if we get a hyphen followed by a newline
+                            // the identifier can still be parsed as a multi-line identifier
+                            // skip all the whitespace and continue parsing
+                            //
+                            // TODO: check is this is compliant with the X.680 standard;
+                            // this occurs in RFC3126 module 'ETS-ElectronicSignatureFormats-88syntax':
+                            // FROM PKIX1Explicit88
+                            //      {iso(1) identified-organization(3) dod(6) internet(1)
+                            //      security(5) mechanisms(5) pkix(7) id-mod(0) id-pkix1-explicit-
+                            //      88(1)}
+                            self.skip_whitespace();
                         } else {
                             break;
                         }
                     } else {
                         break;
                     }
+                } else {
+                    break;
                 }
             }
             let loc = Loc::new(start, name.len());

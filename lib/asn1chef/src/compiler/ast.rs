@@ -195,18 +195,15 @@ pub fn register_all_modules(program: &AstElement<AstProgram>) -> Result<Vec<Erro
             .as_ref()
             .map(|exports| &exports.element.0)
         {
-            Some(defined) => match defined {
-                Some(exports) => match &exports.element {
-                    AstExportsKind::All(_) => Exports::All,
-                    AstExportsKind::SymbolList(symbol_list) => {
-                        Exports::SymbolList(symbol_list_to_string_list(&symbol_list.element))
-                    }
-                },
-                None => Exports::All,
+            Some(Some(exports)) => match &exports.element {
+                AstExportsKind::All(_) => Exports::All,
+                AstExportsKind::SymbolList(symbol_list) => {
+                    Exports::SymbolList(symbol_list_to_string_list(&symbol_list.element))
+                }
             },
             // TODO: should "EXPORTS;" be treated as "EXPORTS ALL;" or an empty symbol list?
             // probably should be a compiler option?
-            None => Exports::All,
+            _ => Exports::All,
         };
         let mut imports = Vec::new();
         if let Some(ref ast_imports) = header.element.imports {
@@ -235,15 +232,18 @@ pub fn register_all_modules(program: &AstElement<AstProgram>) -> Result<Vec<Erro
     Ok(errors)
 }
 
-fn parse_constraints_constant(
+fn parse_constant(
     oid: &ModuleIdentifier,
-    kind: ConstraintsKind,
     ast_constant: &AstElement<AstConstant>,
-) -> Result<AstElement<valref!(Integer)>> {
+    kind: Option<ConstraintsKind>,
+) -> Result<AstElement<Value>> {
     Ok(AstElement::new(
         match &ast_constant.element {
             AstConstant::IntegerValue(num) => {
-                if kind == ConstraintsKind::Size {
+                if kind
+                    .map(|kind| kind == ConstraintsKind::Size)
+                    .unwrap_or(false)
+                {
                     if let Some(sign) = &num.element.sign {
                         return Err(Error {
                             kind: ErrorKind::Ast(
@@ -253,12 +253,11 @@ fn parse_constraints_constant(
                         });
                     }
                 }
-                ValueReference::Value(parse_integer_value(num)?)
+                Value::BuiltinValue(parse_integer_value(num)?)
             }
-            AstConstant::DefinedValue(value) => parse_valuereference(oid, &value.element.value)
-                .element
-                .as_type::<{ TagType::Integer as u8 }>()
-                .clone(),
+            AstConstant::DefinedValue(value) => {
+                parse_valuereference(oid, &value.element.value).element
+            }
         },
         ast_constant.loc,
     ))
@@ -276,7 +275,7 @@ fn parse_constraints(
             AstConstraint::ConstantSeries(ast_series) => {
                 let mut series = Vec::new();
                 for ast_constant in &ast_series.element.0 {
-                    series.push(parse_constraints_constant(oid, kind, ast_constant)?);
+                    series.push(parse_constant(oid, ast_constant, Some(kind))?);
                 }
                 constraints.push(Constraint::ConstantSeries(series));
             }
@@ -287,26 +286,26 @@ fn parse_constraints(
                 constraints.push(Constraint::Range(Range {
                     lower: match &ast_range.element.lower.element {
                         AstRangeLowerBound::Constant(ast_constant) => RangeLowerBound::Constant(
-                            parse_constraints_constant(oid, kind, ast_constant)?,
+                            parse_constant(oid, ast_constant, Some(kind))?,
                         ),
                         AstRangeLowerBound::GtConstant(ast_constant) => {
-                            RangeLowerBound::GtConstant(parse_constraints_constant(
+                            RangeLowerBound::GtConstant(parse_constant(
                                 oid,
-                                kind,
                                 &ast_constant.element.0,
+                                Some(kind),
                             )?)
                         }
                         AstRangeLowerBound::Min(_) => RangeLowerBound::Min,
                     },
                     upper: match &ast_range.element.upper.element {
                         AstRangeUpperBound::Constant(ast_constant) => RangeUpperBound::Constant(
-                            parse_constraints_constant(oid, kind, ast_constant)?,
+                            parse_constant(oid, ast_constant, Some(kind))?,
                         ),
                         AstRangeUpperBound::LtConstant(ast_constant) => {
-                            RangeUpperBound::LtConstant(parse_constraints_constant(
+                            RangeUpperBound::LtConstant(parse_constant(
                                 oid,
-                                kind,
                                 &ast_constant.element.0,
+                                Some(kind),
                             )?)
                         }
                         AstRangeUpperBound::Max(_) => RangeUpperBound::Max,
@@ -402,6 +401,29 @@ fn parse_structure_type(
     })
 }
 
+fn parse_enumerated_type(
+    oid: &ModuleIdentifier,
+    enumerated: &AstElement<AstEnumerated>,
+) -> Result<BuiltinType> {
+    let mut items = Vec::new();
+    let mut implied_index = 0;
+    for ast_item in &enumerated.element.0 {
+        let value = match &ast_item.element.num {
+            Some(num) => EnumerationItemValue::Specified(parse_constant(oid, num, None)?),
+            None => {
+                let value = EnumerationItemValue::Implied(implied_index);
+                implied_index += 1;
+                value
+            }
+        };
+        items.push(EnumerationItem {
+            name: ast_item.element.name.as_ref().map(|name| name.0.clone()),
+            value,
+        });
+    }
+    Ok(BuiltinType::Enumerated(items))
+}
+
 fn parse_builtin_type(
     oid: &ModuleIdentifier,
     builtin: &AstElement<AstBuiltinType>,
@@ -441,7 +463,7 @@ fn parse_builtin_type(
         AstBuiltinType::ObjectDescriptor(_) => todo!("ObjectDescriptor"),
         AstBuiltinType::External(_) => todo!("External"),
         AstBuiltinType::Real(_) => todo!("Real"),
-        AstBuiltinType::Enumerated(_) => todo!("Enumerated"),
+        AstBuiltinType::Enumerated(enumerated) => parse_enumerated_type(oid, enumerated)?,
         AstBuiltinType::EmbeddedPDV(_) => todo!("EmbeddedPDV"),
         AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
         AstBuiltinType::RelativeOid(_) => todo!("RelativeOid"),
@@ -616,7 +638,7 @@ pub fn register_all_types(program: &AstElement<AstProgram>) -> Result<Vec<Error>
 
     for module in &program.element.0 {
         let header = &module.element.header;
-        let oid = module_ast_to_module_ident(&header)?;
+        let oid = module_ast_to_module_ident(header)?;
 
         for assignment in &module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
@@ -633,9 +655,9 @@ pub fn register_all_types(program: &AstElement<AstProgram>) -> Result<Vec<Error>
 fn parse_valuereference(
     oid: &ModuleIdentifier,
     valref: &AstElement<AstValueReference>,
-) -> AstElement<valref!()> {
+) -> AstElement<Value> {
     valref.as_ref().map(|valref| {
-        ValueReference::Reference(
+        Value::Reference(
             context()
                 .lookup_module(oid)
                 .expect("lookup_module")
@@ -644,7 +666,7 @@ fn parse_valuereference(
     })
 }
 
-fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
+fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<BuiltinValue> {
     if num.element.sign.is_none() {
         let uint = num.element.value.element.0;
         if uint > i64::MAX as u64 {
@@ -656,7 +678,7 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(BigInt::from_biguint(
+        Ok(BuiltinValue::Integer(BigInt::from_biguint(
             Sign::Plus,
             BigUint::from(uint),
         )))
@@ -671,7 +693,7 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
                 loc: num.loc,
             });
         }
-        Ok(Value::Integer(BigInt::from_biguint(
+        Ok(BuiltinValue::Integer(BigInt::from_biguint(
             Sign::Minus,
             BigUint::from(int),
         )))
@@ -680,27 +702,23 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
 
 fn parse_structure_value(
     oid: &ModuleIdentifier,
-    struct_val: &AstElement<AstSequenceValue>,
+    struct_val: &AstElement<AstStructureValue>,
     target_type: &ResolvedType,
-) -> Result<Value> {
+) -> Result<BuiltinValue> {
     let tag_type = target_type.ty.tag_type().expect("tag_type");
     let struct_ty_components = match &target_type.ty {
         BuiltinType::Structure(ty) => &ty.components,
         ty => {
             return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "SEQUENCE value cannot be assigned to {} type",
-                    ty.to_string()
-                )),
+                kind: ErrorKind::Ast(format!("SEQUENCE value cannot be assigned to {} type", ty)),
                 loc: struct_val.loc,
             })
         }
     };
     for val_component in &struct_val.element.components {
-        if struct_ty_components
+        if !struct_ty_components
             .iter()
-            .find(|ty_component| ty_component.name.element == val_component.element.name.element.0)
-            .is_none()
+            .any(|ty_component| ty_component.name.element == val_component.element.name.element.0)
         {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
@@ -724,23 +742,19 @@ fn parse_structure_value(
                     parse_value(oid, &val_component.element.value, &component_type)?,
                     false,
                 )
+            } else if let Some(default_value) = &ty_component.default_value {
+                ((**default_value).clone(), true)
             } else {
-                if let Some(default_value) = &ty_component.default_value {
-                    ((**default_value).clone(), true)
-                } else {
-                    if ty_component.optional {
-                        continue;
-                    }
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "{} value missing component '{}' of type {}",
-                            tag_type,
-                            ty_component.name.element,
-                            ty_component.component_type.to_string(),
-                        )),
-                        loc: struct_val.loc,
-                    });
+                if ty_component.optional {
+                    continue;
                 }
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "{} value missing component '{}' of type '{}'",
+                        tag_type, ty_component.name.element, ty_component.component_type,
+                    )),
+                    loc: struct_val.loc,
+                });
             }
         };
 
@@ -752,8 +766,8 @@ fn parse_structure_value(
     }
     let value = StructureValue { components };
     Ok(match tag_type {
-        TagType::Sequence => Value::Sequence(value),
-        TagType::Set => Value::Set(value),
+        TagType::Sequence => BuiltinValue::Sequence(value),
+        TagType::Set => BuiltinValue::Set(value),
         _ => unreachable!(),
     })
 }
@@ -761,7 +775,7 @@ fn parse_structure_value(
 fn parse_character_string(
     str_lit: &AstElement<AstStringLiteral>,
     tag_type: TagType,
-) -> Result<Value> {
+) -> Result<BuiltinValue> {
     let cstring = match &str_lit.element.kind {
         StringKind::CString => str_lit.element.data.clone(),
         _ => {
@@ -803,23 +817,23 @@ fn parse_character_string(
             loc: str_lit.loc,
         });
     }
-    Ok(Value::CharacterString(tag_type, cstring))
+    Ok(BuiltinValue::CharacterString(tag_type, cstring))
 }
 
 fn parse_value(
     oid: &ModuleIdentifier,
     value: &AstElement<AstValue>,
     target_type: &ResolvedType,
-) -> Result<AstElement<valref!()>> {
+) -> Result<AstElement<Value>> {
     Ok(AstElement::new(
-        match value.element {
-            AstValue::BuiltinValue(ref builtin) => ValueReference::Value(match &builtin.element {
-                AstBuiltinValue::Null(_) => Value::Null,
+        match &value.element {
+            AstValue::BuiltinValue(builtin) => Value::BuiltinValue(match &builtin.element {
+                AstBuiltinValue::Null(_) => BuiltinValue::Null,
                 AstBuiltinValue::BooleanValue(b) => match b.element {
-                    AstBooleanValue::True(_) => Value::Boolean(true),
-                    AstBooleanValue::False(_) => Value::Boolean(false),
+                    AstBooleanValue::True(_) => BuiltinValue::Boolean(true),
+                    AstBooleanValue::False(_) => BuiltinValue::Boolean(false),
                 },
-                AstBuiltinValue::StringLiteral(ref str_lit) => match &target_type.ty {
+                AstBuiltinValue::StringLiteral(str_lit) => match &target_type.ty {
                     BuiltinType::BitString(_) => {
                         let radix = match str_lit.element.kind {
                             StringKind::BString => 2,
@@ -834,7 +848,7 @@ fn parse_value(
                                 })
                             }
                         };
-                        Value::BitString(
+                        BuiltinValue::BitString(
                             BigUint::parse_bytes(str_lit.element.data.as_bytes(), radix)
                                 .expect("failed BigUint::parse_bytes"),
                         )
@@ -853,7 +867,7 @@ fn parse_value(
                                 })
                             }
                         };
-                        Value::OctetString(
+                        BuiltinValue::OctetString(
                             BigUint::parse_bytes(str_lit.element.data.as_bytes(), radix)
                                 .expect("failed BigUint::parse_bytes")
                                 .to_bytes_be(),
@@ -874,20 +888,20 @@ fn parse_value(
                     }
                 },
                 AstBuiltinValue::ObjectIdentifierValue(object_id) => {
-                    Value::ObjectIdentifier(parse_object_identifier(oid, object_id)?)
+                    BuiltinValue::ObjectIdentifier(parse_object_identifier(oid, object_id)?)
                 }
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
-                AstBuiltinValue::SequenceValue(seq_val) => {
+                AstBuiltinValue::StructureValue(seq_val) => {
                     parse_structure_value(oid, seq_val, target_type)?
                 }
-                AstBuiltinValue::SequenceOfValue(seq_of_val) => {
+                AstBuiltinValue::StructureOfValue(of_val) => {
                     let component_type = match &target_type.ty {
                         BuiltinType::StructureOf(seq_of) => &seq_of.component_type,
                         other_type => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(
-                                    "{} value cannot be assigned to {}",
-                                    target_type.ty, other_type,
+                                    "SEQUENCE OF/SET OF value cannot be assigned to {}",
+                                    other_type,
                                 )),
                                 loc: builtin.loc,
                             })
@@ -895,16 +909,37 @@ fn parse_value(
                     };
                     let component_type = component_type.resolve()?;
 
-                    let ast_elements = &seq_of_val.element.elements;
+                    let ast_elements = &of_val.element.elements;
                     let mut elements = Vec::with_capacity(ast_elements.len());
                     for ast_element in ast_elements {
                         elements.push(parse_value(oid, ast_element, &component_type)?);
                     }
-                    Value::SequenceOf(elements)
+                    BuiltinValue::SequenceOf(elements)
                 }
                 other_builtin => todo!("{:#?}", other_builtin),
             }),
-            AstValue::ValueReference(ref valref) => parse_valuereference(oid, valref).element,
+            AstValue::ValueReference(valref) => match &target_type.ty {
+                BuiltinType::Enumerated(items) => 'block: {
+                    for item in items {
+                        if item.name.element == valref.element.0 {
+                            break 'block Value::BuiltinValue(BuiltinValue::Enumerated(Box::new(
+                                match &item.value {
+                                    EnumerationItemValue::Implied(implied) => AstElement::new(
+                                        Value::BuiltinValue(BuiltinValue::Integer(BigInt::from(
+                                            *implied,
+                                        ))),
+                                        value.loc,
+                                    ),
+                                    EnumerationItemValue::Specified(specified) => specified.clone(),
+                                },
+                            )));
+                        }
+                    }
+
+                    parse_valuereference(oid, valref).element
+                }
+                _ => parse_valuereference(oid, valref).element,
+            },
         },
         value.loc,
     ))
@@ -924,7 +959,7 @@ fn register_value(
             module: oid.clone(),
             name,
         },
-        DeclaredValue { value: val, ty: ty },
+        DeclaredValue { value: val, ty },
     );
 
     Ok(())
@@ -1029,9 +1064,8 @@ fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
 
 fn verify_type(declared_type: &TaggedType) -> Result<()> {
     let resolved_ty = declared_type.resolve()?;
-    match &resolved_ty.ty {
-        BuiltinType::Structure(structure) => verify_unique_component_tags(structure)?,
-        _ => (),
+    if let BuiltinType::Structure(structure) = &resolved_ty.ty {
+        verify_unique_component_tags(structure)?
     }
 
     Ok(())

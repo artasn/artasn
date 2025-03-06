@@ -1,0 +1,157 @@
+EnumeratedTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+E1 ::= ENUMERATED {
+    foo
+}
+
+E2 ::= ENUMERATED {
+    foo (100)
+}
+
+E3 ::= ENUMERATED {
+    foo,
+    bar,
+    baz
+}
+
+E4 ::= ENUMERATED {
+    foo (100),
+    bar (200),
+    baz (300)
+}
+
+E5 ::= ENUMERATED {
+    foo (100),
+    bar,
+    baz
+}
+
+E6 ::= ENUMERATED {
+    foo,
+    bar (200),
+    baz
+}
+
+E7 ::= ENUMERATED {
+    foo,
+    bar,
+    baz (300)
+}
+
+E8 ::= ENUMERATED {
+    foo (100),
+    bar (200),
+    baz
+}
+
+E9 ::= ENUMERATED {
+    foo (100),
+    bar,
+    baz (300)
+}
+
+v1 E1 ::= foo
+
+v2 E2 ::= foo
+
+S3 ::= SEQUENCE {
+    a E3,
+    b E3,
+    c E3
+}
+v3 S3 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S4 ::= SEQUENCE {
+    a E4,
+    b E4,
+    c E4
+}
+v4 S4 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S5 ::= SEQUENCE {
+    a E5,
+    b E5,
+    c E5
+}
+v5 S5 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S6 ::= SEQUENCE {
+    a E6,
+    b E6,
+    c E6
+}
+v6 S6 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S7 ::= SEQUENCE {
+    a E7,
+    b E7,
+    c E7
+}
+v7 S7 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S8 ::= SEQUENCE {
+    a E8,
+    b E8,
+    c E8
+}
+v8 S8 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+S9 ::= SEQUENCE {
+    a E9,
+    b E9,
+    c E9
+}
+v9 S9 ::= {
+    a foo,
+    b bar,
+    c baz
+}
+
+VS ::= SEQUENCE {
+    v1 E1,
+    v2 E2,
+    v3 S3,
+    v4 S4,
+    v5 S5,
+    v6 S6,
+    v7 S7,
+    v8 S8,
+    v9 S9
+}
+vs VS ::= {
+    v1 v1,
+    v2 v2,
+    v3 v3,
+    v4 v4,
+    v5 v5,
+    v6 v6,
+    v7 v7,
+    v8 v8,
+    v9 v9
+}
+
+END

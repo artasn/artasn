@@ -21,7 +21,7 @@ impl CharEncodingMap {
             if line.is_empty() {
                 continue;
             }
-            if line.chars().skip(2).next().unwrap() != '=' {
+            if line.chars().nth(2).unwrap() != '=' {
                 panic!("malformed map entry: {}", line);
             }
             let byte = u8::from_str_radix(&line[..2], 16).expect("invalid hex byte");
