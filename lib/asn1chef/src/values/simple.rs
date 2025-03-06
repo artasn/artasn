@@ -16,7 +16,7 @@ pub struct EnumeratedValue {
 }
 
 #[derive(Debug, Clone)]
-pub struct SequenceValueComponent {
+pub struct StructureValueComponent {
     pub name: AstElement<String>,
     pub value: AstElement<valref!()>,
     pub is_default: bool,
@@ -24,7 +24,7 @@ pub struct SequenceValueComponent {
 
 #[derive(Debug, Clone)]
 pub struct StructureValue {
-    pub components: Vec<SequenceValueComponent>,
+    pub components: Vec<StructureValueComponent>,
 }
 
 #[derive(Debug, Clone)]

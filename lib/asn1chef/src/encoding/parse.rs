@@ -1,7 +1,7 @@
 use std::io;
 
 use num::{bigint::Sign, BigInt, BigUint};
-use widestring::Utf32String;
+use widestring::{Utf16String, Utf32String};
 
 use super::*;
 use crate::{compiler::parser, module::QualifiedIdentifier, types::*, values::Oid};
@@ -174,9 +174,25 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
                     TagType::GeneralString
                     | TagType::GraphicString
                     | TagType::UTF8String
-                    | TagType::BMPString
                     | TagType::CharacterString => String::from_utf8(value.to_vec())
                         .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
+                    TagType::BMPString => {
+                        if value.len() % 2 != 0 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "UniversalString is not properly UTF-16 encoded",
+                            ));
+                        }
+                        let mut buf = Vec::with_capacity(value.len() / 2);
+                        for i in (0..value.len()).step_by(2) {
+                            let mut be_bytes = [0u8; 2];
+                            be_bytes.copy_from_slice(&value[i..i + 2]);
+                            buf.push(u16::from_be_bytes(be_bytes));
+                        }
+                        Utf16String::from_vec(buf)
+                            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
+                            .to_string()
+                    }
                     TagType::UniversalString => {
                         if value.len() % 4 != 0 {
                             return Err(io::Error::new(
@@ -298,7 +314,7 @@ fn get_component_by_tag<'a>(
     Ok(match mode {
         DecodeMode::Contextless => None,
         DecodeMode::SpecificType { resolved, .. } => match &resolved.ty {
-            BuiltinType::Sequence(structure) => {
+            BuiltinType::Structure(structure) => {
                 for (component_index, component) in
                     structure.components.iter().enumerate().skip(index)
                 {
@@ -330,7 +346,7 @@ fn get_component_by_tag<'a>(
                 }
                 None
             }
-            BuiltinType::SequenceOf(of) | BuiltinType::SetOf(of) => Some(ComponentData {
+            BuiltinType::StructureOf(of) => Some(ComponentData {
                 name: None,
                 tagged_type: &of.component_type,
                 index,
@@ -395,11 +411,11 @@ impl DecodedValue {
                                     .resolve()
                                     .map_err(|err| DecodeError::Parser(err))?,
                             }
-                        },
+                        }
                         None => {
                             index += 1;
                             DecodeMode::Contextless
-                        },
+                        }
                     };
                     elements.push(Self::der_decode(tlv, &mode)?);
                 }

@@ -1,4 +1,4 @@
-DecodeTestModule DEFINITIONS IMPLICIT TAGS ::= BEGIN
+DecodeTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
 SimpleSequence ::= SEQUENCE {
     num INTEGER,

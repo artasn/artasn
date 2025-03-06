@@ -448,8 +448,8 @@ mod test {
 
     #[test]
     fn test_der_decode_specific_type() {
-        let module_file = include_str!("../../test-data/decode/DecodeTestModule.asn");
-        test::compile_module("DecodeTestModule.asn", module_file);
+        let module_file = include_str!("../../test-data/decode/DecodeTest.asn");
+        test::compile_module("DecodeTest.asn", module_file);
 
         #[derive(Deserialize, Debug)]
         struct DataFileEntry {
@@ -458,7 +458,7 @@ mod test {
             pub components: serde_json::Map<String, serde_json::Value>,
         }
 
-        let data_file = include_str!("../../test-data/decode/DecodeTestModule.data");
+        let data_file = include_str!("../../test-data/decode/DecodeTest.data");
         let entries: Vec<DataFileEntry> =
             serde_json::from_str(&data_file).expect("malformed data file");
 
@@ -469,7 +469,7 @@ mod test {
             let value = context()
                 .lookup_value(&QualifiedIdentifier {
                     module: ModuleIdentifier {
-                        name: "DecodeTestModule".to_string(),
+                        name: "DecodeTest".to_string(),
                         oid: None,
                     },
                     name: name.to_string(),

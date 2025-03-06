@@ -332,10 +332,8 @@ pub enum BuiltinType {
     ObjectIdentifier,
     Real,
     Enumerated(EnumeratedType),
-    Sequence(Structure),
-    SequenceOf(StructureOf),
-    Set(Structure),
-    SetOf(StructureOf),
+    Structure(Structure),
+    StructureOf(StructureOf),
     Choice(Choice),
     CharacterString(TagType),
 }
@@ -351,8 +349,8 @@ impl BuiltinType {
             Self::ObjectIdentifier => TagType::ObjectIdentifier,
             Self::Real => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
-            Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
-            Self::Set(_) | Self::SetOf(_) => TagType::Set,
+            Self::Structure(structure) => structure.ty,
+            Self::StructureOf(of) => of.ty,
             Self::Choice(_) => return None,
             Self::CharacterString(tag_type) => *tag_type,
         })
@@ -362,10 +360,8 @@ impl BuiltinType {
     pub fn form(&self) -> TypeForm {
         match self {
             Self::Enumerated(_)
-            | Self::Sequence(_)
-            | Self::SequenceOf(_)
-            | Self::Set(_)
-            | Self::SetOf(_)
+            | Self::Structure(_)
+            | Self::StructureOf(_)
             | Self::Choice(_) => TypeForm::Constructed,
             _ => TypeForm::Primitive,
         }
@@ -399,7 +395,7 @@ impl BuiltinType {
             (Self::Integer(integer), Value::Integer(value)) => {
                 (integer.value_constraints.as_ref(), value)
             }
-            (Self::SequenceOf(seq_of), Value::SequenceOf(value)) => (
+            (Self::StructureOf(seq_of), Value::SequenceOf(value)) => (
                 seq_of.size_constraints.as_ref(),
                 &BigInt::from(value.len() as i64),
             ),
@@ -418,7 +414,7 @@ impl BuiltinType {
         }
 
         match (self, value) {
-            (Self::Sequence(seq), Value::Sequence(value)) => {
+            (Self::Structure(seq), Value::Sequence(value)) => {
                 for seq_component in &seq.components {
                     let val_component = value.components.iter().find(|val_component| {
                         val_component.name.element == seq_component.name.element

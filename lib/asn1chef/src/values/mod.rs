@@ -113,9 +113,7 @@ impl Value {
                 // and that the value provides only components in the SEQUENCE/SET type,
                 // and that the component values are in the same order as in the type definition
                 let ty_components = match &tagged_type.ty {
-                    BuiltinType::Sequence(structure) | BuiltinType::Set(structure) => {
-                        &structure.components
-                    }
+                    BuiltinType::Structure(structure) => &structure.components,
                     _ => unreachable!(),
                 };
                 for component in structure.components.iter().rev() {
@@ -135,7 +133,7 @@ impl Value {
             }
             Self::SequenceOf(structure) | Self::SetOf(structure) => {
                 let component_type = match &tagged_type.ty {
-                    BuiltinType::SequenceOf(structure_ty) => &structure_ty.component_type,
+                    BuiltinType::StructureOf(structure_ty) => &structure_ty.component_type,
                     other => unreachable!("value is SequenceOf but type is {:?}", other),
                 };
                 let component_type = component_type.resolve()?;
@@ -323,5 +321,53 @@ impl<const TYPE_TAG: u8> ValueResolve for AstElement<ValueReference<TYPE_TAG>> {
             });
         }
         Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        compiler::{context, test},
+        module::{ModuleIdentifier, QualifiedIdentifier},
+        values::ValueResolve,
+    };
+
+    #[test]
+    pub fn test_encode_universal_types() {
+        let module_file = include_str!("../../test-data/encode/UniversalTypeTest.asn");
+        test::compile_module("UniversalTypeTest.data", module_file);
+
+        let der = include_bytes!("../../test-data/encode/UniversalTypeTest.der");
+
+        let declared_value = context()
+            .lookup_value(&QualifiedIdentifier {
+                module: ModuleIdentifier {
+                    name: "UniversalTypeTest".to_string(),
+                    oid: None,
+                },
+                name: "sequenceValue".to_string(),
+            })
+            .expect("value does not exist");
+        let tagged_type = declared_value
+            .ty
+            .resolve()
+            .expect("failed to resolve sequenceValue type");
+        let value = declared_value
+            .value
+            .resolve()
+            .expect("failed to resolve sequenceValue value");
+
+        let mut buf = Vec::with_capacity(der.len());
+        value
+            .der_encode(&mut buf, &tagged_type)
+            .expect("failed to encode sequenceValue");
+        let buf = buf.into_iter().rev().collect::<Vec<u8>>();
+
+        assert!(
+            der == buf.as_slice(),
+            "input  = {}\noutput = {}",
+            hex::encode_upper(&der),
+            hex::encode_upper(&buf)
+        );
     }
 }

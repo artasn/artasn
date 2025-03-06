@@ -383,11 +383,11 @@ fn parse_structure_type(
     structure: &AstElement<AstStructureKind>,
 ) -> Result<BuiltinType> {
     Ok(match &structure.element {
-        AstStructureKind::SingleStructure(structure) => BuiltinType::Sequence(Structure {
+        AstStructureKind::SingleStructure(structure) => BuiltinType::Structure(Structure {
             ty: tag_type,
             components: parse_structure_components(oid, &structure.element.components)?,
         }),
-        AstStructureKind::StructureOf(structure_of) => BuiltinType::SequenceOf(StructureOf {
+        AstStructureKind::StructureOf(structure_of) => BuiltinType::StructureOf(StructureOf {
             ty: tag_type,
             size_constraints: parse_size_constraints(
                 oid,
@@ -678,25 +678,26 @@ fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<Value> {
     }
 }
 
-fn parse_sequence_value(
+fn parse_structure_value(
     oid: &ModuleIdentifier,
-    seq_val: &AstElement<AstSequenceValue>,
+    struct_val: &AstElement<AstSequenceValue>,
     target_type: &ResolvedType,
 ) -> Result<Value> {
-    let seq_ty_components = match &target_type.ty {
-        BuiltinType::Sequence(seq_ty) => &seq_ty.components,
+    let tag_type = target_type.ty.tag_type().expect("tag_type");
+    let struct_ty_components = match &target_type.ty {
+        BuiltinType::Structure(ty) => &ty.components,
         ty => {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
                     "SEQUENCE value cannot be assigned to {} type",
                     ty.to_string()
                 )),
-                loc: seq_val.loc,
+                loc: struct_val.loc,
             })
         }
     };
-    for val_component in &seq_val.element.components {
-        if seq_ty_components
+    for val_component in &struct_val.element.components {
+        if struct_ty_components
             .iter()
             .find(|ty_component| ty_component.name.element == val_component.element.name.element.0)
             .is_none()
@@ -711,11 +712,13 @@ fn parse_sequence_value(
         }
     }
     let mut components = Vec::new();
-    for ty_component in seq_ty_components {
+    for ty_component in struct_ty_components {
         let (value, is_default) = {
-            if let Some(val_component) = seq_val.element.components.iter().find(|val_component| {
-                val_component.element.name.element.0 == ty_component.name.element
-            }) {
+            if let Some(val_component) =
+                struct_val.element.components.iter().find(|val_component| {
+                    val_component.element.name.element.0 == ty_component.name.element
+                })
+            {
                 let component_type = ty_component.component_type.resolve()?;
                 (
                     parse_value(oid, &val_component.element.value, &component_type)?,
@@ -730,23 +733,29 @@ fn parse_sequence_value(
                     }
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
-                            "SEQUENCE value missing component '{}' of type {}",
+                            "{} value missing component '{}' of type {}",
+                            tag_type,
                             ty_component.name.element,
                             ty_component.component_type.to_string(),
                         )),
-                        loc: seq_val.loc,
+                        loc: struct_val.loc,
                     });
                 }
             }
         };
 
-        components.push(SequenceValueComponent {
+        components.push(StructureValueComponent {
             name: ty_component.name.clone(),
             value,
             is_default,
         });
     }
-    Ok(Value::Sequence(StructureValue { components }))
+    let value = StructureValue { components };
+    Ok(match tag_type {
+        TagType::Sequence => Value::Sequence(value),
+        TagType::Set => Value::Set(value),
+        _ => unreachable!(),
+    })
 }
 
 fn parse_character_string(
@@ -805,6 +814,7 @@ fn parse_value(
     Ok(AstElement::new(
         match value.element {
             AstValue::BuiltinValue(ref builtin) => ValueReference::Value(match &builtin.element {
+                AstBuiltinValue::Null(_) => Value::Null,
                 AstBuiltinValue::BooleanValue(b) => match b.element {
                     AstBooleanValue::True(_) => Value::Boolean(true),
                     AstBooleanValue::False(_) => Value::Boolean(false),
@@ -868,11 +878,11 @@ fn parse_value(
                 }
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
                 AstBuiltinValue::SequenceValue(seq_val) => {
-                    parse_sequence_value(oid, seq_val, target_type)?
+                    parse_structure_value(oid, seq_val, target_type)?
                 }
                 AstBuiltinValue::SequenceOfValue(seq_of_val) => {
                     let component_type = match &target_type.ty {
-                        BuiltinType::SequenceOf(seq_of) => &seq_of.component_type,
+                        BuiltinType::StructureOf(seq_of) => &seq_of.component_type,
                         other_type => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(
@@ -970,7 +980,7 @@ fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
                 if let Some(illegal_component) = illegal_component {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
-                            "SEQUENCE components '{}' and components '{}' must have distinct tags",
+                            "SEQUENCE component '{}' and component '{}' must have distinct tags",
                             illegal_component.name.element, component.name.element
                         )),
                         loc: illegal_component.name.loc,
@@ -1002,7 +1012,7 @@ fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
                     if tag_a.class == tag_b.class && tag_a.num == tag_b.num {
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(
-                                "SET components '{}' and components '{}' must have distinct tags",
+                                "SET component '{}' and component '{}' must have distinct tags",
                                 a.name.element, b.name.element
                             )),
                             loc: a.name.loc,
@@ -1020,9 +1030,7 @@ fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
 fn verify_type(declared_type: &TaggedType) -> Result<()> {
     let resolved_ty = declared_type.resolve()?;
     match &resolved_ty.ty {
-        BuiltinType::Sequence(structure) | BuiltinType::Set(structure) => {
-            verify_unique_component_tags(structure)?
-        }
+        BuiltinType::Structure(structure) => verify_unique_component_tags(structure)?,
         _ => (),
     }
 

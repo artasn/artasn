@@ -1,4 +1,4 @@
-UniqueTagTestModule DEFINITIONS IMPLICIT TAGS ::= BEGIN
+UniqueTagTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
 Compliant1 ::= SEQUENCE {
     num INTEGER

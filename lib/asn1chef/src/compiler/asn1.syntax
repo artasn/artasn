@@ -771,6 +771,6 @@ variant BooleanValue = True {
     keyword FALSE
 };
 
-variant BuiltinValue = BooleanValue | StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
+variant BuiltinValue = Null | BooleanValue | StringLiteral | IntegerValue | SequenceOfValue | SequenceValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

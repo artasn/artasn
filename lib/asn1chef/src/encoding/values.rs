@@ -1,5 +1,5 @@
 use num::{bigint::Sign, BigInt};
-use widestring::Utf32String;
+use widestring::{Utf16String, Utf32String};
 
 use crate::types::TagType;
 
@@ -77,6 +77,13 @@ pub fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &s
             // GeneralString and GraphicString are implemented as UTF-8 as well
             buf.extend(str.bytes().rev());
         }
+        TagType::BMPString => {
+            // BMPString is encoded as UTF-16
+            let utf16str = Utf16String::from_str(str);
+            for b in utf16str.into_vec().into_iter().rev() {
+                buf.extend_from_slice(&b.to_le_bytes());
+            }
+        }
         TagType::UniversalString => {
             // UniversalString is encoded as UTF-32
             let utf32str = Utf32String::from_str(str);
@@ -84,6 +91,6 @@ pub fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &s
                 buf.extend_from_slice(&b.to_le_bytes());
             }
         }
-        _ => todo!(),
+        other => todo!("{:?}", other),
     }
 }
