@@ -1,5 +1,11 @@
 External-X690 DEFINITIONS EXPLICIT TAGS ::= BEGIN
 
+-- This is how the EXTERNAL type is encoded in the presentation layer.
+-- This is to ensure backwards compatability between the X.208 and X.680
+-- implementations of the EXTERNAL type.
+-- See X.690 clause 8.18 and its subclauses to see how the X.680 EXTERNAL type is mapped to this type.
+-- The X.208 EXTERNAL type is directly equivalent to this type at the presentation layer.
+
 External ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
     direct-reference      OBJECT IDENTIFIER OPTIONAL,
     indirect-reference    INTEGER           OPTIONAL,

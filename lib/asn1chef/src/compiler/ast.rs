@@ -984,7 +984,7 @@ pub fn register_all_values(program: &AstElement<AstProgram>) -> Result<Vec<Error
     Ok(errors)
 }
 
-// See X.680 sections 25.6, 25.6.1, and 27.3 to see exactly what is being enforced here.
+// See X.680 clauses 25.6, 25.6.1, and 27.3 to see exactly what is being enforced here.
 fn verify_unique_component_tags(structure: &Structure) -> Result<()> {
     if structure.components.len() <= 1 {
         return Ok(());

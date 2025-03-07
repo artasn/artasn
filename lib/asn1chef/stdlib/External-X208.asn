@@ -1,0 +1,18 @@
+External-X208 DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+-- This was the original definition of the EXTERNAL type from X.208,
+-- until X.680 (1994) superceded it and replaced it with the EXTERNAL type
+-- which is declared in ./External-X680.asn
+
+External ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
+    direct-reference      OBJECT IDENTIFIER OPTIONAL,
+    indirect-reference    INTEGER           OPTIONAL,
+    data-value-descriptor ObjectDescriptor  OPTIONAL,
+    encoding CHOICE {
+        single-ASN1-type [0] ANY,
+        octet-aligned    [1] IMPLICIT OCTET STRING,
+        arbitrary        [2] IMPLICIT BIT STRING
+    }
+}
+
+END
