@@ -1,7 +1,6 @@
 use serde::Deserialize;
 
 use crate::{
-    compiler::context,
     encoding::{
         DecodeError, DecodeMode, DecodeResult, DecodedValue, DecodedValueForm, DecodedValueKind,
         DerReader,
@@ -11,29 +10,33 @@ use crate::{
     values::ValueResolve,
 };
 
-use super::{context::DeclaredValue, context_mut, CompileError, Compiler};
+use super::{context::DeclaredValue, options::CompilerConfig, CompileError, Compiler, Context};
 
-pub fn compile_module_fallible(path: &str, source: &str) -> Vec<CompileError> {
-    context_mut().clear();
+pub fn compile_module_fallible(
+    context: &mut Context,
+    path: &str,
+    source: &str,
+) -> Vec<CompileError> {
+    context.clear();
 
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new(CompilerConfig::default());
     match compiler.add_source(path.to_string(), source.to_string()) {
         Ok(()) => (),
         Err(err) => {
             eprintln!("{}", err);
-            assert!(false);
+            panic!("parse module '{}' failed", path);
         }
     }
-    compiler.compile()
+    compiler.compile(context)
 }
 
-pub fn compile_module(path: &str, source: &str) {
-    let errors = compile_module_fallible(path, source);
+pub fn compile_module(context: &mut Context, path: &str, source: &str) {
+    let errors = compile_module_fallible(context, path, source);
     if !errors.is_empty() {
         for error in errors {
             eprintln!("{}", error);
         }
-        assert!(false);
+        panic!("compile module '{}' failed", path);
     }
 }
 
@@ -58,16 +61,19 @@ struct TestFile {
     pub values: Vec<ValueTestEntry>,
 }
 
-fn test_encode_value(declared_value: &DeclaredValue, expected_der: &[u8]) {
-    let tagged_type = declared_value.ty.resolve().expect("failed to resolve type");
+fn test_encode_value(context: &Context, declared_value: &DeclaredValue, expected_der: &[u8]) {
+    let tagged_type = declared_value
+        .ty
+        .resolve(context)
+        .expect("failed to resolve type");
     let value = declared_value
         .value
-        .resolve()
+        .resolve(context)
         .expect("failed to resolve value");
 
     let mut buf = Vec::with_capacity(expected_der.len());
     value
-        .der_encode(&mut buf, &tagged_type)
+        .der_encode(&mut buf, context, &tagged_type)
         .expect("failed to encode sequenceValue");
     let buf = buf.into_iter().rev().collect::<Vec<u8>>();
 
@@ -150,19 +156,27 @@ fn compare_decoded_value_to_json_value(
     }
 }
 
-fn test_decode_value(declared_value: &DeclaredValue, der: &[u8], json_value: &serde_json::Value) {
+fn test_decode_value(
+    context: &Context,
+    declared_value: &DeclaredValue,
+    der: &[u8],
+    json_value: &serde_json::Value,
+) {
     let mode = DecodeMode::SpecificType {
         source_ident: match &declared_value.ty.ty {
             UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
             UntaggedType::BuiltinType(_) => panic!("value type is not a typereference"),
         },
         component_name: None,
-        resolved: declared_value.ty.resolve().expect("failed resolving type"),
+        resolved: declared_value
+            .ty
+            .resolve(context)
+            .expect("failed resolving type"),
     };
-    let reader = DerReader::new(&der, 0);
+    let reader = DerReader::new(der, 0);
     let values = reader
         .into_iter()
-        .map(|tlv| DecodedValue::der_decode(tlv.map_err(DecodeError::Io)?, &mode))
+        .map(|tlv| DecodedValue::der_decode(context, tlv.map_err(DecodeError::Io)?, &mode))
         .collect::<DecodeResult<Vec<DecodedValue>>>()
         .unwrap();
     compare_decoded_values_to_json_values(&values, json_value)
@@ -171,14 +185,19 @@ fn test_decode_value(declared_value: &DeclaredValue, der: &[u8], json_value: &se
 pub fn execute_json_test(module_file: &str, data_file: &str) {
     let test_file: TestFile = serde_json::from_str(data_file).expect("malformed data file");
 
-    compile_module(&format!("{}.asn", test_file.module), module_file);
+    let mut context = Context::new();
+    compile_module(
+        &mut context,
+        &format!("{}.asn", test_file.module),
+        module_file,
+    );
 
     let all_tests = vec![TestMode::Encode, TestMode::Decode];
     for entry in &test_file.values {
         let name = &entry.name;
         let der = hex::decode(&entry.der).expect("invalid DER hex");
 
-        let declared_value = context()
+        let declared_value = context
             .lookup_value(&QualifiedIdentifier {
                 module: ModuleIdentifier {
                     name: test_file.module.clone(),
@@ -186,10 +205,8 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
                 },
                 name: name.to_string(),
             })
-            .expect(&format!(
-                "value '{}.{}' does not exist",
-                test_file.module, name
-            ));
+            .unwrap_or_else(|| panic!("value '{}.{}' does not exist",
+                test_file.module, name));
 
         let tests = entry
             .tests
@@ -197,11 +214,11 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
             .or(test_file.tests.as_ref())
             .unwrap_or(&all_tests);
         if tests.contains(&TestMode::Encode) {
-            test_encode_value(&declared_value, &der);
+            test_encode_value(&context, declared_value, &der);
         }
         if tests.contains(&TestMode::Decode) {
             let value = entry.value.as_ref().expect("missing 'value' in test JSON");
-            test_decode_value(declared_value, &der, value);
+            test_decode_value(&context, declared_value, &der, value);
         }
     }
 }
@@ -209,7 +226,8 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
 #[test]
 pub fn test_unique_tag_compliance() {
     let module_file = include_str!("../../test-data/compile/UniqueTagTest.asn");
-    let errors = compile_module_fallible("UniqueTagTest.asn", module_file);
+    let mut context = Context::new();
+    let errors = compile_module_fallible(&mut context, "UniqueTagTest.asn", module_file);
 
     let data_file = include_str!("../../test-data/compile/UniqueTagTest.data");
     let entries: Vec<String> = serde_json::from_str(data_file).expect("malformed data file");

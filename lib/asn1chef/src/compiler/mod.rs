@@ -2,15 +2,18 @@
 
 pub mod ast;
 mod context;
-pub use context::{context, context_mut, Context};
+pub use context::Context;
 
 #[path = "asn1.gen.rs"]
 pub mod parser;
 
+use options::CompilerConfig;
 use parser::*;
 use std::fmt::Display;
 
 pub mod oid_tree;
+
+pub mod options;
 
 #[cfg(test)]
 pub mod test;
@@ -90,25 +93,19 @@ impl Display for CompileError {
 
 pub struct Compiler {
     sources: Vec<SourceFile>,
-}
-
-impl Default for Compiler {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub config: CompilerConfig,
 }
 
 impl Compiler {
-    pub fn new() -> Compiler {
-        context::init_context();
-
+    pub fn new(options: CompilerConfig) -> Compiler {
         Compiler {
             sources: Vec::new(),
+            config: options,
         }
     }
 
     pub fn add_source(&mut self, path: String, source: String) -> CompileResult<()> {
-        let mut token_stream = TokenStream::new(&source);
+        let mut token_stream = TokenStream::new(&source, self.config.permit_lowercase_string_indicator);
         let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
         match parser {
             ParseResult::Ok(program) => {
@@ -117,7 +114,7 @@ impl Compiler {
                         phase: CompilePhase::Parse,
                         error: Error {
                             loc: Loc::at(token_stream.cursor()),
-                            kind: ErrorKind::ExpectingEOI,
+                            kind: ErrorKind::ExpectingEoi,
                         },
                         path,
                         source,
@@ -162,34 +159,20 @@ impl Compiler {
         }
     }
 
-    pub fn compile(&self) -> Vec<CompileError> {
-        macro_rules! map_err {
-            ( $source: expr ) => {
-                |error| CompileError {
-                    phase: CompilePhase::Walk,
-                    path: $source.path.clone(),
-                    source: $source.code.clone(),
-                    error,
-                }
-            };
-        }
-
+    pub fn compile(&self, context: &mut Context) -> Vec<CompileError> {
         macro_rules! stage {
             ( $stage:ident ) => {{
                 let mut errors = Vec::new();
                 for source in &self.sources {
-                    match ast::$stage(&source.program)
-                        .map(|errors| {
-                            errors
-                                .into_iter()
-                                .map(map_err!(source))
-                                .collect::<Vec<CompileError>>()
-                        })
-                        .map_err(map_err!(source))
-                    {
-                        Ok(source_errors) => errors.extend(source_errors),
-                        Err(err) => errors.push(err),
-                    }
+                    let source_errors = ast::$stage(context, &self.config, &source.program)
+                        .into_iter()
+                        .map(|error| CompileError {
+                            phase: CompilePhase::Walk,
+                            path: source.path.clone(),
+                            source: source.code.clone(),
+                            error,
+                        });
+                    errors.extend(source_errors);
                 }
                 if errors.len() > 0 {
                     return errors;
@@ -204,9 +187,5 @@ impl Compiler {
         stage!(verify_all_values);
 
         Vec::new()
-    }
-
-    pub fn get_context<'a>() -> &'a Context {
-        context()
     }
 }

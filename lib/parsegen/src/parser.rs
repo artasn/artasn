@@ -8,9 +8,9 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
-    pub fn new(source: &str) -> TokenStream {
+    pub fn new(source: &str, permit_lowercase_string_indicator: bool) -> TokenStream {
         TokenStream {
-            tokenizer: Tokenizer::new(source),
+            tokenizer: Tokenizer::new(source, permit_lowercase_string_indicator),
         }
     }
 
@@ -41,7 +41,7 @@ impl TokenStream {
         let mut tokens = Vec::new();
         loop {
             let token = self.tokenizer.tokenize_next()?;
-            if token.kind == TokenKind::EOI {
+            if token.kind == TokenKind::Eoi {
                 tokens.push(token);
                 return Ok(tokens);
             }
@@ -51,16 +51,16 @@ impl TokenStream {
 }
 
 #[derive(Debug, Clone)]
-pub struct SOI;
+pub struct Soi;
 
-impl Parseable for SOI {
+impl Parseable for Soi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::SOI)
+            .try_parse(TokenKind::Soi)
             .map(|token| {
                 ParseResult::Ok(AstElement {
-                    element: SOI,
+                    element: Soi,
                     loc: token.loc,
                 })
             })
@@ -69,16 +69,16 @@ impl Parseable for SOI {
 }
 
 #[derive(Debug, Clone)]
-pub struct EOI;
+pub struct Eoi;
 
-impl Parseable for EOI {
+impl Parseable for Eoi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::EOI)
+            .try_parse(TokenKind::Eoi)
             .map(|token| {
                 ParseResult::Ok(AstElement {
-                    element: EOI,
+                    element: Eoi,
                     loc: token.loc,
                 })
             })

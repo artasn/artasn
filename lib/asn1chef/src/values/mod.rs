@@ -5,8 +5,8 @@ pub use simple::*;
 
 use crate::{
     compiler::{
-        context,
         parser::{AstElement, Error, ErrorKind, Loc, Result},
+        Context,
     },
     encoding,
     module::QualifiedIdentifier,
@@ -32,8 +32,8 @@ pub enum BuiltinValue {
 }
 
 impl BuiltinValue {
-    pub fn tag_type(&self) -> TagType {
-        match self {
+    pub fn tag_type(&self, context: &Context) -> Result<TagType> {
+        Ok(match self {
             Self::Boolean(_) => TagType::Boolean,
             Self::Integer(_) => TagType::Integer,
             Self::BitString(_) => TagType::BitString,
@@ -44,19 +44,20 @@ impl BuiltinValue {
             Self::Enumerated(_) => TagType::Enumerated,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
-            Self::Choice(choice) => choice
-                .value
-                .resolve()
-                .expect("CHOICE value failed to resolve")
-                .tag_type(),
+            Self::Choice(choice) => choice.value.resolve(context)?.tag_type(context)?,
             Self::CharacterString(tag_type, _) => *tag_type,
-        }
+        })
     }
 
     /// Reverse-encodes the value, including its tag.
     /// The resulting bytes are in reverse order.
     /// The bytes of the final output must be reversed to be valid DER.
-    pub fn der_encode(&self, buf: &mut Vec<u8>, tagged_type: &ResolvedType) -> Result<()> {
+    pub fn der_encode(
+        &self,
+        buf: &mut Vec<u8>,
+        context: &Context,
+        resolved_type: &ResolvedType,
+    ) -> Result<()> {
         let start_len = buf.len();
         match self {
             Self::Boolean(b) => {
@@ -75,7 +76,7 @@ impl BuiltinValue {
             Self::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
             Self::Null => (),
             Self::ObjectIdentifier(oid) => {
-                let oid = oid.resolve_oid()?.0;
+                let oid = oid.resolve_oid(context)?.0;
 
                 match oid.len() {
                     2.. => {
@@ -97,14 +98,14 @@ impl BuiltinValue {
                 encoding::write_vlq(prefix, buf);
             }
             Self::Enumerated(enumerated) => {
-                let resolved = enumerated.resolve()?;
+                let resolved = enumerated.resolve(context)?;
                 let num = match resolved {
                     Self::Integer(num) => num.clone(),
                     other => {
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(
                                 "ENUMERATED value must be of type INTEGER, but found {}",
-                                other.tag_type()
+                                other.tag_type(context)?
                             )),
                             loc: enumerated.loc,
                         })
@@ -116,7 +117,7 @@ impl BuiltinValue {
                 // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
                 // and that the value provides only components in the SEQUENCE/SET type,
                 // and that the component values are in the same order as in the type definition
-                let ty_components = match &tagged_type.ty {
+                let ty_components = match &resolved_type.ty {
                     BuiltinType::Structure(structure) => &structure.components,
                     _ => unreachable!(),
                 };
@@ -125,25 +126,25 @@ impl BuiltinValue {
                     if component.is_default {
                         continue;
                     }
-                    let value = component.value.resolve()?;
+                    let value = component.value.resolve(context)?;
                     let value_ty = ty_components
                         .iter()
                         .find(|ty_component| ty_component.name.element == component.name.element)
                         .expect("find type component matching value component for SEQUENCE/SET")
                         .component_type
-                        .resolve()?;
-                    value.der_encode(buf, &value_ty)?;
+                        .resolve(context)?;
+                    value.der_encode(buf, context, &value_ty)?;
                 }
             }
             Self::SequenceOf(structure) | Self::SetOf(structure) => {
-                let component_type = match &tagged_type.ty {
+                let component_type = match &resolved_type.ty {
                     BuiltinType::StructureOf(structure_ty) => &structure_ty.component_type,
                     other => unreachable!("value is SequenceOf but type is {:?}", other),
                 };
-                let component_type = component_type.resolve()?;
+                let component_type = component_type.resolve(context)?;
                 for element in structure.iter().rev() {
-                    let resolved = element.resolve()?;
-                    resolved.der_encode(buf, &component_type)?;
+                    let resolved = element.resolve(context)?;
+                    resolved.der_encode(buf, context, &component_type)?;
                 }
             }
             Self::CharacterString(tag_type, str) => {
@@ -153,24 +154,24 @@ impl BuiltinValue {
         }
 
         let end_len = buf.len();
-        if tagged_type.tag.kind == TagKind::Explicit {
+        if resolved_type.tag.kind == TagKind::Explicit {
             encoding::write_tlv_len((end_len - start_len) as u64, buf);
-            Tag::universal(tagged_type.ty.tag_type().expect("tag_type")).der_encode(
+            Tag::universal(resolved_type.ty.tag_type().expect("tag_type")).der_encode(
                 buf,
                 TagContext {
                     is_outer_explicit: false,
-                    ty: &tagged_type.ty,
+                    ty: &resolved_type.ty,
                 },
             );
         }
 
         let end_len = buf.len();
         encoding::write_tlv_len((end_len - start_len) as u64, buf);
-        tagged_type.tag.der_encode(
+        resolved_type.tag.der_encode(
             buf,
             TagContext {
-                is_outer_explicit: tagged_type.tag.kind == TagKind::Explicit,
-                ty: &tagged_type.ty,
+                is_outer_explicit: resolved_type.tag.kind == TagKind::Explicit,
+                ty: &resolved_type.ty,
             },
         );
 
@@ -265,17 +266,17 @@ pub enum Value {
 }
 
 pub trait ValueResolve {
-    fn resolve(&self) -> Result<&BuiltinValue>;
+    fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a BuiltinValue>;
 }
 
 impl ValueResolve for AstElement<Value> {
-    fn resolve(&self) -> Result<&BuiltinValue> {
+    fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a BuiltinValue> {
         let mut valref = self;
         loop {
             match &valref.element {
                 Value::BuiltinValue(value) => return Ok(value),
                 Value::Reference(ident) => {
-                    valref = &context()
+                    valref = &context
                         .lookup_value(ident)
                         .ok_or_else(|| Error {
                             kind: ErrorKind::Ast(format!(

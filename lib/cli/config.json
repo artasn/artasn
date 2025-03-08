@@ -1,0 +1,5 @@
+{
+    "edition": "X.680",
+    "emptyExportBehavior": "ExportAll",
+    "permitLowercaseStringIndicator": true
+}

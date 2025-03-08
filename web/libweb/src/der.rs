@@ -1,14 +1,8 @@
-use asn1chef::{
-    compiler::context,
-    encoding::{
-        DecodeMode, DecodeResult, DecodedValue, DecodedValueForm, DecodedValueKind,
-        DecodedValueMetadata, DerReader, TlvElement, TlvPos, TlvTag, UTCTimeZone, UTCTimeZoneSign,
-    },
-};
+use asn1chef::encoding::*;
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
-use crate::QualifiedIdentifier;
+use crate::{LibWeb, QualifiedIdentifier};
 
 fn serialize_tlv_pos(loc: TlvPos) -> JsValue {
     let obj = Object::new();
@@ -76,6 +70,7 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             ("data", "OBJECT IDENTIFIER".into(), data.to_string().into())
         }
         DecodedValueKind::Real(data) => ("data", "REAL".into(), data.to_string().into()),
+        DecodedValueKind::Enumerated(variant) => ("data", "ENUMERATED".into(), variant.into()),
         DecodedValueKind::CharacterString(tag_type, str) => {
             ("data", tag_type.to_string().into(), str.into())
         }
@@ -166,7 +161,7 @@ fn serialize_decoded_value(value: DecodedValue) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn context_der_decode(der_hex: &str, options: &JsValue) -> JsValue {
+pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsValue) -> JsValue {
     let der = match hex::decode(der_hex) {
         Ok(der) => der,
         Err(err) => return err.to_string().into(),
@@ -189,14 +184,24 @@ pub fn context_der_decode(der_hex: &str, options: &JsValue) -> JsValue {
             let ident: crate::QualifiedIdentifier =
                 serde_wasm_bindgen::from_value(ident).expect("deserialize ident");
             let ident = ident.try_into().expect("convert ident");
-            let source = match context().lookup_type(&ident) {
+
+            let libweb = unsafe { Box::from_raw(libweb_ptr) };
+            let source = match libweb.context.lookup_type(&ident) {
                 Some(source) => source,
-                None => return format!("no such type: {}", ident).into(),
+                None => {
+                    let _ = Box::into_raw(libweb);
+                    return format!("no such type: {}", ident).into();
+                }
             };
-            let resolved = match source.resolve() {
+            let resolved = match source.resolve(&libweb.context) {
                 Ok(resolved) => resolved,
-                Err(err) => return err.kind.message().into(),
+                Err(err) => {
+                    let _ = Box::into_raw(libweb);
+                    return err.kind.message().into();
+                }
             };
+            let _ = Box::into_raw(libweb);
+
             DecodeMode::SpecificType {
                 source_ident: Some(ident),
                 component_name: None,
@@ -206,14 +211,19 @@ pub fn context_der_decode(der_hex: &str, options: &JsValue) -> JsValue {
         other => panic!("{}", other),
     };
 
+    let libweb = unsafe { Box::from_raw(libweb_ptr) };
     let values = match tlvs
         .into_iter()
-        .map(|tlv| DecodedValue::der_decode(tlv, &mode))
+        .map(|tlv| DecodedValue::der_decode(&libweb.context, tlv, &mode))
         .collect::<DecodeResult<Vec<DecodedValue>>>()
     {
         Ok(values) => values,
-        Err(err) => return err.to_string().into(),
+        Err(err) => {
+            let _ = Box::into_raw(libweb);
+            return err.to_string().into()
+        }
     };
+    let _ = Box::into_raw(libweb);
 
     let arr = Array::new();
     for value in values {

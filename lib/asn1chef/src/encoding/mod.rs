@@ -354,7 +354,7 @@ impl<'a> Iterator for DerReader<'a> {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::test,
+        compiler::{test, Context},
         encoding::{DecodeMode, DecodeResult},
     };
 
@@ -427,10 +427,15 @@ mod test {
             include_bytes!("../../test-data/decode/LetsEncryptX3.der"),
             0,
         );
+        let context = Context::new();
         reader
             .into_iter()
             .map(|tlv| {
-                DecodedValue::der_decode(tlv.map_err(DecodeError::Io)?, &DecodeMode::Contextless)
+                DecodedValue::der_decode(
+                    &context,
+                    tlv.map_err(DecodeError::Io)?,
+                    &DecodeMode::Contextless,
+                )
             })
             .collect::<DecodeResult<Vec<DecodedValue>>>()
             .unwrap();

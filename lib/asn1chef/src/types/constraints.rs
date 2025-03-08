@@ -3,7 +3,7 @@ use std::fmt::Display;
 use num::BigInt;
 
 use crate::{
-    compiler::parser::{AstElement, Result},
+    compiler::{parser::{AstElement, Result}, Context},
     values::{BuiltinValue, Value, ValueResolve},
 };
 
@@ -55,10 +55,10 @@ pub struct Constraints {
 }
 
 impl Constraints {
-    pub fn includes_value(&self, value: &BigInt) -> Result<bool> {
+    pub fn includes_value(&self, context: &Context, value: &BigInt) -> Result<bool> {
         macro_rules! cmp_constant {
             ( $value:expr, $op:tt, $constant:expr ) => {{
-                let constant = $constant.resolve()?;
+                let constant = $constant.resolve(context)?;
                 match constant {
                     BuiltinValue::Integer(integer) => {
                         $value $op integer

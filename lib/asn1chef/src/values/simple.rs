@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use num::bigint::Sign;
 
-use crate::compiler::parser::{AstElement, Error, ErrorKind, Result};
+use crate::compiler::{
+    parser::{AstElement, Error, ErrorKind, Result},
+    Context,
+};
 
 use super::{BuiltinValue, Value, ValueResolve};
 
@@ -28,13 +31,13 @@ pub struct ChoiceValue {
 pub struct ObjectIdentifier(pub Vec<ObjectIdentifierComponent>);
 
 impl ObjectIdentifier {
-    pub fn resolve_oid(&self) -> Result<Oid> {
+    pub fn resolve_oid(&self, context: &Context) -> Result<Oid> {
         let mut nodes = Vec::new();
 
         for (i, component) in self.0.iter().enumerate() {
             match component {
                 ObjectIdentifierComponent::ValueReference(valref) => {
-                    let resolved_value = valref.resolve()?;
+                    let resolved_value = valref.resolve(context)?;
                     match resolved_value {
                         BuiltinValue::Integer(integer) => {
                             let (sign, digits) = integer.to_u64_digits();
@@ -65,14 +68,14 @@ impl ObjectIdentifier {
                                     loc: valref.loc,
                                 });
                             }
-                            let resolved_oid = relative_oid.resolve_oid()?;
+                            let resolved_oid = relative_oid.resolve_oid(context)?;
                             nodes.extend(resolved_oid.0);
                         }
                         other => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(
                                     "expecting OBJECT IDENTIFIER or INTEGER; found {}",
-                                    other.tag_type()
+                                    other.tag_type(context)?
                                 )),
                                 loc: valref.loc,
                             });

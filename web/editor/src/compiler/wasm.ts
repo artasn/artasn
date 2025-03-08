@@ -28,24 +28,28 @@ export function compile(): CompileError[] | null {
 }
 
 export function listModules(): ModuleIdentifier[] {
-    return lib.context_list_modules();
+    ensureInit(libweb);
+    return lib.compiler_list_modules(libweb);
 }
 
 export function listTypes(): TypeDefinition[] {
-    return lib.context_list_types();
+    ensureInit(libweb);
+    return lib.compiler_list_types(libweb);
 }
 
 export function listValues(): ValueDefinition[] {
-    return lib.context_list_values();
+    ensureInit(libweb);
+    return lib.compiler_list_values(libweb);
 }
 
 export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string> {
     ensureInit(libweb);
-    return lib.context_der_encode(libweb, ident.module.name, ident.module.oid, ident.name);
+    return lib.compiler_der_encode(libweb, ident.module.name, ident.module.oid, ident.name);
 }
 
 export async function derDecodeValue(derHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
-    return lib.context_der_decode(derHex, options);
+    ensureInit(libweb);
+    return lib.compiler_der_decode(libweb, derHex, options);
 }
 
 export async function ensureLoaded(): Promise<void> {

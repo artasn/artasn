@@ -197,7 +197,7 @@ impl Display for Token {
                 TokenData::Named(name) => name.clone(),
                 TokenData::Number(num) => num.to_string(),
                 TokenData::Operator(op) => op.name().to_string(),
-                TokenData::String(kind, value) => format!("{} '{}'", kind.to_string(), value),
+                TokenData::String(kind, value) => format!("{} '{}'", kind, value),
             })?;
             f.write_str(")")?;
         }
@@ -208,7 +208,7 @@ impl Display for Token {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
-    SOI,
+    Soi,
     ValueReference,
     TypeReference,
     EncodingReference,
@@ -216,13 +216,13 @@ pub enum TokenKind {
     Number,
     String,
     Operator,
-    EOI,
+    Eoi,
 }
 
-impl ToString for TokenKind {
-    fn to_string(&self) -> String {
-        String::from(match self {
-            Self::SOI => "SOI",
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Soi => "Soi",
             Self::ValueReference => "valuereference",
             Self::TypeReference => "typereference",
             Self::EncodingReference => "encodingreference",
@@ -230,7 +230,7 @@ impl ToString for TokenKind {
             Self::Number => "integer",
             Self::String => "string",
             Self::Operator => "operator",
-            Self::EOI => "EOI",
+            Self::Eoi => "Eoi",
         })
     }
 }
@@ -242,9 +242,9 @@ pub enum StringKind {
     BString,
 }
 
-impl ToString for StringKind {
-    fn to_string(&self) -> String {
-        String::from(match self {
+impl Display for StringKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             Self::CString => "cstring",
             Self::HString => "hstring",
             Self::BString => "bstring",
@@ -264,9 +264,9 @@ pub enum TokenData {
 impl TokenData {
     pub fn to_string(&self, kind: &TokenKind) -> String {
         match self {
-            Self::Named(name) => format!("{} '{}'", kind.to_string(), name),
+            Self::Named(name) => format!("{} '{}'", kind, name),
             Self::Number(value) => format!("integer {}", value),
-            Self::String(kind, value) => format!("{} '{}'", kind.to_string(), value),
+            Self::String(kind, value) => format!("{} '{}'", kind, value),
             Self::Keyword(keyword) => format!("keyword {}", keyword.name()),
             Self::Operator(op) => format!("operator {}", op.name()),
         }
@@ -303,7 +303,7 @@ impl Error {
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     UnexpectedToken(char),
-    ExpectingEOI,
+    ExpectingEoi,
     ExpectingOther {
         expecting: Vec<TokenKind>,
         found: Token,
@@ -357,7 +357,7 @@ impl ErrorKind {
             ErrorKind::UnexpectedToken(token) => {
                 format!("unexpected token '{}'", token)
             }
-            ErrorKind::ExpectingEOI => String::from("expecting end of input"),
+            ErrorKind::ExpectingEoi => String::from("expecting end of input"),
             ErrorKind::ExpectingOther { expecting, found } => {
                 let expecting_str = if expecting.len() == 1 {
                     expecting[0].to_string()
@@ -381,7 +381,7 @@ impl ErrorKind {
                     format!(
                         "expecting {}, found {}",
                         expecting_str,
-                        found.kind.to_string()
+                        found.kind
                     )
                 }
             }
@@ -390,7 +390,7 @@ impl ErrorKind {
                 character,
             } => format!(
                 "illegal {} character '{}'",
-                string_kind.to_string(),
+                string_kind,
                 character
             ),
             ErrorKind::InvalidStringIndicator(indicator) => format!(
@@ -434,6 +434,7 @@ pub struct Tokenizer {
     source: Vec<char>,
     cursor: usize,
     yielded_soi: bool,
+    permit_lowercase_string_indicator: bool,
 }
 
 lazy_static::lazy_static! {
@@ -447,11 +448,12 @@ impl Tokenizer {
     const BLOCK_COMMENT_START: &[char] = &['/', '*'];
     const BLOCK_COMMENT_END: &[char] = &['*', '/'];
 
-    pub fn new(source: &str) -> Tokenizer {
+    pub fn new(source: &str, permit_lowercase_string_indicator: bool) -> Tokenizer {
         Tokenizer {
             source: source.chars().collect(),
             cursor: 0,
             yielded_soi: false,
+            permit_lowercase_string_indicator,
         }
     }
 
@@ -467,7 +469,7 @@ impl Tokenizer {
         if !self.yielded_soi {
             self.yielded_soi = true;
             return Ok(Token {
-                kind: TokenKind::SOI,
+                kind: TokenKind::Soi,
                 data: None,
                 loc: Loc { offset: 0, len: 0 },
             });
@@ -483,7 +485,7 @@ impl Tokenizer {
         }
         if self.is_ended() {
             return Ok(Token {
-                kind: TokenKind::EOI,
+                kind: TokenKind::Eoi,
                 data: None,
                 loc: Loc {
                     offset: self.source.len(),
@@ -568,7 +570,7 @@ impl Tokenizer {
         let (loc, text, kind) = if let Some((loc, text, _)) = self.tokenize_string_delim('"')? {
             (loc, text, StringKind::CString)
         } else if let Some((loc, text, suffix)) = self.tokenize_string_delim('\'')? {
-            match Self::assert_string_validity(loc, text, suffix) {
+            match self.assert_string_validity(loc, text, suffix) {
                 Ok(string) => string,
                 Err(err) => return Err(err),
             }
@@ -583,21 +585,29 @@ impl Tokenizer {
     }
 
     fn assert_string_validity(
+        &self,
         loc: Loc,
         text: String,
         suffix: char,
     ) -> Result<(Loc, String, StringKind)> {
-        let (invalid_char, kind) = match suffix {
-            // TODO: lowercase string indicators are not standard-compliant, but can be found occasionally in IETF RFCs
-            // there should be a compiler option to be permissive about this or not
-            'B' | 'b' => (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::BString),
-            'H' | 'h' => (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::HString),
-            indicator => {
-                return Err(Error {
-                    kind: ErrorKind::InvalidStringIndicator(indicator),
-                    loc,
-                })
-            }
+        let bstring_indicators;
+        let hstring_indicators;
+        if self.permit_lowercase_string_indicator {
+            bstring_indicators = "Bb";
+            hstring_indicators = "Hh";
+        } else {
+            bstring_indicators = "B";
+            hstring_indicators = "H";
+        }
+        let (invalid_char, kind) = if bstring_indicators.contains(suffix) {
+            (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::BString)
+        } else if hstring_indicators.contains(suffix) {
+            (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::HString)
+        } else {
+            return Err(Error {
+                kind: ErrorKind::InvalidStringIndicator(suffix),
+                loc,
+            });
         };
         if let Some(invalid_char) = invalid_char {
             Err(Error {
@@ -824,46 +834,46 @@ mod test {
 
     #[test]
     pub fn empty_input() {
-        let mut t = Tokenizer::new("");
+        let mut t = Tokenizer::new("", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
     }
 
     #[test]
     pub fn only_comments_is_equivalent_to_empty_input() {
-        let mut t = Tokenizer::new("-- Hello world");
+        let mut t = Tokenizer::new("-- Hello world", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
-        let mut t = Tokenizer::new("-- Hello world\n");
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
+        let mut t = Tokenizer::new("-- Hello world\n", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
 
-        let mut t = Tokenizer::new("--Goodbye world--");
+        let mut t = Tokenizer::new("--Goodbye world--", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
-        let mut t = Tokenizer::new("--Goodbye world--\n");
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
+        let mut t = Tokenizer::new("--Goodbye world--\n", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
 
-        let mut t = Tokenizer::new("-- Hello world\n--Goodbye world--");
+        let mut t = Tokenizer::new("-- Hello world\n--Goodbye world--", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
-        let mut t = Tokenizer::new("-- Hello world\n--Goodbye world--\n");
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
+        let mut t = Tokenizer::new("-- Hello world\n--Goodbye world--\n", true);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::SOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
         let r = assert_ok!(t.tokenize_next());
-        assert!(matches!(r.kind, TokenKind::EOI), "{:?}", r);
+        assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
     }
 }

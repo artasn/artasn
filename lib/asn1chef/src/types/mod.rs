@@ -14,8 +14,8 @@ pub use constraints::*;
 
 use crate::{
     compiler::{
-        context,
         parser::{AstElement, Error, ErrorKind, Result},
+        Context,
     },
     encoding,
     module::QualifiedIdentifier,
@@ -186,7 +186,7 @@ pub struct TaggedType {
 }
 
 impl TaggedType {
-    pub fn resolve(&self) -> Result<ResolvedType> {
+    pub fn resolve(&self, context: &Context) -> Result<ResolvedType> {
         let mut tagged_ty = self;
         let mut tag = self.tag.as_ref();
         loop {
@@ -198,9 +198,9 @@ impl TaggedType {
                     });
                 }
                 UntaggedType::Reference(ident) => {
-                    tagged_ty = context().lookup_type(&ident.element).ok_or_else(|| Error {
+                    tagged_ty = context.lookup_type(&ident.element).ok_or_else(|| Error {
                         kind: ErrorKind::Ast(format!(
-                            "undefined reference to type '{}",
+                            "undefined reference to type '{}'",
                             ident.element
                         )),
                         loc: ident.loc,
@@ -364,17 +364,21 @@ impl BuiltinType {
         }
     }
 
-    pub fn ensure_satisfied_by_value(&self, valref: &AstElement<Value>) -> Result<()> {
-        let value = valref.resolve()?;
+    pub fn ensure_satisfied_by_value(
+        &self,
+        context: &Context,
+        valref: &AstElement<Value>,
+    ) -> Result<()> {
+        let value = valref.resolve(context)?;
         let tag_type = self
             .tag_type()
             .expect("ensure_satisfied_by_value: no tag type");
-        if tag_type != value.tag_type() {
+        if tag_type != value.tag_type(context)? {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
                     "expecting {} but found {}",
                     tag_type,
-                    value.tag_type()
+                    value.tag_type(context)?
                 )),
                 loc: valref.loc,
             });
@@ -399,7 +403,7 @@ impl BuiltinType {
             _ => (None, &BigInt::ZERO),
         };
         if let Some(constraints) = constraints {
-            if !constraints.includes_value(item)? {
+            if !constraints.includes_value(context, item)? {
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
                         "value does not satisfy {} constraints of type",
@@ -417,8 +421,10 @@ impl BuiltinType {
                     .iter()
                     .find(|val_component| val_component.name.element == seq_component.name.element);
                 if let Some(val_component) = val_component {
-                    let seq_ty = seq_component.component_type.resolve()?;
-                    seq_ty.ty.ensure_satisfied_by_value(&val_component.value)?;
+                    let seq_ty = seq_component.component_type.resolve(context)?;
+                    seq_ty
+                        .ty
+                        .ensure_satisfied_by_value(context, &val_component.value)?;
                 } else if seq_component.default_value.is_none() && !seq_component.optional {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(

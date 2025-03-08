@@ -4,7 +4,12 @@ use num::{BigInt, BigUint};
 use widestring::{Utf16String, Utf32String};
 
 use super::*;
-use crate::{compiler::parser, module::QualifiedIdentifier, types::*, values::Oid};
+use crate::{
+    compiler::{parser, Context},
+    module::QualifiedIdentifier,
+    types::*,
+    values::Oid,
+};
 
 #[derive(Debug)]
 pub enum DecodedValueForm {
@@ -299,6 +304,7 @@ struct ComponentData<'a> {
 }
 
 fn get_component_by_tag<'a>(
+    context: &Context,
     mode: &'a DecodeMode,
     tlv_tag: &TlvElement<TlvTag>,
     index: usize,
@@ -313,7 +319,7 @@ fn get_component_by_tag<'a>(
                 {
                     let component_type = component
                         .component_type
-                        .resolve()
+                        .resolve(context)
                         .map_err(DecodeError::Parser)?;
 
                     let tag_matches = tag_eq_tlv(&component_type.tag, &tlv_tag.element);
@@ -350,7 +356,11 @@ fn get_component_by_tag<'a>(
 }
 
 impl DecodedValue {
-    pub fn der_decode(tlv: Tlv<'_>, mode: &DecodeMode) -> DecodeResult<DecodedValue> {
+    pub fn der_decode(
+        context: &Context,
+        tlv: Tlv<'_>,
+        mode: &DecodeMode,
+    ) -> DecodeResult<DecodedValue> {
         let form = match tlv.tag.element.form {
             TypeForm::Primitive => {
                 let kind = match tlv.tag.element.class {
@@ -388,7 +398,7 @@ impl DecodedValue {
                 let mut elements = Vec::new();
                 for tlv in DerReader::new(tlv.value.element, tlv.value.pos.start) {
                     let tlv = tlv.map_err(DecodeError::Io)?;
-                    let component = get_component_by_tag(mode, &tlv.tag, index)?;
+                    let component = get_component_by_tag(context, mode, &tlv.tag, index)?;
                     let mode = match component {
                         Some(data) => {
                             index = data.index + 1;
@@ -402,7 +412,7 @@ impl DecodedValue {
                                 component_name: data.name,
                                 resolved: data
                                     .tagged_type
-                                    .resolve()
+                                    .resolve(context)
                                     .map_err(DecodeError::Parser)?,
                             }
                         }
@@ -411,7 +421,7 @@ impl DecodedValue {
                             DecodeMode::Contextless
                         }
                     };
-                    elements.push(Self::der_decode(tlv, &mode)?);
+                    elements.push(Self::der_decode(context, tlv, &mode)?);
                 }
                 DecodedValueForm::Constructed(elements)
             }

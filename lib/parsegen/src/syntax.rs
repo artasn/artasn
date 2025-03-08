@@ -278,11 +278,11 @@ impl SyntaxParser {
             }
             Rule::soi_statement => self.data.code.write_indented(&format!(
                 "{};\n",
-                self.make_ok("SOI::parse(ParseContext::new(context.tokens))")
+                self.make_ok("Soi::parse(ParseContext::new(context.tokens))")
             )),
             Rule::eoi_statement => self.data.code.write_indented(&format!(
                 "{};\n",
-                self.make_ok("EOI::parse(ParseContext::new(context.tokens))")
+                self.make_ok("Eoi::parse(ParseContext::new(context.tokens))")
             )),
             other => unimplemented!("{:?}", other),
         }

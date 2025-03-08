@@ -3,25 +3,9 @@ use crate::{
     types::{Class, TaggedType},
     values::Value,
 };
-use std::{collections::BTreeMap, mem::MaybeUninit};
+use std::collections::BTreeMap;
 
 use super::parser::AstElement;
-
-static mut CONTEXT: MaybeUninit<Context> = MaybeUninit::uninit();
-
-pub fn init_context() {
-    unsafe {
-        CONTEXT = MaybeUninit::new(Context::new());
-    }
-}
-
-pub fn context<'a>() -> &'a Context {
-    unsafe { CONTEXT.assume_init_ref() }
-}
-
-pub fn context_mut<'a>() -> &'a mut Context {
-    unsafe { CONTEXT.assume_init_mut() }
-}
 
 #[derive(Debug)]
 pub struct DeclaredValue {
@@ -76,7 +60,7 @@ impl Context {
     }
 
     pub fn register_module(&mut self, module: ModuleHeader) {
-        self.modules.insert(module.oid.clone(), module);
+        self.modules.insert(module.ident.clone(), module);
     }
 
     pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: TaggedType) {
@@ -85,6 +69,12 @@ impl Context {
 
     pub fn register_value(&mut self, ident: QualifiedIdentifier, val: DeclaredValue) {
         self.values.insert(ident, val);
+    }
+
+    pub fn lookup_module_by_name<'a>(&'a self, name: &str) -> Option<&'a ModuleHeader> {
+        self.modules
+            .values()
+            .find(|value| value.ident.name.as_str() == name)
     }
 
     pub fn lookup_module<'a>(&'a self, ident: &ModuleIdentifier) -> Option<&'a ModuleHeader> {
