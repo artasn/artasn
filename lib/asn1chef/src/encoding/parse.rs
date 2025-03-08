@@ -143,7 +143,8 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             })?;
             DecodedValueKind::Enumerated(int)
         }
-        TagType::NumericString
+        TagType::ObjectDescriptor
+        | TagType::NumericString
         | TagType::PrintableString
         | TagType::IA5String
         | TagType::VisibleString
@@ -171,6 +172,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
                     TagType::VideotexString => strings::T100_MAP.decode_bytes(value).ok_or(err)?,
                     TagType::GeneralString
                     | TagType::GraphicString
+                    | TagType::ObjectDescriptor
                     | TagType::UTF8String
                     | TagType::CharacterString => String::from_utf8(value.to_vec())
                         .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
@@ -178,7 +180,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
                         if value.len() % 2 != 0 {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
-                                "UniversalString is not properly UTF-16 encoded",
+                                "BMPString is not properly UTF-16 encoded",
                             ));
                         }
                         let mut buf = Vec::with_capacity(value.len() / 2);

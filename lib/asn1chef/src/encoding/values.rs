@@ -93,9 +93,9 @@ pub fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &s
                 .expect("VideotexString cannot be encoded to T.100");
             buf.extend(bytes.into_iter().rev());
         }
-        TagType::GeneralString | TagType::GraphicString | TagType::UTF8String => {
-            // Rust strings are already UTF-8, so we just write the string's internal bytes
-            // GeneralString and GraphicString are implemented as UTF-8 as well
+        TagType::UTF8String | TagType::GeneralString | TagType::GraphicString | TagType::ObjectDescriptor => {
+            // Rust strings are already UTF-8, so we just write the string's internal bytes for UTF8String
+            // GeneralString, GraphicString, and ObjectDescriptor are implemented as UTF-8 as well
             buf.extend(str.bytes().rev());
         }
         TagType::BMPString => {

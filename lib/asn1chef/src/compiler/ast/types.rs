@@ -233,7 +233,9 @@ fn parse_builtin_type(
         }),
         AstBuiltinType::Null(_) => BuiltinType::Null,
         AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
-        AstBuiltinType::ObjectDescriptor(_) => todo!("ObjectDescriptor"),
+        AstBuiltinType::ObjectDescriptor(_) => {
+            BuiltinType::CharacterString(TagType::ObjectDescriptor)
+        }
         AstBuiltinType::External(_) => todo!("External"),
         AstBuiltinType::Real(_) => todo!("Real"),
         AstBuiltinType::Enumerated(enumerated) => parse_enumerated_type(parser, enumerated)?,

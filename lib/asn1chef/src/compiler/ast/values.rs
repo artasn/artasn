@@ -140,8 +140,7 @@ fn parse_character_string(
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
                     "{} value cannot be assigned to {}",
-                    str_lit.element.kind,
-                    tag_type
+                    str_lit.element.kind, tag_type
                 )),
                 loc: str_lit.loc,
             });
@@ -162,7 +161,9 @@ fn parse_character_string(
         }
         TagType::VisibleString => |ch: char| ch.is_ascii_graphic() || ch == ' ',
         TagType::IA5String => |ch: char| ch <= '\x7f',
-        TagType::GraphicString => |ch: char| ch == ' ' || ch.is_alphanumeric(),
+        TagType::GraphicString | TagType::ObjectDescriptor => {
+            |ch: char| ch == ' ' || ch.is_alphanumeric()
+        }
         _ => unreachable!(),
     };
     let invalid = cstring.chars().map(validator).any(|valid| !valid);
@@ -238,8 +239,7 @@ pub fn parse_value(
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(
                                 "{} value cannot be assigned to {}",
-                                str_lit.element.kind,
-                                other_type,
+                                str_lit.element.kind, other_type,
                             )),
                             loc: builtin.loc,
                         })
