@@ -38,6 +38,16 @@ jobs:
     - name: Run Tests
       run: make test
 
+    - name: Build CLI
+      run: make build-cli
+
+    - name: Archive CLI Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: asn1chef-cli
+        path: lib/target/release/asn1chef
+        overwrite: true
+
     - name: Build VSCode Web
       run: make build-vscode-web
 

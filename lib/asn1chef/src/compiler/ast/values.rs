@@ -235,6 +235,18 @@ pub fn parse_value(
                     BuiltinType::CharacterString(tag_type) => {
                         parse_character_string(str_lit, *tag_type)?
                     }
+                    BuiltinType::UTCTime => BuiltinValue::UTCTime(UTCTime::parse(
+                        &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
+                    )?),
+                    BuiltinType::Date => BuiltinValue::Date(Date::parse(
+                        &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
+                    )?),
+                    BuiltinType::TimeOfDay => BuiltinValue::TimeOfDay(TimeOfDay::parse(
+                        &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
+                    )?),
+                    BuiltinType::DateTime => BuiltinValue::DateTime(DateTime::parse(
+                        &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
+                    )?),
                     other_type => {
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(

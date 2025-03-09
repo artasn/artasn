@@ -1,7 +1,10 @@
-mod simple;
-
 use num::{BigInt, BigUint};
+
+mod simple;
 pub use simple::*;
+
+mod time;
+pub use time::*;
 
 use crate::{
     compiler::{
@@ -29,6 +32,11 @@ pub enum BuiltinValue {
     SetOf(Vec<AstElement<Value>>),
     Choice(ChoiceValue),
     CharacterString(TagType, String),
+    UTCTime(UTCTime),
+    // GeneralizedTime(GeneralizedTime),
+    Date(Date),
+    TimeOfDay(TimeOfDay),
+    DateTime(DateTime),
 }
 
 impl BuiltinValue {
@@ -46,6 +54,10 @@ impl BuiltinValue {
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
             Self::Choice(choice) => choice.value.resolve(context)?.tag_type(context)?,
             Self::CharacterString(tag_type, _) => *tag_type,
+            Self::UTCTime(_) => TagType::UTCTime,
+            Self::Date(_) => TagType::Date,
+            Self::TimeOfDay(_) => TagType::TimeOfDay,
+            Self::DateTime(_) => TagType::DateTime,
         })
     }
 
@@ -149,6 +161,18 @@ impl BuiltinValue {
             }
             Self::CharacterString(tag_type, str) => {
                 encoding::der_encode_character_string(buf, *tag_type, str);
+            }
+            Self::UTCTime(utc) => {
+                buf.extend(utc.to_ber_string().into_bytes().into_iter().rev());
+            }
+            Self::Date(date) => {
+                buf.extend(date.to_ber_string().into_bytes().into_iter().rev());
+            }
+            Self::TimeOfDay(time_of_day) => {
+                buf.extend(time_of_day.to_ber_string().into_bytes().into_iter().rev());
+            }
+            Self::DateTime(date_time) => {
+                buf.extend(date_time.to_ber_string().into_bytes().into_iter().rev());
             }
             other => todo!("{:#02X?}", other),
         }

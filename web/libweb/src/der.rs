@@ -1,4 +1,4 @@
-use asn1chef::encoding::*;
+use asn1chef::{encoding::*, values::*};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
@@ -74,25 +74,17 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
         DecodedValueKind::CharacterString(tag_type, str) => {
             ("data", tag_type.to_string().into(), str.into())
         }
-        DecodedValueKind::UTCTime {
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            tz,
-        } => {
+        DecodedValueKind::UTCTime(utc) => {
             let obj = Object::new();
-            Reflect::set(&obj, &"year".into(), &year.0.into()).unwrap();
-            Reflect::set(&obj, &"month".into(), &month.0.into()).unwrap();
-            Reflect::set(&obj, &"day".into(), &day.0.into()).unwrap();
-            Reflect::set(&obj, &"hour".into(), &hour.0.into()).unwrap();
-            Reflect::set(&obj, &"minute".into(), &minute.0.into()).unwrap();
-            if let Some(second) = second {
-                Reflect::set(&obj, &"second".into(), &second.0.into()).unwrap();
+            Reflect::set(&obj, &"year".into(), &utc.year.into()).unwrap();
+            Reflect::set(&obj, &"month".into(), &utc.month.into()).unwrap();
+            Reflect::set(&obj, &"day".into(), &utc.day.into()).unwrap();
+            Reflect::set(&obj, &"hour".into(), &utc.hour.into()).unwrap();
+            Reflect::set(&obj, &"minute".into(), &utc.minute.into()).unwrap();
+            if let Some(second) = utc.second {
+                Reflect::set(&obj, &"second".into(), &second.into()).unwrap();
             }
-            let tz: JsValue = match tz {
+            let tz: JsValue = match utc.tz {
                 UTCTimeZone::Z => "Z".into(),
                 UTCTimeZone::Offset { sign, hour, minute } => {
                     let obj = Object::new();
@@ -101,17 +93,55 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
                         UTCTimeZoneSign::Minus => "-",
                     };
                     Reflect::set(&obj, &"sign".into(), &sign.into()).unwrap();
-                    Reflect::set(&obj, &"hour".into(), &hour.0.into()).unwrap();
-                    Reflect::set(&obj, &"minute".into(), &minute.0.into()).unwrap();
+                    Reflect::set(&obj, &"hour".into(), &hour.into()).unwrap();
+                    Reflect::set(&obj, &"minute".into(), &minute.into()).unwrap();
                     obj.into()
                 }
             };
             Reflect::set(&obj, &"tz".into(), &tz).unwrap();
             ("data", "UTCTime".into(), obj.into())
         }
+        DecodedValueKind::Date(date) => ("data", "DATE".into(), serialize_date(&date).into()),
+        DecodedValueKind::TimeOfDay(time_of_day) => (
+            "data",
+            "TIME-OF-DAY".into(),
+            serialize_time_of_day(&time_of_day).into(),
+        ),
+        DecodedValueKind::DateTime(date_time) => {
+            let obj = Object::new();
+            Reflect::set(
+                &obj,
+                &"date".into(),
+                &serialize_date(&date_time.date).into(),
+            )
+            .unwrap();
+            Reflect::set(
+                &obj,
+                &"timeOfDay".into(),
+                &serialize_time_of_day(&date_time.time_of_day).into(),
+            )
+            .unwrap();
+            ("data", "DATE-TIME".into(), obj.into())
+        }
     };
     Reflect::set(&obj, &"type".into(), &ty).unwrap();
     Reflect::set(&obj, &field.into(), &data).unwrap();
+    obj.into()
+}
+
+fn serialize_date(date: &Date) -> JsValue {
+    let obj = Object::new();
+    Reflect::set(&obj, &"year".into(), &date.year.into()).unwrap();
+    Reflect::set(&obj, &"month".into(), &date.month.into()).unwrap();
+    Reflect::set(&obj, &"day".into(), &date.day.into()).unwrap();
+    obj.into()
+}
+
+fn serialize_time_of_day(time_of_day: &TimeOfDay) -> JsValue {
+    let obj = Object::new();
+    Reflect::set(&obj, &"hour".into(), &time_of_day.hour.into()).unwrap();
+    Reflect::set(&obj, &"minute".into(), &time_of_day.minute.into()).unwrap();
+    Reflect::set(&obj, &"second".into(), &time_of_day.second.into()).unwrap();
     obj.into()
 }
 
@@ -220,7 +250,7 @@ pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsV
         Ok(values) => values,
         Err(err) => {
             let _ = Box::into_raw(libweb);
-            return err.to_string().into()
+            return err.to_string().into();
         }
     };
     let _ = Box::into_raw(libweb);

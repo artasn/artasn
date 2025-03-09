@@ -5,10 +5,13 @@ use widestring::{Utf16String, Utf32String};
 
 use super::*;
 use crate::{
-    compiler::{parser, Context},
+    compiler::{
+        parser::{self, AstElement, Loc},
+        Context,
+    },
     module::QualifiedIdentifier,
     types::*,
-    values::Oid,
+    values::{Date, DateTime, Oid, TimeOfDay, UTCTime},
 };
 
 #[derive(Debug)]
@@ -221,76 +224,22 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
                 format!("{} must have the Constructed bit set", tag_type),
             ));
         }
-        TagType::UTCTime => {
-            if value.is_empty() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "UTCTime must have a value",
-                ));
-            }
-
-            // shorted possible value is YYMMDDhhmmZ
-            if value.len() < 11 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "UTCTime value is too short",
-                ));
-            }
-
-            let (time, tz) = if value[value.len() - 1] == b'Z' {
-                (&value[..value.len() - 1], UTCTimeZone::Z)
-            } else {
-                let tz_sign = value[value.len() - 5];
-                if tz_sign == b'+' || tz_sign == b'-' {
-                    (
-                        &value[..value.len() - 5],
-                        UTCTimeZone::Offset {
-                            sign: match tz_sign {
-                                b'+' => UTCTimeZoneSign::Plus,
-                                b'-' => UTCTimeZoneSign::Minus,
-                                _ => unreachable!(),
-                            },
-                            hour: TwoDigitInteger::from_chars(
-                                &value[value.len() - 4..value.len() - 2],
-                            )?,
-                            minute: TwoDigitInteger::from_chars(&value[value.len() - 2..])?,
-                        },
-                    )
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "UTCTime time zone is malformed",
-                    ));
-                }
-            };
-
-            if time.len() != 10 && time.len() != 12 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "UTCTime is malformed (invalid length)",
-                ));
-            }
-            let year = TwoDigitInteger::from_chars(&time[..2])?;
-            let month = TwoDigitInteger::from_chars(&time[2..4])?;
-            let day = TwoDigitInteger::from_chars(&time[4..6])?;
-            let hour = TwoDigitInteger::from_chars(&time[6..8])?;
-            let minute = TwoDigitInteger::from_chars(&time[8..10])?;
-            let second = match time.len() {
-                10 => None,
-                12 => Some(TwoDigitInteger::from_chars(&time[10..])?),
-                _ => unreachable!(),
-            };
-
-            DecodedValueKind::UTCTime {
-                year,
-                month,
-                day,
-                hour,
-                minute,
-                second,
-                tz,
-            }
-        }
+        TagType::UTCTime => DecodedValueKind::UTCTime(
+            UTCTime::parse(&AstElement::new(value, Loc::at(0)))
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()))?,
+        ),
+        TagType::Date => DecodedValueKind::Date(
+            Date::parse(&AstElement::new(value, Loc::at(0)))
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()))?,
+        ),
+        TagType::TimeOfDay => DecodedValueKind::TimeOfDay(
+            TimeOfDay::parse(&AstElement::new(value, Loc::at(0)))
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()))?,
+        ),
+        TagType::DateTime => DecodedValueKind::DateTime(
+            DateTime::parse(&AstElement::new(value, Loc::at(0)))
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()))?,
+        ),
         other => todo!("decode {:?}", other),
     })
 }
@@ -451,42 +400,6 @@ impl DecodedValue {
 }
 
 #[derive(Debug)]
-pub struct TwoDigitInteger(pub u8);
-
-impl TwoDigitInteger {
-    pub fn from_chars(chars: &[u8]) -> io::Result<TwoDigitInteger> {
-        if chars.len() != 2 {
-            panic!("TwoDigitInteger::from_chars: len == {}", chars.len());
-        }
-        let msd = chars[0];
-        let lsd = chars[1];
-        if !(msd as char).is_ascii_digit() || !(lsd as char).is_ascii_digit() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("invalid two-digit integer: {}{}", msd as char, lsd as char),
-            ));
-        }
-        Ok(TwoDigitInteger((msd - b'0') * 10 + (lsd - b'0')))
-    }
-}
-
-#[derive(Debug)]
-pub enum UTCTimeZoneSign {
-    Plus,
-    Minus,
-}
-
-#[derive(Debug)]
-pub enum UTCTimeZone {
-    Z,
-    Offset {
-        sign: UTCTimeZoneSign,
-        hour: TwoDigitInteger,
-        minute: TwoDigitInteger,
-    },
-}
-
-#[derive(Debug)]
 pub enum DecodedValueKind {
     Raw(Vec<u8>),
     Boolean(bool),
@@ -498,13 +411,8 @@ pub enum DecodedValueKind {
     Real(f64),
     Enumerated(i64),
     CharacterString(TagType, String),
-    UTCTime {
-        year: TwoDigitInteger,
-        month: TwoDigitInteger,
-        day: TwoDigitInteger,
-        hour: TwoDigitInteger,
-        minute: TwoDigitInteger,
-        second: Option<TwoDigitInteger>,
-        tz: UTCTimeZone,
-    },
+    UTCTime(UTCTime),
+    Date(Date),
+    TimeOfDay(TimeOfDay),
+    DateTime(DateTime),
 }

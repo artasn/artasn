@@ -87,5 +87,5 @@ dev-editor: build-editor
 
 test:
 	cd lib && \
-	$(CARGO) test -- --test-threads=1 --nocapture && \
+	$(CARGO) test -- --nocapture && \
 	cd ..

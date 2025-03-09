@@ -4,16 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hex = "0.4"
 int-enum = "1.1"
+iso8601 = "0.6"
 lazy_static = "1.5"
 num = { version = "0.4" }
-byteorder = "1.5"
-nom_locate = "4.2"
-varint-rs = "2.2"
 pest = "2.7.14"
 pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 regex = "1.11"
-hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 widestring = "1.1"

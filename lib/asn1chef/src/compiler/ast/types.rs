@@ -256,7 +256,7 @@ fn parse_builtin_type(
         AstBuiltinType::TeletexString(_) => BuiltinType::CharacterString(TagType::TeletexString),
         AstBuiltinType::VideotexString(_) => BuiltinType::CharacterString(TagType::VideotexString),
         AstBuiltinType::IA5String(_) => BuiltinType::CharacterString(TagType::IA5String),
-        AstBuiltinType::UTCTime(_) => todo!("UTCTime"),
+        AstBuiltinType::UTCTime(_) => BuiltinType::UTCTime,
         AstBuiltinType::GeneralizedTime(_) => todo!("GeneralizedTime"),
         AstBuiltinType::GraphicString(_) => BuiltinType::CharacterString(TagType::GraphicString),
         AstBuiltinType::VisibleString(_) => BuiltinType::CharacterString(TagType::VisibleString),
@@ -268,9 +268,9 @@ fn parse_builtin_type(
             BuiltinType::CharacterString(TagType::CharacterString)
         }
         AstBuiltinType::BMPString(_) => BuiltinType::CharacterString(TagType::BMPString),
-        AstBuiltinType::Date(_) => todo!("Date"),
-        AstBuiltinType::TimeOfDay(_) => todo!("TimeOfDay"),
-        AstBuiltinType::DateTime(_) => todo!("DateTime"),
+        AstBuiltinType::Date(_) => BuiltinType::Date,
+        AstBuiltinType::TimeOfDay(_) => BuiltinType::TimeOfDay,
+        AstBuiltinType::DateTime(_) => BuiltinType::DateTime,
         AstBuiltinType::Duration(_) => todo!("Duration"),
     })
 }

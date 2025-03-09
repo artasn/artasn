@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[derive(Debug, Parser)]
 #[command(name = "asn1chef")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "CLI for asn1chef", long_about = None)]
+#[command(about = "CLI for ASN.1Chef", long_about = None)]
 struct Cli {
     /// Path to the config JSON file
     #[arg(long, short = 'c')]

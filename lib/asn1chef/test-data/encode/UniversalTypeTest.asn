@@ -18,6 +18,11 @@ BasicSetType ::= SET {
     baz BOOLEAN DEFAULT TRUE
 }
 
+-- BasicChoice ::= CHOICE {
+--     foo INTEGER,
+--     bar BOOLEAN
+-- }
+
 SequenceType ::= SEQUENCE {
     boolean BOOLEAN,
     integer INTEGER,
@@ -31,6 +36,7 @@ SequenceType ::= SEQUENCE {
     enumerated EnumeratedType,
     -- embeddedPDV EMBEDDED PDV,
     utf8String UTF8String,
+    -- choice BasicChoice,
     -- relativeOID RELATIVE-OID,
     -- time TIME,
     sequence BasicSequenceType,
@@ -40,17 +46,17 @@ SequenceType ::= SEQUENCE {
     teletexString TeletexString,
     videotexString VideotexString,
     ia5String IA5String,
-    -- utcTime UTCTime,
+    utcTime UTCTime,
     -- generalizedTime GeneralizedTime,
     graphicString GraphicString,
     visibleString VisibleString,
     generalString GeneralString,
     universalString UniversalString,
     -- characterString CHARACTER STRING,
-    bmpString BMPString
-    -- date DATE,
-    -- timeOfDay TIME-OF-DAY,
-    -- dateTime DATE-TIME,
+    bmpString BMPString,
+    date DATE,
+    timeOfDay TIME-OF-DAY,
+    dateTime DATE-TIME
     -- duration DURATION
 }
 
@@ -67,6 +73,7 @@ sequenceValue SequenceType ::= {
     enumerated baz,
     -- embeddedPDV EMBEDDED PDV,
     utf8String "UTF8String",
+    -- choice foo : 7331,
     -- relativeOID RELATIVE-OID,
     -- time TIME,
     sequence {
@@ -82,17 +89,17 @@ sequenceValue SequenceType ::= {
     teletexString "TeletexString",
     videotexString "VideotexString",
     ia5String "IA5String",
-    -- utcTime UTCTime,
+    utcTime "250309162105Z",
     -- generalizedTime GeneralizedTime,
     graphicString "GraphicString",
     visibleString "VisibleString",
     generalString "GeneralString",
     universalString "UniversalString",
     -- characterString CHARACTER STRING,
-    bmpString "BMPString"
-    -- date DATE,
-    -- timeOfDay TIME-OF-DAY,
-    -- dateTime DATE-TIME,
+    bmpString "BMPString",
+    date "2025-03-09",
+    timeOfDay "16:21:05",
+    dateTime "2025-03-09T16:21:05"
     -- duration DURATION
 }
 

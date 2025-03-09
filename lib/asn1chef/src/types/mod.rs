@@ -336,6 +336,10 @@ pub enum BuiltinType {
     StructureOf(StructureOf),
     Choice(Choice),
     CharacterString(TagType),
+    UTCTime,
+    Date,
+    TimeOfDay,
+    DateTime,
 }
 
 impl BuiltinType {
@@ -353,6 +357,10 @@ impl BuiltinType {
             Self::StructureOf(of) => of.ty,
             Self::Choice(_) => return None,
             Self::CharacterString(tag_type) => *tag_type,
+            Self::UTCTime => TagType::UTCTime,
+            Self::Date => TagType::Date,
+            Self::TimeOfDay => TagType::TimeOfDay,
+            Self::DateTime => TagType::DateTime,
         })
     }
 
