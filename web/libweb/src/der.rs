@@ -71,6 +71,7 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
         }
         DecodedValueKind::Real(data) => ("data", "REAL".into(), data.to_string().into()),
         DecodedValueKind::Enumerated(variant) => ("data", "ENUMERATED".into(), variant.into()),
+        DecodedValueKind::Time(time) => ("data", "TIME".into(), time.source.into()),
         DecodedValueKind::CharacterString(tag_type, str) => {
             ("data", tag_type.to_string().into(), str.into())
         }
@@ -117,12 +118,13 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             .unwrap();
             Reflect::set(
                 &obj,
-                &"timeOfDay".into(),
+                &"time".into(),
                 &serialize_time_of_day(&date_time.time_of_day).into(),
             )
             .unwrap();
             ("data", "DATE-TIME".into(), obj.into())
         }
+        DecodedValueKind::Duration(duration) => ("data", "DURATION".into(), duration.source.into()),
     };
     Reflect::set(&obj, &"type".into(), &ty).unwrap();
     Reflect::set(&obj, &field.into(), &data).unwrap();

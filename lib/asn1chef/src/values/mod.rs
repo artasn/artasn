@@ -26,6 +26,7 @@ pub enum BuiltinValue {
     ObjectIdentifier(ObjectIdentifier),
     Real(f64),
     Enumerated(Box<AstElement<Value>>),
+    Time(Time),
     Sequence(StructureValue),
     SequenceOf(Vec<AstElement<Value>>),
     Set(StructureValue),
@@ -37,6 +38,7 @@ pub enum BuiltinValue {
     Date(Date),
     TimeOfDay(TimeOfDay),
     DateTime(DateTime),
+    Duration(Duration),
 }
 
 impl BuiltinValue {
@@ -50,6 +52,7 @@ impl BuiltinValue {
             Self::ObjectIdentifier(_) => TagType::ObjectIdentifier,
             Self::Real(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
+            Self::Time(_) => TagType::Time,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
             Self::Choice(choice) => choice.value.resolve(context)?.tag_type(context)?,
@@ -58,6 +61,7 @@ impl BuiltinValue {
             Self::Date(_) => TagType::Date,
             Self::TimeOfDay(_) => TagType::TimeOfDay,
             Self::DateTime(_) => TagType::DateTime,
+            Self::Duration(_) => TagType::Duration,
         })
     }
 
@@ -125,6 +129,9 @@ impl BuiltinValue {
                 };
                 encoding::der_encode_integer(buf, num);
             }
+            Self::Time(time) => {
+                buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
+            }
             Self::Sequence(structure) | Self::Set(structure) => {
                 // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
                 // and that the value provides only components in the SEQUENCE/SET type,
@@ -173,6 +180,9 @@ impl BuiltinValue {
             }
             Self::DateTime(date_time) => {
                 buf.extend(date_time.to_ber_string().into_bytes().into_iter().rev());
+            }
+            Self::Duration(duration) => {
+                buf.extend(duration.to_ber_string().into_bytes().into_iter().rev());
             }
             other => todo!("{:#02X?}", other),
         }

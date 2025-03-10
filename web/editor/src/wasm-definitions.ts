@@ -139,6 +139,8 @@ export type Value = {
 } | {
     type: 'ENUMERATED';
 } | {
+    type: 'TIME';
+} | {
     type: 'SEQUENCE';
     components: StructureComponentValue[];
 } | {
@@ -147,6 +149,16 @@ export type Value = {
 } | {
     type: CharacterStringType;
     value: string;
+} | {
+    type: 'UTCTime';
+} | {
+    type: 'DATE';
+} | {
+    type: 'TIME-OF-DAY';
+} | {
+    type: 'DATE-TIME';
+} | {
+    type: 'DURATION';
 };
 
 export interface StructureComponentValue {
@@ -216,7 +228,13 @@ export type DecodedValueKind = {
     type: 'REAL';
     data: number;
 } | {
+    type: 'ENUMERATED';
+    data: number;
+} | {
     type: CharacterStringType;
+    data: string;
+} | {
+    type: 'TIME';
     data: string;
 } | {
     type: 'UTCTime';
@@ -233,7 +251,34 @@ export type DecodedValueKind = {
             minute: number;
         };
     };
+} | {
+    type: 'DATE';
+    data: DateValue;
+} | {
+    type: 'TIME-OF-DAY';
+    data: TimeValue;
+} | {
+    type: 'DATE-TIME';
+    data: {
+        date: DateValue;
+        time: TimeValue;
+    };
+} | {
+    type: 'DURATION';
+    data: string;
 };
+
+export interface DateValue {
+    year: number;
+    month: number;
+    day: number;
+}
+
+export interface TimeValue {
+    hour: number;
+    minute: number;
+    second: number;
+}
 
 export interface DecodedValueMetadata {
     typeIdent?: QualifiedIdentifier;

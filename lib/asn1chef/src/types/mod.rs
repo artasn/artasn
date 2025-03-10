@@ -332,6 +332,7 @@ pub enum BuiltinType {
     ObjectIdentifier,
     Real,
     Enumerated(EnumeratedType),
+    Time,
     Structure(Structure),
     StructureOf(StructureOf),
     Choice(Choice),
@@ -340,6 +341,7 @@ pub enum BuiltinType {
     Date,
     TimeOfDay,
     DateTime,
+    Duration,
 }
 
 impl BuiltinType {
@@ -353,6 +355,7 @@ impl BuiltinType {
             Self::ObjectIdentifier => TagType::ObjectIdentifier,
             Self::Real => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
+            Self::Time => TagType::Time,
             Self::Structure(structure) => structure.ty,
             Self::StructureOf(of) => of.ty,
             Self::Choice(_) => return None,
@@ -361,6 +364,7 @@ impl BuiltinType {
             Self::Date => TagType::Date,
             Self::TimeOfDay => TagType::TimeOfDay,
             Self::DateTime => TagType::DateTime,
+            Self::Duration => TagType::Duration,
         })
     }
 

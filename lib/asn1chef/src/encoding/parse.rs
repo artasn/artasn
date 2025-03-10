@@ -11,7 +11,7 @@ use crate::{
     },
     module::QualifiedIdentifier,
     types::*,
-    values::{Date, DateTime, Oid, TimeOfDay, UTCTime},
+    values::{Date, DateTime, Duration, Oid, Time, TimeOfDay, UTCTime},
 };
 
 #[derive(Debug)]
@@ -218,6 +218,14 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             };
             DecodedValueKind::CharacterString(tag_type, str)
         }
+        TagType::Time => match String::from_utf8(value.to_vec()) {
+            Ok(value) => {
+                DecodedValueKind::Time(Time::parse(&AstElement::new(&value, Loc::at(0))).map_err(
+                    |err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()),
+                )?)
+            }
+            Err(err) => return Err(io::Error::new(io::ErrorKind::InvalidData, err)),
+        },
         TagType::Sequence | TagType::Set => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -240,6 +248,14 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             DateTime::parse(&AstElement::new(value, Loc::at(0)))
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.kind.message()))?,
         ),
+        TagType::Duration => match String::from_utf8(value.to_vec()) {
+            Ok(value) => DecodedValueKind::Duration(
+                Duration::parse(&AstElement::new(&value, Loc::at(0))).map_err(|err| {
+                    io::Error::new(io::ErrorKind::InvalidData, err.kind.message())
+                })?,
+            ),
+            Err(err) => return Err(io::Error::new(io::ErrorKind::InvalidData, err)),
+        },
         other => todo!("decode {:?}", other),
     })
 }
@@ -410,9 +426,11 @@ pub enum DecodedValueKind {
     ObjectIdentifier(Oid),
     Real(f64),
     Enumerated(i64),
+    Time(Time),
     CharacterString(TagType, String),
     UTCTime(UTCTime),
     Date(Date),
     TimeOfDay(TimeOfDay),
     DateTime(DateTime),
+    Duration(Duration),
 }

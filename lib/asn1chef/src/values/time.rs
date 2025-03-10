@@ -307,6 +307,95 @@ impl DateTime {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeKind {
+    Date(iso8601::Date),
+    Time(iso8601::Time),
+    DateTime(iso8601::DateTime),
+    Duration(iso8601::Duration),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Time {
+    pub kind: TimeKind,
+    pub source: String,
+}
+
+impl Time {
+    pub fn parse(str: &AstElement<&String>) -> Result<Time> {
+        let kind = match iso8601::duration(str.element) {
+            Ok(duration) => TimeKind::Duration(duration),
+            Err(_) => match iso8601::datetime(str.element) {
+                Ok(date_time) => TimeKind::DateTime(date_time),
+                Err(_) => match iso8601::date(str.element) {
+                    Ok(date) => TimeKind::Date(date),
+                    Err(_) => match iso8601::time(str.element) {
+                        Ok(time) => TimeKind::Time(time),
+                        Err(_) => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "DATE is malformed (not a valid ISO8601 date, time, date time, or duration)"
+                                        .to_string(),
+                                ),
+                                loc: str.loc,
+                            })
+                        }
+                    },
+                },
+            },
+        };
+
+        Ok(Time {
+            kind,
+            source: str.element.clone(),
+        })
+    }
+
+    pub fn to_ber_string(&self) -> String {
+        let time = match &self.kind {
+            TimeKind::DateTime(date_time) => Some(&date_time.time),
+            TimeKind::Time(time) => Some(time),
+            _ => None,
+        };
+        let tz_has_zero_minutes = time
+            .map(|time| time.tz_offset_hours != 0 && time.tz_offset_minutes == 0)
+            .unwrap_or(false);
+        if tz_has_zero_minutes {
+            // if the time has a specified time zone with zero minutes, don't include the minutes component in the encoded bytes
+            self.source[..self.source.len() - 3].to_string()
+        } else {
+            self.source.clone()
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Duration {
+    pub iso: iso8601::Duration,
+    pub source: String,
+}
+
+impl Duration {
+    pub fn parse(str: &AstElement<&String>) -> Result<Duration> {
+        let iso = iso8601::duration(str.element).map_err(|_| Error {
+            kind: ErrorKind::Ast(
+                "DURATION is malformed (not a valid ISO8601 duration)".to_string(),
+            ),
+            loc: str.loc,
+        })?;
+
+        Ok(Duration {
+            iso,
+            source: str.element.clone(),
+        })
+    }
+
+    pub fn to_ber_string(&self) -> String {
+        // the 'P' prefix is not included in the encoded format
+        self.source.as_str()[1..].to_string()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{

@@ -242,7 +242,7 @@ fn parse_builtin_type(
         AstBuiltinType::EmbeddedPDV(_) => todo!("EmbeddedPDV"),
         AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
         AstBuiltinType::RelativeOid(_) => todo!("RelativeOid"),
-        AstBuiltinType::Time(_) => todo!("Time"),
+        AstBuiltinType::Time(_) => BuiltinType::Time,
         AstBuiltinType::Sequence(sequence) => {
             parse_structure_type(parser, TagType::Sequence, &sequence.element.0)?
         }
@@ -271,7 +271,7 @@ fn parse_builtin_type(
         AstBuiltinType::Date(_) => BuiltinType::Date,
         AstBuiltinType::TimeOfDay(_) => BuiltinType::TimeOfDay,
         AstBuiltinType::DateTime(_) => BuiltinType::DateTime,
-        AstBuiltinType::Duration(_) => todo!("Duration"),
+        AstBuiltinType::Duration(_) => BuiltinType::Duration,
     })
 }
 
