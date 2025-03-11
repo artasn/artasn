@@ -75,6 +75,10 @@ fn main() {
     };
 
     let mut compiler = Compiler::new(config);
+    match compiler.add_stdlib() {
+        Ok(()) => (),
+        Err(err) => exit_with_error(format_args!("failed to parse stdlib: {}", err)),
+    }
 
     let start = Instant::now();
     let mut parse_errors = Vec::new();

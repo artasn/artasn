@@ -97,15 +97,25 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new(options: CompilerConfig) -> Compiler {
+    pub fn new(config: CompilerConfig) -> Compiler {
         Compiler {
             sources: Vec::new(),
-            config: options,
+            config,
         }
     }
 
+    pub fn add_stdlib(&mut self) -> CompileResult<()> {
+        self.add_source(
+            String::from("EmbeddedPDV.asn"),
+            include_str!("../../stdlib/EmbeddedPDV.asn").to_string(),
+        )?;
+
+        Ok(())
+    }
+
     pub fn add_source(&mut self, path: String, source: String) -> CompileResult<()> {
-        let mut token_stream = TokenStream::new(&source, self.config.permit_lowercase_string_indicator);
+        let mut token_stream =
+            TokenStream::new(&source, self.config.permit_lowercase_string_indicator);
         let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
         match parser {
             ParseResult::Ok(program) => {
@@ -182,6 +192,7 @@ impl Compiler {
 
         stage!(register_all_modules);
         stage!(register_all_types);
+        stage!(register_all_constraints);
         stage!(register_all_values);
         stage!(verify_all_types);
         stage!(verify_all_values);

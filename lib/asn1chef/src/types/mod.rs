@@ -177,6 +177,7 @@ impl Display for UntaggedType {
 pub struct ResolvedType {
     pub tag: Option<Tag>,
     pub ty: BuiltinType,
+    pub constraint: Option<Constraint>,
 }
 
 impl ResolvedType {
@@ -186,7 +187,11 @@ impl ResolvedType {
         Ok(tags)
     }
 
-    fn extend_possible_tags(&self, context: &Context, tags: &mut Vec<(Tag, BuiltinType)>) -> Result<()> {
+    fn extend_possible_tags(
+        &self,
+        context: &Context,
+        tags: &mut Vec<(Tag, BuiltinType)>,
+    ) -> Result<()> {
         match &self.tag {
             Some(tag) => tags.push((tag.clone(), self.ty.clone())),
             None => match &self.ty {
@@ -208,6 +213,7 @@ impl ResolvedType {
 pub struct TaggedType {
     pub tag: Option<Tag>,
     pub ty: UntaggedType,
+    pub constraint: Option<Constraint>,
 }
 
 impl TaggedType {
@@ -227,6 +233,12 @@ impl TaggedType {
                     return Ok(ResolvedType {
                         tag: tag.cloned(),
                         ty: ty.clone(),
+                        // TODO: implement constraint intersection
+                        // for example, in the ASN.1 declaration:
+                        //   I1 ::= INTEGER (0..10)
+                        //   I2 ::= I1 (8..MAX)
+                        // the only valid values for I2 are 8, 9, and 10
+                        constraint: tagged_ty.constraint.clone(),
                     });
                 }
                 UntaggedType::Reference(ident) => {
@@ -359,7 +371,7 @@ pub enum BuiltinType {
     Boolean,
     Integer(IntegerType),
     BitString(BitStringType),
-    OctetString(OctetStringType),
+    OctetString,
     Null,
     ObjectIdentifier,
     Real,
@@ -382,7 +394,7 @@ impl BuiltinType {
             Self::Boolean => TagType::Boolean,
             Self::Integer(_) => TagType::Integer,
             Self::BitString(_) => TagType::BitString,
-            Self::OctetString(_) => TagType::OctetString,
+            Self::OctetString => TagType::OctetString,
             Self::Null => TagType::Null,
             Self::ObjectIdentifier => TagType::ObjectIdentifier,
             Self::Real => TagType::Real,
@@ -412,37 +424,52 @@ impl BuiltinType {
         &self,
         context: &Context,
         valref: &AstElement<Value>,
+        constraint: Option<&Constraint>,
     ) -> Result<()> {
         let value = valref.resolve(context)?;
 
-        let (constraints, item) = match (self, value) {
-            (Self::BitString(bit_string), BuiltinValue::BitString(value)) => (
-                bit_string.size_constraints.as_ref(),
-                &BigInt::from(value.bits() as i64),
-            ),
-            (Self::OctetString(octet_string), BuiltinValue::OctetString(value)) => (
-                octet_string.size_constraints.as_ref(),
-                &BigInt::from(value.len() as i64),
-            ),
-            (Self::Integer(integer), BuiltinValue::Integer(value)) => {
-                (integer.value_constraints.as_ref(), value)
-            }
-            (Self::StructureOf(seq_of), BuiltinValue::SequenceOf(value)) => (
-                seq_of.size_constraints.as_ref(),
-                &BigInt::from(value.len() as i64),
-            ),
-            _ => (None, &BigInt::ZERO),
+        let size_ok = match constraint {
+            Some(constraint) => match value {
+                BuiltinValue::BitString(value) => constraint.includes_integer(
+                    context,
+                    ConstraintCheckMode::Size,
+                    &BigInt::from(value.bits() as i64),
+                )?,
+                BuiltinValue::OctetString(value) => constraint.includes_integer(
+                    context,
+                    ConstraintCheckMode::Size,
+                    &BigInt::from(value.len() as i64),
+                )?,
+                BuiltinValue::SequenceOf(value) => constraint.includes_integer(
+                    context,
+                    ConstraintCheckMode::Size,
+                    &BigInt::from(value.len() as i64),
+                )?,
+                _ => None,
+            },
+            None => None,
         };
-        if let Some(constraints) = constraints {
-            if !constraints.includes_value(context, item)? {
+        let value_ok = match constraint {
+            Some(constraint) => match value {
+                BuiltinValue::Boolean(_) | BuiltinValue::OctetString(_) => {
+                    constraint.includes_value(context, valref)?
+                }
+                BuiltinValue::Integer(value) => {
+                    constraint.includes_integer(context, ConstraintCheckMode::Value, value)?
+                }
+                _ => None,
+            },
+            None => None,
+        };
+
+        match (size_ok, value_ok) {
+            (Some(false), Some(false)) | (Some(false), None) | (None, Some(false)) => {
                 return Err(Error {
-                    kind: ErrorKind::Ast(format!(
-                        "value does not satisfy {} constraints of type",
-                        constraints.kind,
-                    )),
+                    kind: ErrorKind::Ast("value violates constraints of type".to_string()),
                     loc: valref.loc,
-                });
+                })
             }
+            _ => (),
         }
 
         if let (Self::Structure(seq), BuiltinValue::Sequence(value)) = (self, value) {
@@ -453,9 +480,11 @@ impl BuiltinType {
                     .find(|val_component| val_component.name.element == seq_component.name.element);
                 if let Some(val_component) = val_component {
                     let seq_ty = seq_component.component_type.resolve(context)?;
-                    seq_ty
-                        .ty
-                        .ensure_satisfied_by_value(context, &val_component.value)?;
+                    seq_ty.ty.ensure_satisfied_by_value(
+                        context,
+                        &val_component.value,
+                        seq_component.component_type.constraint.as_ref(),
+                    )?;
                 } else if seq_component.default_value.is_none() && !seq_component.optional {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(

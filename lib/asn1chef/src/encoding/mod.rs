@@ -281,7 +281,7 @@ impl<'a> Iterator for DerReader<'a> {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::{test, Context},
+        compiler::{test::json_test, Context},
         encoding::{DecodeMode, DecodeResult},
     };
 
@@ -368,11 +368,5 @@ mod test {
             .unwrap();
     }
 
-    #[test]
-    fn test_der_decode_specific_type() {
-        let module_file = include_str!("../../test-data/decode/DecodeTest.asn");
-        let test_file = include_str!("../../test-data/decode/DecodeTest.test.json");
-
-        test::execute_json_test(module_file, test_file);
-    }
+    json_test!(test_der_decode_specific_type, "decode/DecodeTest");
 }

@@ -1,3 +1,4 @@
+pub mod constraints;
 pub mod object_id;
 pub mod types;
 pub mod values;
@@ -238,7 +239,37 @@ pub fn register_all_types(
     }
 }
 
-/// Third stage: register all declared values.
+/// Third stage: register the constraints for all types.
+pub fn register_all_constraints(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
+                match constraints::parse_type_assignment_constraint(&parser, type_assignment) {
+                    Ok(Some(result)) => results.push(Ok(result)),
+                    Ok(None) => (),
+                    Err(err) => results.push(Err(err)),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(constraints) => {
+            for (ident, constraint) in constraints {
+                let ty = context.lookup_type_mut(&ident).expect("lookup_type");
+                ty.constraint = Some(constraint);
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+/// Fourth stage: register all declared values.
 pub fn register_all_values(
     context: &mut Context,
     config: &CompilerConfig,
@@ -263,7 +294,7 @@ pub fn register_all_values(
     }
 }
 
-/// Fourth stage: verify all types.
+/// Fifth stage: verify all types.
 pub fn verify_all_types(
     context: &Context,
     config: &CompilerConfig,
@@ -284,7 +315,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Fifth stage: verify all declared values.
+/// Sixth stage: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     config: &CompilerConfig,

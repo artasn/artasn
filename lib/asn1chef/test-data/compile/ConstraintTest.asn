@@ -1,0 +1,113 @@
+ConstraintTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+SizeConstraint1 ::= OCTET STRING (SIZE(1))
+sc1-valid1   SizeConstraint1 ::= '11'H
+sc1-invalid1 SizeConstraint1 ::= '0000'H
+sc1-invalid2 SizeConstraint1 ::= ''H
+
+SizeConstraint2 ::= OCTET STRING (SIZE(1) | SIZE(2))
+sc2-valid1   SizeConstraint2 ::= '00'H
+sc2-valid2   SizeConstraint2 ::= '0000'H
+sc2-invalid1 SizeConstraint2 ::= ''H
+sc2-invalid2 SizeConstraint2 ::= '000000'H
+
+SizeConstraint3 ::= OCTET STRING (SIZE(1), ..., SIZE(2))
+sc3-valid1   SizeConstraint3 ::= '00'H
+sc3-valid2   SizeConstraint3 ::= '0000'H
+sc3-invalid1 SizeConstraint3 ::= ''H
+sc3-invalid2 SizeConstraint3 ::= '000000'H
+
+SizeConstraintRange1 ::= OCTET STRING (SIZE(0..2))
+scr1-valid1   SizeConstraintRange1 ::= ''H
+scr1-valid2   SizeConstraintRange1 ::= '00'H
+scr1-valid3   SizeConstraintRange1 ::= '0000'H
+scr1-invalid1 SizeConstraintRange1 ::= '000000'H
+
+SizeConstraintRange2 ::= OCTET STRING (SIZE(0<..2))
+scr2-valid1   SizeConstraintRange2 ::= '00'H
+scr2-valid2   SizeConstraintRange2 ::= '0000'H
+scr2-invalid1 SizeConstraintRange2 ::= ''H
+
+SizeConstraintRange3 ::= OCTET STRING (SIZE(0..<2))
+scr3-valid1   SizeConstraintRange3 ::= ''H
+scr3-valid2   SizeConstraintRange3 ::= '00'H
+scr3-invalid1 SizeConstraintRange3 ::= '0000'H
+
+SizeConstraintRange4 ::= OCTET STRING (SIZE(0<..<2))
+scr4-valid1   SizeConstraintRange4 ::= '00'H
+scr4-invalid1 SizeConstraintRange4 ::= ''H
+scr4-invalid2 SizeConstraintRange4 ::= '0000'H
+
+SizeConstraintRange5 ::= OCTET STRING (SIZE(0..<2 | 2<..4))
+scr5-valid1   SizeConstraintRange5 ::= ''H
+scr5-valid2   SizeConstraintRange5 ::= '00'H
+scr5-valid3   SizeConstraintRange5 ::= '000000'H
+scr5-valid4   SizeConstraintRange5 ::= '00000000'H
+scr5-invalid1 SizeConstraintRange5 ::= '0000'H
+
+SizeConstraintRange6 ::= OCTET STRING (SIZE(0..<2, ..., 2<..4))
+scr6-valid1   SizeConstraintRange6 ::= ''H
+scr6-valid2   SizeConstraintRange6 ::= '00'H
+scr6-valid3   SizeConstraintRange6 ::= '000000'H
+scr6-valid4   SizeConstraintRange6 ::= '00000000'H
+scr6-invalid1 SizeConstraintRange6 ::= '0000'H
+
+ValueConstraint1 ::= INTEGER (0)
+vc1-valid1   ValueConstraint1 ::= 0
+vc1-invalid1 ValueConstraint1 ::= 1
+
+ValueConstraint2 ::= INTEGER (0 | 1)
+vc2-valid1   ValueConstraint2 ::= 0
+vc2-valid2   ValueConstraint2 ::= 1
+vc2-invalid1 ValueConstraint2 ::= 2
+
+ValueConstraint3 ::= INTEGER (0, ..., 1)
+vc3-valid1   ValueConstraint3 ::= 0
+vc3-valid2   ValueConstraint3 ::= 1
+vc3-invalid1 ValueConstraint3 ::= 2
+
+ValueConstraintRange1 ::= INTEGER (0..2)
+vcr1-valid1   ValueConstraintRange1 ::= 0
+vcr1-valid2   ValueConstraintRange1 ::= 1
+vcr1-valid3   ValueConstraintRange1 ::= 2
+vcr1-invalid1 ValueConstraintRange1 ::= 3
+vcr1-invalid2 ValueConstraintRange1 ::= -1
+
+ValueConstraintRange2 ::= INTEGER (0<..2)
+vcr2-valid1   ValueConstraintRange2 ::= 1
+vcr2-valid2   ValueConstraintRange2 ::= 2
+vcr2-invalid1 ValueConstraintRange2 ::= 0
+
+ValueConstraintRange3 ::= INTEGER (0..<2)
+vcr3-valid1   ValueConstraintRange3 ::= 0
+vcr3-valid2   ValueConstraintRange3 ::= 1
+vcr3-invalid1 ValueConstraintRange3 ::= 2
+
+ValueConstraintRange4 ::= INTEGER (0<..<2)
+vcr4-valid1   ValueConstraintRange4 ::= 1
+vcr4-invalid1 ValueConstraintRange4 ::= 0
+vcr4-invalid2 ValueConstraintRange4 ::= 2
+
+ValueConstraintRange5 ::= INTEGER (0..<2 | 2<..4)
+vcr5-valid1   ValueConstraintRange5 ::= 0
+vcr5-valid2   ValueConstraintRange5 ::= 1
+vcr5-valid3   ValueConstraintRange5 ::= 3
+vcr5-valid4   ValueConstraintRange5 ::= 4
+vcr5-invalid1 ValueConstraintRange5 ::= 2
+
+ValueConstraintRange6 ::= INTEGER (0..<2, ..., 2<..4)
+vcr6-valid1   ValueConstraintRange6 ::= 0
+vcr6-valid2   ValueConstraintRange6 ::= 1
+vcr6-valid3   ValueConstraintRange6 ::= 3
+vcr6-valid4   ValueConstraintRange6 ::= 4
+vcr6-invalid1 ValueConstraintRange6 ::= 2
+
+SizeOrValueConstraint1 ::= OCTET STRING ('1337'H | SIZE(1))
+sorc-valid1   SizeOrValueConstraint1 ::= '1337'H
+sorc-valid2   SizeOrValueConstraint1 ::= '13'H
+sorc-valid3   SizeOrValueConstraint1 ::= '37'H
+sorc-invalid1 SizeOrValueConstraint1 ::= ''H
+sorc-invalid2 SizeOrValueConstraint1 ::= '000000'H
+sorc-invalid3 SizeOrValueConstraint1 ::= '7331'H
+
+END

@@ -317,45 +317,49 @@ rule TypeAssignment {
     ty = Type
 }
 
-variant Constant = IntegerValue | DefinedValue;
-
-rule ConstantSeries {
+rule Constraint {
     captures {
-        constants = repeated: Constant
+        constraint = SubtypeConstraint
     }
-    constants = Constant
+    operator (
+    constraint = SubtypeConstraint
+    persist
+    operator )
+    return constraint
+}
+
+rule SubtypeConstraint {
+    captures {
+        element_sets = repeated: SubtypeElementSet
+    }
+    element_sets = SubtypeElementSet
+    optional repeated {
+        operator ,
+        operator ...
+        operator ,
+        element_sets = SubtypeElementSet
+    }
+    optional {
+        operator ,
+        operator ...
+    }
+    return element_sets
+}
+
+rule SubtypeElementSet {
+    captures {
+        elements = repeated: SubtypeElement
+    }
+    elements = SubtypeElement
     persist
     optional repeated {
         operator |
-        constants = Constant
+        elements = SubtypeElement
     }
-    return constants
+    return elements
 }
 
-variant RangeLowerBound = Min {
-    keyword MIN
-} | GtConstant {
-    captures {
-        constant = Constant
-    }
-    constant = Constant
-    operator <
-    return constant
-} | Constant;
-
-variant RangeUpperBound = Max {
-    keyword MAX
-} | LtConstant {
-    captures {
-        constant = Constant
-    }
-    operator <
-    persist
-    constant = Constant
-    return constant
-} | Constant;
-
-rule Range {
+variant SubtypeElement = ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -364,25 +368,119 @@ rule Range {
     operator ..
     persist
     upper = RangeUpperBound
+} | SizeConstraint | InnerTypeConstraints | SingleValueConstraint {
+    captures {
+        value = Value
+    }
+    value = Value
+    return value
+};
+
+rule SizeConstraint {
+    captures {
+        constraint = Constraint
+    }
+    keyword SIZE
+    persist
+    constraint = Constraint
+    return constraint
 }
 
-variant Constraint = Extensible {
-    operator ...
-} | Range | ConstantSeries;
-
-rule Constraints {
+variant RangeLowerBound = Min {
+    keyword MIN
+} | GtValue {
     captures {
-        constraints = repeated: Constraint
+        value = Value
     }
-    operator (
-    constraints = Constraint
+    value = Value
+    operator <
+    return value
+} | Value;
+
+variant RangeUpperBound = Max {
+    keyword MAX
+} | LtValue {
+    captures {
+        value = Value
+    }
+    operator <
+    persist
+    value = Value
+    return value
+} | Value;
+
+rule InnerTypeConstraints {
+    captures {
+        spec = TypeConstraintSpec
+    }
+    keyword WITH
+    persist
+    keyword COMPONENTS
+    spec = TypeConstraintSpec
+    return spec
+}
+
+variant TypeConstraintSpec = FullSpec {
+    captures {
+        constraints = TypeConstraints
+    }
+    operator {
+    constraints = TypeConstraints
+    persist
+    operator }
+    return constraints
+} | PartialSpec {
+    captures {
+        constraints = TypeConstraints
+    }
+    operator {
+    operator ...
+    persist
+    operator ,
+    constraints = TypeConstraints
+    operator }
+    return constraints
+};
+
+rule TypeConstraints {
+    captures {
+        constraints = repeated: NamedConstraint
+    }
+    constraints = NamedConstraint
     persist
     optional repeated {
         operator ,
-        constraints = Constraint
+        constraints = NamedConstraint
     }
-    operator )
+    return constraints
 }
+
+rule NamedConstraint {
+    captures {
+        name = ValueReference
+        constraint = ComponentConstraint
+    }
+    name = ValueReference
+    persist
+    constraint = ComponentConstraint
+}
+
+variant ComponentConstraint = Constraint | PresenceConstraint | ValuedPresenceConstraint {
+    captures {
+        value = Constraint
+        presence = PresenceConstraint
+    }
+    value = Constraint
+    presence = PresenceConstraint
+};
+
+variant PresenceConstraint = PresencePresent {
+    keyword PRESENT
+} | PresenceAbsent {
+    keyword ABSENT
+} | PresenceOptional {
+    keyword OPTIONAL
+};
 
 rule Boolean {
     keyword BOOLEAN
@@ -390,66 +488,31 @@ rule Boolean {
 
 rule Integer {
     captures {
-        value_constraints = optional: Constraints
         named_values = optional: NamedNumberList
     }
     keyword INTEGER
     persist
     optional {
-        value_constraints = Constraints
-    }
-    optional {
         named_values = NamedNumberList
     }
 }
 
-rule ParenthesizedSizeConstraints {
-    captures {
-        constraints = SizeConstraints
-    }
-    operator (
-    constraints = SizeConstraints
-    persist
-    operator )
-    return constraints
-}
-
-rule SizeConstraints {
-    captures {
-        constraints = Constraints
-    }
-    keyword SIZE
-    persist
-    constraints = Constraints
-    return constraints
-}
-
 rule BitString {
     captures {
-        size_constraints = optional: ParenthesizedSizeConstraints
         named_bits = optional: NamedNumberList
     }
     keyword BIT
-    keyword STRING
     persist
-    optional {
-        size_constraints = ParenthesizedSizeConstraints
-    }
+    keyword STRING
     optional {
         named_bits = NamedNumberList
     }
 }
 
 rule OctetString {
-    captures {
-        size_constraints = optional: ParenthesizedSizeConstraints
-    }
     keyword OCTET
-    keyword STRING
     persist
-    optional {
-        size_constraints = ParenthesizedSizeConstraints
-    }
+    keyword STRING
 }
 
 rule Null {
@@ -458,6 +521,7 @@ rule Null {
 
 rule ObjectIdentifier {
     keyword OBJECT
+    persist
     keyword IDENTIFIER
 }
 
@@ -476,13 +540,13 @@ rule Real {
 rule EnumerationItem {
     captures {
         name = ValueReference
-        num = optional: Constant
+        num = optional: Value
     }
     name = ValueReference
     persist
     optional {
         operator (
-        num = Constant
+        num = Value
         operator )
     }
 }
@@ -505,6 +569,7 @@ rule Enumerated {
 
 rule EmbeddedPDV {
     keyword EMBEDDED
+    persist
     keyword PDV
 }
 
@@ -520,10 +585,18 @@ rule Time {
     keyword TIME
 }
 
-variant StructureKind = SingleStructure {
+variant StructureKind = Sequence {
+    keyword SEQUENCE
+} | Set {
+    keyword SET
+};
+
+rule Structure {
     captures {
+        kind = StructureKind
         components = repeated: StructureComponent
     }
+    kind = StructureKind
     operator {
     persist
     optional {
@@ -534,38 +607,23 @@ variant StructureKind = SingleStructure {
         components = StructureComponent
     }
     operator }
-} | StructureOf {
+}
+
+variant ConstraintOrSizeConstraint = Constraint | SizeConstraint;
+
+rule StructureOf {
     captures {
-        size_constraints = optional: SizeConstraints
+        kind = StructureKind
+        constraint = optional: ConstraintOrSizeConstraint
         ty = boxed Type
     }
+    kind = StructureKind
     optional {
-        size_constraints = SizeConstraints
-        persist
+        constraint = ConstraintOrSizeConstraint
     }
     keyword OF
     persist
     ty = Type
-};
-
-rule Sequence {
-    captures {
-        kind = StructureKind
-    }
-    keyword SEQUENCE
-    persist
-    kind = StructureKind
-    return kind
-}
-
-rule Set {
-    captures {
-        kind = StructureKind
-    }
-    keyword SET
-    persist
-    kind = StructureKind
-    return kind
 }
 
 rule StructureComponent {
@@ -687,7 +745,7 @@ rule Duration {
 }
 
 variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
-    Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Sequence | Set | Choice | NumericString | PrintableString |
+    Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Structure | Choice | NumericString | PrintableString |
     TeletexString | VideotexString | IA5String | UTCTime |  GeneralizedTime | GraphicString | VisibleString | GeneralString |
     UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration;
 
@@ -728,19 +786,36 @@ rule TaggedType {
     captures {
         tag = Tag
         kind = optional: TagKind
-        ty = boxed UntaggedType
+        ty = boxed ConstrainedType
     }
     tag = Tag
     persist
     optional {
         kind = TagKind
     }
-    ty = UntaggedType
+    ty = ConstrainedType
 }
+
+variant ConstrainedType = Suffixed {
+    captures {
+        ty = UntaggedType
+        constraint = optional: Constraint
+    }
+    ty = UntaggedType
+    optional {
+        constraint = Constraint
+    }
+} | TypeWithConstraint {
+    captures {
+        ty = StructureOf
+    }
+    ty = StructureOf
+    return ty
+};
 
 variant UntaggedType = BuiltinType | TypeReference;
 
-variant Type = TaggedType | UntaggedType;
+variant Type = TaggedType | ConstrainedType;
 
 rule ValueAssignment {
     captures {

@@ -1,6 +1,8 @@
 {
     "module": "DecodeTest",
-    "tests": ["Decode"],
+    "tests": [
+        "Decode"
+    ],
     "values": [
         {
             "name": "ss",

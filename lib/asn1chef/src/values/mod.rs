@@ -235,6 +235,7 @@ pub enum Value {
 
 pub trait ValueResolve {
     fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a BuiltinValue>;
+    fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool>;
 }
 
 impl ValueResolve for AstElement<Value> {
@@ -258,41 +259,57 @@ impl ValueResolve for AstElement<Value> {
             }
         }
     }
+
+    fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool> {
+        let lhs = self.resolve(context)?;
+        let rhs = rhs.resolve(context)?;
+        Ok(match (lhs, rhs) {
+            (BuiltinValue::Boolean(lhs), BuiltinValue::Boolean(rhs)) => lhs == rhs,
+            (BuiltinValue::Integer(lhs), BuiltinValue::Integer(rhs)) => lhs == rhs,
+            (BuiltinValue::BitString(lhs), BuiltinValue::BitString(rhs)) => lhs == rhs,
+            (BuiltinValue::OctetString(lhs), BuiltinValue::OctetString(rhs)) => lhs == rhs,
+            (BuiltinValue::Null, BuiltinValue::Null) => true,
+            (BuiltinValue::ObjectIdentifier(lhs), BuiltinValue::ObjectIdentifier(rhs)) => {
+                lhs.resolve_oid(context)? == rhs.resolve_oid(context)?
+            }
+            (BuiltinValue::Real(lhs), BuiltinValue::Real(rhs)) => lhs == rhs,
+            (BuiltinValue::Enumerated(lhs), BuiltinValue::Enumerated(rhs)) => {
+                lhs.try_eq(context, rhs)?
+            }
+            (BuiltinValue::Choice(lhs), BuiltinValue::Choice(rhs)) => {
+                lhs.value.try_eq(context, &rhs.value)?
+            }
+            (
+                BuiltinValue::CharacterString(lhs_tag, lhs),
+                BuiltinValue::CharacterString(rhs_tag, rhs),
+            ) => lhs_tag == rhs_tag && lhs == rhs,
+            _ => {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "cannot compare values of types {} and {}",
+                        lhs.tag_type(context)?,
+                        rhs.tag_type(context)?
+                    )),
+                    loc: self.loc,
+                })
+            }
+        })
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::compiler::test;
+    use crate::compiler::test::json_test;
 
-    #[test]
-    pub fn test_encode_universal_types() {
-        let module_file = include_str!("../../test-data/encode/UniversalTypeTest.asn");
-        let test_file = include_str!("../../test-data/encode/UniversalTypeTest.test.json");
-
-        test::execute_json_test(module_file, test_file);
-    }
-
-    #[test]
-    pub fn test_encode_enumerated() {
-        let module_file = include_str!("../../test-data/encode/EnumeratedTest.asn");
-        let test_file = include_str!("../../test-data/encode/EnumeratedTest.test.json");
-
-        test::execute_json_test(module_file, test_file);
-    }
-
-    #[test]
-    pub fn test_encode_choice_implicit_tagging() {
-        let module_file = include_str!("../../test-data/encode/ChoiceTestImplicitTagging.asn");
-        let test_file = include_str!("../../test-data/encode/ChoiceTestImplicitTagging.test.json");
-
-        test::execute_json_test(module_file, test_file);
-    }
-
-    #[test]
-    pub fn test_encode_choice_automatic_tagging() {
-        let module_file = include_str!("../../test-data/encode/ChoiceTestAutomaticTagging.asn");
-        let test_file = include_str!("../../test-data/encode/ChoiceTestAutomaticTagging.test.json");
-
-        test::execute_json_test(module_file, test_file);
-    }
+    json_test!(test_encode_universal_types, "encode/UniversalTypeTest");
+    json_test!(test_encode_enumerated, "encode/EnumeratedTest");
+    json_test!(
+        test_encode_choice_implicit_tagging,
+        "encode/ChoiceTestImplicitTagging"
+    );
+    json_test!(
+        test_encode_choice_automatic_tagging,
+        "encode/ChoiceTestAutomaticTagging"
+    );
+    json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
 }

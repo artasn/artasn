@@ -1,11 +1,11 @@
+use indexmap::IndexMap;
+
+use super::parser::AstElement;
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
     types::{Class, TaggedType},
     values::Value,
 };
-use std::collections::BTreeMap;
-
-use super::parser::AstElement;
 
 #[derive(Debug)]
 pub struct DeclaredValue {
@@ -15,9 +15,9 @@ pub struct DeclaredValue {
 
 #[derive(Debug)]
 pub struct Context {
-    modules: BTreeMap<ModuleIdentifier, ModuleHeader>,
-    types: BTreeMap<QualifiedIdentifier, TaggedType>,
-    values: BTreeMap<QualifiedIdentifier, DeclaredValue>,
+    modules: IndexMap<ModuleIdentifier, ModuleHeader>,
+    types: IndexMap<QualifiedIdentifier, TaggedType>,
+    values: IndexMap<QualifiedIdentifier, DeclaredValue>,
 }
 
 impl Default for Context {
@@ -29,9 +29,9 @@ impl Default for Context {
 impl Context {
     pub fn new() -> Context {
         Context {
-            modules: BTreeMap::new(),
-            types: BTreeMap::new(),
-            values: BTreeMap::new(),
+            modules: IndexMap::new(),
+            types: IndexMap::new(),
+            values: IndexMap::new(),
         }
     }
 
@@ -83,6 +83,13 @@ impl Context {
 
     pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a TaggedType> {
         self.types.get(ident)
+    }
+
+    pub fn lookup_type_mut<'a>(
+        &'a mut self,
+        ident: &QualifiedIdentifier,
+    ) -> Option<&'a mut TaggedType> {
+        self.types.get_mut(ident)
     }
 
     pub fn lookup_value<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredValue> {

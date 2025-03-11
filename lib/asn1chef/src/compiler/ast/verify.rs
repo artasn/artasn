@@ -162,7 +162,6 @@ fn get_choice_alternative_leaves(
 fn verify_unique_alternative_tags(context: &Context, choice: &Choice) -> Result<()> {
     let mut leaves = Vec::new();
     get_choice_alternative_leaves(context, &mut leaves, choice, Vec::new())?;
-    println!("leaves: {:#?}", leaves);
     for i in 0..leaves.len() {
         for j in 0..leaves.len() {
             if i == j {
@@ -201,9 +200,11 @@ pub fn verify_type(context: &Context, declared_type: &TaggedType) -> Result<()> 
 
 pub fn verify_value(context: &Context, declared_value: &DeclaredValue) -> Result<()> {
     let resolved_ty = declared_value.ty.resolve(context)?;
-    resolved_ty
-        .ty
-        .ensure_satisfied_by_value(context, &declared_value.value)?;
+    resolved_ty.ty.ensure_satisfied_by_value(
+        context,
+        &declared_value.value,
+        resolved_ty.constraint.as_ref(),
+    )?;
 
     Ok(())
 }

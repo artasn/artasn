@@ -1,93 +1,14 @@
 use super::{values, AstParser};
-use crate::{compiler::parser::*, module::*, types::*, values::*};
+use crate::{compiler::parser::*, module::*, types::*};
 
-fn parse_constant(
-    parser: &AstParser<'_>,
-    ast_constant: &AstElement<AstConstant>,
-    kind: Option<ConstraintsKind>,
-) -> Result<AstElement<Value>> {
-    Ok(AstElement::new(
-        match &ast_constant.element {
-            AstConstant::IntegerValue(num) => {
-                if kind
-                    .map(|kind| kind == ConstraintsKind::Size)
-                    .unwrap_or(false)
-                {
-                    if let Some(sign) = &num.element.sign {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(
-                                "size constraint must be a non-negative integer".to_owned(),
-                            ),
-                            loc: sign.loc,
-                        });
-                    }
-                }
-                Value::BuiltinValue(values::parse_integer_value(num)?)
-            }
-            AstConstant::DefinedValue(value) => {
-                values::parse_valuereference(parser, &value.element.value).element
-            }
+lazy_static::lazy_static! {
+    static ref EMBEDDED_PDV_IDENT: QualifiedIdentifier = QualifiedIdentifier {
+        module: ModuleIdentifier {
+            name: String::from("EmbeddedPDV"),
+            oid: None,
         },
-        ast_constant.loc,
-    ))
-}
-
-fn parse_constraints(
-    parser: &AstParser<'_>,
-    kind: ConstraintsKind,
-    ast_constraints: &AstElement<AstConstraints>,
-) -> Result<Constraints> {
-    let mut constraints = Vec::new();
-
-    for ast_constraint in &ast_constraints.element.constraints {
-        match &ast_constraint.element {
-            AstConstraint::ConstantSeries(ast_series) => {
-                let mut series = Vec::new();
-                for ast_constant in &ast_series.element.0 {
-                    series.push(parse_constant(parser, ast_constant, Some(kind))?);
-                }
-                constraints.push(Constraint::ConstantSeries(series));
-            }
-            AstConstraint::Extensible(_) => {
-                // TODO: verify that there is an Extensible between each definition
-            }
-            AstConstraint::Range(ast_range) => {
-                constraints.push(Constraint::Range(Range {
-                    lower: match &ast_range.element.lower.element {
-                        AstRangeLowerBound::Constant(ast_constant) => RangeLowerBound::Constant(
-                            parse_constant(parser, ast_constant, Some(kind))?,
-                        ),
-                        AstRangeLowerBound::GtConstant(ast_constant) => {
-                            RangeLowerBound::GtConstant(parse_constant(
-                                parser,
-                                &ast_constant.element.0,
-                                Some(kind),
-                            )?)
-                        }
-                        AstRangeLowerBound::Min(_) => RangeLowerBound::Min,
-                    },
-                    upper: match &ast_range.element.upper.element {
-                        AstRangeUpperBound::Constant(ast_constant) => RangeUpperBound::Constant(
-                            parse_constant(parser, ast_constant, Some(kind))?,
-                        ),
-                        AstRangeUpperBound::LtConstant(ast_constant) => {
-                            RangeUpperBound::LtConstant(parse_constant(
-                                parser,
-                                &ast_constant.element.0,
-                                Some(kind),
-                            )?)
-                        }
-                        AstRangeUpperBound::Max(_) => RangeUpperBound::Max,
-                    },
-                }));
-            }
-        }
-    }
-
-    Ok(Constraints {
-        kind,
-        components: constraints,
-    })
+        name: String::from("EmbeddedPDV"),
+    };
 }
 
 fn parse_structure_components(
@@ -98,7 +19,7 @@ fn parse_structure_components(
         .iter()
         .any(|component| match &component.element.ty.element {
             AstType::TaggedType(_) => true,
-            AstType::UntaggedType(_) => false,
+            AstType::ConstrainedType(_) => false,
         });
     components
         .iter()
@@ -135,43 +56,36 @@ fn parse_structure_components(
         .collect::<Result<Vec<StructureComponent>>>()
 }
 
-fn parse_size_constraints(
-    parser: &AstParser<'_>,
-    size_constraints: Option<&AstElement<AstSizeConstraints>>,
-) -> Result<Option<Constraints>> {
-    Ok(match size_constraints {
-        Some(sc) => Some(parse_constraints(
-            parser,
-            ConstraintsKind::Size,
-            &sc.element.0,
-        )?),
-        None => None,
-    })
-}
-
 fn parse_structure_type(
     parser: &AstParser<'_>,
-    tag_type: TagType,
-    structure: &AstElement<AstStructureKind>,
+    structure: &AstElement<AstStructure>,
 ) -> Result<BuiltinType> {
-    Ok(match &structure.element {
-        AstStructureKind::SingleStructure(structure) => BuiltinType::Structure(Structure {
-            ty: tag_type,
-            components: parse_structure_components(parser, &structure.element.components)?,
-        }),
-        AstStructureKind::StructureOf(structure_of) => BuiltinType::StructureOf(StructureOf {
-            ty: tag_type,
-            size_constraints: parse_size_constraints(
-                parser,
-                structure_of.element.size_constraints.as_ref(),
-            )?,
+    Ok(BuiltinType::Structure(Structure {
+        ty: match structure.element.kind.element {
+            AstStructureKind::Sequence(_) => TagType::Sequence,
+            AstStructureKind::Set(_) => TagType::Set,
+        },
+        components: parse_structure_components(parser, &structure.element.components)?,
+    }))
+}
+
+fn parse_structure_of_type(
+    parser: &AstParser<'_>,
+    of: &AstElement<AstStructureOf>,
+) -> Result<UntaggedType> {
+    Ok(UntaggedType::BuiltinType(BuiltinType::StructureOf(
+        StructureOf {
+            ty: match of.element.kind.element {
+                AstStructureKind::Sequence(_) => TagType::Sequence,
+                AstStructureKind::Set(_) => TagType::Set,
+            },
             component_type: Box::new(parse_type(
                 parser,
-                &structure_of.element.ty,
+                &of.element.ty,
                 TypeContext::Contextless,
             )?),
-        }),
-    })
+        },
+    )))
 }
 
 fn parse_choice_type(
@@ -182,7 +96,7 @@ fn parse_choice_type(
         .iter()
         .any(|alternative| match &alternative.element.ty.element {
             AstType::TaggedType(_) => true,
-            AstType::UntaggedType(_) => false,
+            AstType::ConstrainedType(_) => false,
         });
     Ok(BuiltinType::Choice(Choice {
         alternatives: alternatives
@@ -215,7 +129,15 @@ fn parse_enumerated_type(
     let mut implied_index = 0;
     for ast_item in &enumerated.element.0 {
         let value = match &ast_item.element.num {
-            Some(num) => EnumerationItemValue::Specified(parse_constant(parser, num, None)?),
+            Some(num) => EnumerationItemValue::Specified(values::parse_value(
+                parser,
+                num,
+                &ResolvedType {
+                    tag: Some(Tag::universal(TagType::Integer)),
+                    ty: BuiltinType::Integer(IntegerType { named_values: None }),
+                    constraint: None,
+                },
+            )?),
             None => {
                 let value = EnumerationItemValue::Implied(implied_index);
                 implied_index += 1;
@@ -233,37 +155,16 @@ fn parse_enumerated_type(
 fn parse_builtin_type(
     parser: &AstParser<'_>,
     builtin: &AstElement<AstBuiltinType>,
-) -> Result<BuiltinType> {
-    Ok(match &builtin.element {
+) -> Result<UntaggedType> {
+    Ok(UntaggedType::BuiltinType(match &builtin.element {
         AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
-        AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
+        AstBuiltinType::Integer(_) => BuiltinType::Integer(IntegerType {
             named_values: None, // TODO
-            value_constraints: match &integer.element.value_constraints {
-                Some(sc) => Some(parse_constraints(parser, ConstraintsKind::Value, sc)?),
-                None => None,
-            },
         }),
-        AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
+        AstBuiltinType::BitString(_) => BuiltinType::BitString(BitStringType {
             named_bits: None, // TODO
-            size_constraints: parse_size_constraints(
-                parser,
-                bit_string
-                    .element
-                    .size_constraints
-                    .as_ref()
-                    .map(|sc| &sc.element.0),
-            )?,
         }),
-        AstBuiltinType::OctetString(octet_string) => BuiltinType::OctetString(OctetStringType {
-            size_constraints: parse_size_constraints(
-                parser,
-                octet_string
-                    .element
-                    .size_constraints
-                    .as_ref()
-                    .map(|sc| &sc.element.0),
-            )?,
-        }),
+        AstBuiltinType::OctetString(_) => BuiltinType::OctetString,
         AstBuiltinType::Null(_) => BuiltinType::Null,
         AstBuiltinType::ObjectIdentifier(_) => BuiltinType::ObjectIdentifier,
         AstBuiltinType::ObjectDescriptor(_) => {
@@ -272,16 +173,16 @@ fn parse_builtin_type(
         AstBuiltinType::External(_) => todo!("External"),
         AstBuiltinType::Real(_) => todo!("Real"),
         AstBuiltinType::Enumerated(enumerated) => parse_enumerated_type(parser, enumerated)?,
-        AstBuiltinType::EmbeddedPDV(_) => todo!("EmbeddedPDV"),
+        AstBuiltinType::EmbeddedPDV(_) => {
+            return Ok(UntaggedType::Reference(AstElement::new(
+                EMBEDDED_PDV_IDENT.clone(),
+                builtin.loc,
+            )))
+        }
         AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
         AstBuiltinType::RelativeOid(_) => todo!("RelativeOid"),
         AstBuiltinType::Time(_) => BuiltinType::Time,
-        AstBuiltinType::Sequence(sequence) => {
-            parse_structure_type(parser, TagType::Sequence, &sequence.element.0)?
-        }
-        AstBuiltinType::Set(sequence) => {
-            parse_structure_type(parser, TagType::Set, &sequence.element.0)?
-        }
+        AstBuiltinType::Structure(sequence) => parse_structure_type(parser, sequence)?,
         AstBuiltinType::Choice(choice) => parse_choice_type(parser, &choice.element.0)?,
         AstBuiltinType::NumericString(_) => BuiltinType::CharacterString(TagType::NumericString),
         AstBuiltinType::PrintableString(_) => {
@@ -306,7 +207,7 @@ fn parse_builtin_type(
         AstBuiltinType::TimeOfDay(_) => BuiltinType::TimeOfDay,
         AstBuiltinType::DateTime(_) => BuiltinType::DateTime,
         AstBuiltinType::Duration(_) => BuiltinType::Duration,
-    })
+    }))
 }
 
 fn parse_untagged_type(
@@ -314,9 +215,7 @@ fn parse_untagged_type(
     ty: &AstElement<AstUntaggedType>,
 ) -> Result<UntaggedType> {
     Ok(match ty.element {
-        AstUntaggedType::BuiltinType(ref builtin) => {
-            UntaggedType::BuiltinType(parse_builtin_type(parser, builtin)?)
-        }
+        AstUntaggedType::BuiltinType(ref builtin) => parse_builtin_type(parser, builtin)?,
         AstUntaggedType::TypeReference(ref typeref) => UntaggedType::Reference(AstElement::new(
             parser
                 .context
@@ -325,6 +224,20 @@ fn parse_untagged_type(
                 .resolve_symbol(&typeref.element.0),
             typeref.loc,
         )),
+    })
+}
+
+fn parse_constrained_type(
+    parser: &AstParser<'_>,
+    constrained_type: &AstElement<AstConstrainedType>,
+) -> Result<UntaggedType> {
+    Ok(match &constrained_type.element {
+        AstConstrainedType::Suffixed(suffixed) => {
+            parse_untagged_type(parser, &suffixed.element.ty)?
+        }
+        AstConstrainedType::TypeWithConstraint(twc) => {
+            parse_structure_of_type(parser, &twc.element.0)?
+        }
     })
 }
 
@@ -356,7 +269,7 @@ pub fn parse_type(
         .tag_default;
     Ok(match &ty.element {
         AstType::TaggedType(tagged_type) => {
-            let ty = parse_untagged_type(parser, &tagged_type.element.ty)?;
+            let ty = parse_constrained_type(parser, &tagged_type.element.ty)?;
             let tag = &tagged_type.element.tag;
             let class = match tag.element.class {
                 Some(ref class) => match class.element {
@@ -399,8 +312,7 @@ pub fn parse_type(
                         TagSource::KindSpecified => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(
-                                    "CHOICE is not permitted to have IMPLICIT tagging"
-                                        .to_string(),
+                                    "CHOICE is not permitted to have IMPLICIT tagging".to_string(),
                                 ),
                                 loc: tagged_type.element.kind.as_ref().unwrap().loc,
                             })
@@ -413,10 +325,15 @@ pub fn parse_type(
             }
 
             let tag = Tag::new(class, tag_number, kind, source);
-            TaggedType { tag: Some(tag), ty }
+            TaggedType {
+                tag: Some(tag),
+                ty,
+                constraint: None,
+            }
         }
-        AstType::UntaggedType(untagged) => {
-            let ty = parse_untagged_type(parser, untagged)?;
+        AstType::ConstrainedType(constrained) => {
+            let ty = parse_constrained_type(parser, constrained)?;
+
             let index = match type_context {
                 TypeContext::StructureComponent { index, has_tags } => match has_tags {
                     true => None,
@@ -436,9 +353,7 @@ pub fn parse_type(
                     ))
                 }
                 _ => match &ty {
-                    UntaggedType::BuiltinType(builtin) => {
-                        builtin.tag_type().map(Tag::universal)
-                    }
+                    UntaggedType::BuiltinType(builtin) => builtin.tag_type().map(Tag::universal),
                     UntaggedType::Reference(_) => None,
                 },
             };
@@ -447,7 +362,11 @@ pub fn parse_type(
                     tag.kind = TagKind::Explicit;
                 }
             }
-            TaggedType { tag, ty }
+            TaggedType {
+                tag,
+                ty,
+                constraint: None,
+            }
         }
     })
 }

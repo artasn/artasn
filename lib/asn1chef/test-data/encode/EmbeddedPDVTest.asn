@@ -1,0 +1,41 @@
+EmbeddedPDVTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EmbeddedPDV ::= EMBEDDED PDV
+
+with-syntaxes EmbeddedPDV ::= {
+    identification syntaxes : {
+        abstract { joint-iso-itu-t asn1chef(1337) test(47) abstract(0) },
+        transfer { joint-iso-itu-t asn1chef(1337) test(47) transfer(1) }
+    },
+    data-value '1337'H
+}
+
+with-syntax EmbeddedPDV ::= {
+    identification syntax : { joint-iso-itu-t asn1chef(1337) test(47) syntax(2) },
+    data-value '1337'H
+}
+
+with-presentation-context-id EmbeddedPDV ::= {
+    identification presentation-context-id : 9001,
+    data-value '1337'H
+}
+
+with-context-negotiation EmbeddedPDV ::= {
+    identification context-negotiation : {
+        presentation-context-id 9001,
+        transfer-syntax { joint-iso-itu-t asn1chef(1337) test(47) transfer(1) }
+    },
+    data-value '1337'H
+}
+
+with-transfer-syntax EmbeddedPDV ::= {
+    identification transfer-syntax : { joint-iso-itu-t asn1chef(1337) test(47) transfer(1) },
+    data-value '1337'H
+}
+
+with-fixed EmbeddedPDV ::= {
+    identification fixed : NULL,
+    data-value '1337'H
+}
+
+END

@@ -20,6 +20,14 @@ pub fn compile_module_fallible(
     context.clear();
 
     let mut compiler = Compiler::new(CompilerConfig::default());
+    match compiler.add_stdlib() {
+        Ok(()) => (),
+        Err(err) => {
+            eprintln!("{}", err);
+            panic!("parse stdlib failed");
+        }
+    }
+
     match compiler.add_source(path.to_string(), source.to_string()) {
         Ok(()) => (),
         Err(err) => {
@@ -251,39 +259,33 @@ fn execute_json_compile_test(module_name: &str, module_file: &str, data_file: &s
     }
 }
 
-#[test]
-pub fn test_unique_tag_compliance() {
-    let module_file = include_str!("../../test-data/compile/UniqueTagTest.asn");
-    let data_file = include_str!("../../test-data/compile/UniqueTagTest.test.json");
+macro_rules! json_test {
+    ( $test:ident, $name:literal ) => {
+        #[test]
+        pub fn $test() {
+            let module_file = include_str!(concat!("../../test-data/", $name, ".asn"));
+            let data_file = include_str!(concat!("../../test-data/", $name, ".test.json"));
 
-    execute_json_compile_test("UniqueTagTest.asn", module_file, data_file);
+            crate::compiler::test::execute_json_test(module_file, data_file);
+        }
+    };
+}
+pub(crate) use json_test;
+
+macro_rules! json_compile_test {
+    ( $test:ident, $name:literal ) => {
+        #[test]
+        pub fn $test() {
+            let module_file = include_str!(concat!("../../test-data/", $name, ".asn"));
+            let data_file = include_str!(concat!("../../test-data/", $name, ".test.json"));
+
+            crate::compiler::test::execute_json_compile_test(concat!($name, ".asn"), module_file, data_file);
+        }
+    };
 }
 
-#[test]
-pub fn test_unique_alternative_compliance_implicit_tagging() {
-    let module_file =
-        include_str!("../../test-data/compile/UniqueAlternativeTestImplicitTagging.asn");
-    let data_file =
-        include_str!("../../test-data/compile/UniqueAlternativeTestImplicitTagging.test.json");
-
-    execute_json_compile_test(
-        "UniqueAlternativeTestImplicitTagging.asn",
-        module_file,
-        data_file,
-    );
-}
-
+json_compile_test!(test_unique_tag_compliance, "compile/UniqueTagTest");
+json_compile_test!(test_unique_alternative_compliance_implicit_tagging, "compile/UniqueAlternativeTestImplicitTagging");
 // TODO: make this work
-// #[test]
-// pub fn test_unique_alternative_compliance_automatic_tagging() {
-//     let module_file =
-//         include_str!("../../test-data/compile/UniqueAlternativeTestAutomaticTagging.asn");
-//     let data_file =
-//         include_str!("../../test-data/compile/UniqueAlternativeTestAutomaticTagging.test.json");
-
-//     execute_json_compile_test(
-//         "UniqueAlternativeTestAutomaticTagging.asn",
-//         module_file,
-//         data_file,
-//     );
-// }
+// json_compile_test!(test_unique_alternative_compliance_automatic_tagging, "compile/UniqueAlternativeTestAutomaticTagging");
+json_compile_test!(test_constraint_verifier, "compile/ConstraintTest");

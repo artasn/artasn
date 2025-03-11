@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use num::{bigint::Sign, BigInt, BigUint};
 
 use crate::{
@@ -179,6 +181,37 @@ fn parse_character_string(
     Ok(BuiltinValue::CharacterString(tag_type, cstring))
 }
 
+fn parse_octet_string(str: &str, radix: u32) -> Vec<u8> {
+    if str.is_empty() {
+        return Vec::new();
+    }
+
+    let chars_per_byte = match radix {
+        16 => 2,
+        2 => 8,
+        _ => unreachable!(),
+    };
+    let mut bytes = Vec::with_capacity(str.len() / chars_per_byte + 1);
+    let mut char_buf = String::with_capacity(chars_per_byte);
+    for i in (0..str.len()).step_by(chars_per_byte) {
+        char_buf.clear();
+
+        let segment = &str[i..usize::min(str.len(), i + chars_per_byte)];
+        for char in segment.chars() {
+            char_buf.write_char(char).unwrap();
+        }
+        while char_buf.len() < chars_per_byte {
+            char_buf.write_char('0').unwrap();
+        }
+        bytes.push(
+            u8::from_str_radix(&char_buf, radix)
+                .expect("invalid OCTET STRING value (this should be caught by the parser)"),
+        );
+    }
+
+    bytes
+}
+
 pub fn parse_value(
     parser: &AstParser<'_>,
     value: &AstElement<AstValue>,
@@ -194,25 +227,30 @@ pub fn parse_value(
                 },
                 AstBuiltinValue::StringLiteral(str_lit) => match &target_type.ty {
                     BuiltinType::BitString(_) => {
-                        let radix = match str_lit.element.kind {
-                            StringKind::BString => 2,
-                            StringKind::HString => 16,
-                            StringKind::CString => {
-                                return Err(Error {
-                                    kind: ErrorKind::Ast(
-                                        "cstring value cannot be assigned to BIT STRING"
-                                            .to_string(),
-                                    ),
-                                    loc: builtin.loc,
-                                })
-                            }
-                        };
-                        BuiltinValue::BitString(
-                            BigUint::parse_bytes(str_lit.element.data.as_bytes(), radix)
-                                .expect("failed BigUint::parse_bytes"),
-                        )
+                        let bytes = str_lit.element.data.as_bytes();
+                        if bytes.is_empty() {
+                            BuiltinValue::OctetString(Vec::new())
+                        } else {
+                            let radix = match str_lit.element.kind {
+                                StringKind::BString => 2,
+                                StringKind::HString => 16,
+                                StringKind::CString => {
+                                    return Err(Error {
+                                        kind: ErrorKind::Ast(
+                                            "cstring value cannot be assigned to BIT STRING"
+                                                .to_string(),
+                                        ),
+                                        loc: builtin.loc,
+                                    })
+                                }
+                            };
+                            BuiltinValue::BitString(
+                                BigUint::parse_bytes(bytes, radix)
+                                    .expect("failed BigUint::parse_bytes"),
+                            )
+                        }
                     }
-                    BuiltinType::OctetString(_) => {
+                    BuiltinType::OctetString => {
                         let radix = match str_lit.element.kind {
                             StringKind::BString => 2,
                             StringKind::HString => 16,
@@ -226,11 +264,7 @@ pub fn parse_value(
                                 })
                             }
                         };
-                        BuiltinValue::OctetString(
-                            BigUint::parse_bytes(str_lit.element.data.as_bytes(), radix)
-                                .expect("failed BigUint::parse_bytes")
-                                .to_bytes_be(),
-                        )
+                        BuiltinValue::OctetString(parse_octet_string(&str_lit.element.data, radix))
                     }
                     BuiltinType::CharacterString(tag_type) => {
                         parse_character_string(str_lit, *tag_type)?

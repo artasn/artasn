@@ -1,6 +1,8 @@
 {
     "module": "UniversalTypeTest",
-    "tests": ["Encode"],
+    "tests": [
+        "Encode"
+    ],
     "values": [
         {
             "name": "sequenceValue",
