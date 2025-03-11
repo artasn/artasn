@@ -16,6 +16,12 @@ pub struct AstParser<'a> {
     pub module: ModuleIdentifier,
 }
 
+pub struct AstVerifier<'a> {
+    pub context: &'a Context,
+    pub config: &'a CompilerConfig,
+    pub module: ModuleIdentifier,
+}
+
 fn run_parser<T, F: Fn(AstParser<'_>) -> Vec<Result<T>>>(
     context: &Context,
     config: &CompilerConfig,
@@ -54,6 +60,35 @@ fn run_parser<T, F: Fn(AstParser<'_>) -> Vec<Result<T>>>(
     } else {
         Ok(results)
     }
+}
+
+fn run_verifier<F: Fn(AstVerifier<'_>) -> Vec<Error>>(
+    context: &Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+    f: F,
+) -> Vec<Error> {
+    let mut errors = Vec::new();
+
+    for ast_module in &program.element.0 {
+        let module = match module_ast_to_module_ident(&ast_module.element.header) {
+            Ok(module) => module,
+            Err(err) => {
+                errors.push(err);
+                continue;
+            }
+        };
+
+        let verifier = AstVerifier {
+            context,
+            config,
+            module,
+        };
+
+        errors.extend(f(verifier));
+    }
+
+    errors
 }
 
 fn module_ast_to_module_ident(header: &AstElement<AstModuleHeader>) -> Result<ModuleIdentifier> {
@@ -230,48 +265,42 @@ pub fn register_all_values(
 
 /// Fourth stage: verify all types.
 pub fn verify_all_types(
-    context: &mut Context,
+    context: &Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
-        let mut errors: Vec<Result<()>> = Vec::new();
-        for (ident, declared_value) in parser.context.list_types() {
-            if ident.module != parser.module {
+    run_verifier(context, config, program, |verifier| {
+        let mut errors: Vec<Error> = Vec::new();
+        for (ident, declared_value) in verifier.context.list_types() {
+            if ident.module != verifier.module {
                 continue;
             }
 
-            if let Err(err) = verify::verify_type(&parser, declared_value) {
-                errors.push(Err(err));
+            if let Err(err) = verify::verify_type(verifier.context, declared_value) {
+                errors.push(err);
             }
         }
         errors
-    }) {
-        Ok(_) => Vec::new(),
-        Err(errors) => errors,
-    }
+    })
 }
 
 /// Fifth stage: verify all declared values.
 pub fn verify_all_values(
-    context: &mut Context,
+    context: &Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
-        let mut errors: Vec<Result<()>> = Vec::new();
-        for (ident, declared_value) in parser.context.list_values() {
-            if ident.module != parser.module {
+    run_verifier(context, config, program, |verifier| {
+        let mut errors: Vec<Error> = Vec::new();
+        for (ident, declared_value) in verifier.context.list_values() {
+            if ident.module != verifier.module {
                 continue;
             }
 
-            if let Err(err) = verify::verify_value(&parser, declared_value) {
-                errors.push(Err(err));
+            if let Err(err) = verify::verify_value(verifier.context, declared_value) {
+                errors.push(err);
             }
         }
         errors
-    }) {
-        Ok(_) => Vec::new(),
-        Err(errors) => errors,
-    }
+    })
 }

@@ -1,0 +1,6 @@
+[
+    "compile error: CHOICE alternative 'i1' and alternative 'i2' must have distinct tags",
+    "compile error: CHOICE alternative 'foo' and alternative 'baz' must have distinct tags",
+    "compile error: CHOICE alternative 'qop' and alternative 'zab' must have distinct tags",
+    "compile error: CHOICE alternative 'qop' and alternative 'zab' must have distinct tags"
+]

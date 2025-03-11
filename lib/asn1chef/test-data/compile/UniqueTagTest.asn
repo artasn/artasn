@@ -39,6 +39,19 @@ Compliant8 ::= SEQUENCE {
     num2 [1] INTEGER OPTIONAL
 }
 
+Compliant9 ::= SET {
+    num INTEGER
+}
+
+Compliant10 ::= SET {
+    num INTEGER OPTIONAL
+}
+
+Compliant11 ::= SET {
+    num1 [0] INTEGER,
+    num2 [1] INTEGER
+}
+
 Noncompliant1 ::= SEQUENCE {
     num1 INTEGER OPTIONAL,
     num2 INTEGER
@@ -52,6 +65,17 @@ Noncompliant2 ::= SEQUENCE {
 Noncompliant3 ::= SEQUENCE {
     num1 INTEGER OPTIONAL,
     bytes OCTET STRING OPTIONAL,
+    num2 INTEGER
+}
+
+Noncompliant4 ::= SET {
+    num1 INTEGER,
+    num2 INTEGER
+}
+
+Noncompliant5 ::= SET {
+    num1 INTEGER,
+    bytes OCTET STRING,
     num2 INTEGER
 }
 

@@ -591,6 +591,32 @@ rule Optional {
     keyword OPTIONAL
 }
 
+rule Choice {
+    captures {
+        alternatives = repeated: ChoiceAlternative
+    }
+    keyword CHOICE
+    persist
+    operator {
+    alternatives = ChoiceAlternative
+    optional repeated {
+        operator ,
+        alternatives = ChoiceAlternative
+    }
+    operator }
+    return alternatives
+}
+
+rule ChoiceAlternative {
+    captures {
+        name = ValueReference
+        ty = Type
+    }
+    name = ValueReference
+    persist
+    ty = Type
+}
+
 rule NumericString {
     keyword NumericString
 }
@@ -660,11 +686,10 @@ rule Duration {
     keyword DURATION
 }
 
-variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor |
-    External | Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Sequence | Set |
-    NumericString | PrintableString | TeletexString | VideotexString | IA5String | UTCTime | 
-    GeneralizedTime | GraphicString | VisibleString | GeneralString | UniversalString | CharacterString |
-    BMPString | Date | TimeOfDay | DateTime | Duration;
+variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
+    Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Sequence | Set | Choice | NumericString | PrintableString |
+    TeletexString | VideotexString | IA5String | UTCTime |  GeneralizedTime | GraphicString | VisibleString | GeneralString |
+    UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration;
 
 variant Class = Universal {
     keyword UNIVERSAL

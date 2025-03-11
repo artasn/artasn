@@ -1,0 +1,115 @@
+UniqueAlternativeTestImplicitTagging DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Compliant1 ::= CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+Compliant2 ::= [APPLICATION 1] CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+Compliant3 ::= CHOICE {
+    foo [0] INTEGER,
+    bar [1] BOOLEAN
+}
+
+Compliant4 ::= CHOICE {
+    foo INTEGER,
+    bar [0] CHOICE {
+        baz INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Compliant5 ::= CHOICE {
+    foo INTEGER,
+    bar CHOICE {
+        baz [0] INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Compliant6 ::= CHOICE {
+    foo CHOICE {
+        bar [0] CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Compliant7 ::= CHOICE {
+    foo CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab [0] BOOLEAN
+    }
+}
+
+Noncompliant1 ::= CHOICE {
+    i1 INTEGER,
+    i2 INTEGER
+}
+
+Noncompliant2 ::= CHOICE {
+    foo INTEGER,
+    bar CHOICE {
+        baz INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Noncompliant3 ::= CHOICE {
+    foo CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Noncompliant4 ::= CHOICE {
+    foo [0] CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof [0] CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+END

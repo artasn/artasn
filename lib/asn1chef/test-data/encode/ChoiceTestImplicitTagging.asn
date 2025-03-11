@@ -1,0 +1,131 @@
+ChoiceTestImplicitTagging DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+C1 ::= CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+c1v1 C1 ::= foo : 1
+c1v2 C1 ::= bar : TRUE
+
+C2 ::= CHOICE {
+    i1 [0] INTEGER,
+    i2 [1] INTEGER
+}
+
+c2v1 C2 ::= i1 : 5
+c2v2 C2 ::= i2 : 7
+
+C3 ::= [APPLICATION 1] CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+c3v1 C3 ::= foo : 1
+c3v2 C3 ::= bar : TRUE
+
+C4 ::= [APPLICATION 1] CHOICE {
+    foo [APPLICATION 2] INTEGER,
+    bar [APPLICATION 3] BOOLEAN
+}
+
+c4v1 C4 ::= foo : 1
+c4v2 C4 ::= bar : TRUE
+
+C5 ::= CHOICE {
+    foo [0] INTEGER,
+    bar CHOICE {
+        baz [1] INTEGER,
+        quz BOOLEAN
+    }
+}
+
+c5v1 C5 ::= foo : 1
+c5v2 C5 ::= bar : baz : 2
+c5v3 C5 ::= bar : quz : TRUE
+
+C6 ::= [APPLICATION 1] CHOICE {
+    foo INTEGER,
+    bar [APPLICATION 2] CHOICE {
+        baz INTEGER,
+        quz BOOLEAN
+    }
+}
+
+c6v1 C6 ::= foo : 1
+c6v2 C6 ::= bar : baz : 2
+c6v3 C6 ::= bar : quz : TRUE
+
+C7 ::= CHOICE {
+    foo CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop [0] BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab [1] BOOLEAN
+    }
+}
+
+c7v1 C7 ::= foo : bar : quz : '1337'H
+c7v2 C7 ::= foo : bar : qop : TRUE
+c7v3 C7 ::= foo : baz : zuq : '01101101'B
+c7v4 C7 ::= foo : baz : poq : "Hello, world!"
+c7v5 C7 ::= oof : rab : 7
+c7v6 C7 ::= oof : zab : TRUE
+
+C8 ::= [APPLICATION 1] CHOICE {
+    foo [APPLICATION 2] CHOICE {
+        bar [APPLICATION 3] CHOICE {
+            quz [APPLICATION 4] OCTET STRING,
+            qop [APPLICATION 5] BOOLEAN
+        },
+        baz [APPLICATION 6] CHOICE {
+            zuq [APPLICATION 7] BIT STRING,
+            poq [APPLICATION 8] UTF8String
+        }
+    },
+    oof [APPLICATION 9] CHOICE {
+        rab [APPLICATION 10] INTEGER,
+        zab [APPLICATION 11] BOOLEAN
+    }
+}
+
+c8v1 C8 ::= foo : bar : quz : '1337'H
+c8v2 C8 ::= foo : bar : qop : TRUE
+c8v3 C8 ::= foo : baz : zuq : '01101101'B
+c8v4 C8 ::= foo : baz : poq : "Hello, world!"
+c8v5 C8 ::= oof : rab : 7
+c8v6 C8 ::= oof : zab : TRUE
+
+C1S ::= SEQUENCE OF C1
+c1s C1S ::= { c1v1, c1v2 }
+
+C2S ::= SEQUENCE OF C2
+c2s C2S ::= { c2v1, c2v2 }
+
+C3S ::= SEQUENCE OF C3
+c3s C3S ::= { c3v1, c3v2 }
+
+C4S ::= SEQUENCE OF C4
+c4s C4S ::= { c4v1, c4v2 }
+
+C5S ::= SEQUENCE OF C5
+c5s C5S ::= { c5v1, c5v2, c5v3 }
+
+C6S ::= SEQUENCE OF C6
+c6s C6S ::= { c6v1, c6v2, c6v3 }
+
+C7S ::= SEQUENCE OF C7
+c7s C7S ::= { c7v1, c7v2, c7v3, c7v4, c7v5, c7v6 }
+
+C8S ::= SEQUENCE OF C8
+c8s C8S ::= { c8v1, c8v2, c8v3, c8v4, c8v5, c8v6 }
+
+END

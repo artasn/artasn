@@ -22,7 +22,7 @@ use crate::{
     values::{BuiltinValue, Value, ValueResolve},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
     Universal,
     Application,
@@ -175,8 +175,33 @@ impl Display for UntaggedType {
 
 #[derive(Debug, Clone)]
 pub struct ResolvedType {
-    pub tag: Tag,
+    pub tag: Option<Tag>,
     pub ty: BuiltinType,
+}
+
+impl ResolvedType {
+    pub fn get_possible_tags(&self, context: &Context) -> Result<Vec<(Tag, BuiltinType)>> {
+        let mut tags = Vec::with_capacity(1);
+        self.extend_possible_tags(context, &mut tags)?;
+        Ok(tags)
+    }
+
+    fn extend_possible_tags(&self, context: &Context, tags: &mut Vec<(Tag, BuiltinType)>) -> Result<()> {
+        match &self.tag {
+            Some(tag) => tags.push((tag.clone(), self.ty.clone())),
+            None => match &self.ty {
+                BuiltinType::Choice(choice) => {
+                    for alternative in &choice.alternatives {
+                        let alternative_ty = alternative.ty.resolve(context)?;
+                        alternative_ty.extend_possible_tags(context, tags)?;
+                    }
+                }
+                other => unreachable!("extend_possible_tags: tag is None but type is {}", other),
+            },
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -192,8 +217,15 @@ impl TaggedType {
         loop {
             match &tagged_ty.ty {
                 UntaggedType::BuiltinType(ty) => {
+                    match tag {
+                        Some(_) => (),
+                        None => match ty {
+                            BuiltinType::Choice(_) => (),
+                            _ => unreachable!("no tag for non-CHOICE type"),
+                        },
+                    }
                     return Ok(ResolvedType {
-                        tag: tag.expect("unreachable: no tag").clone(),
+                        tag: tag.cloned(),
                         ty: ty.clone(),
                     });
                 }
@@ -371,7 +403,7 @@ impl BuiltinType {
     /// TODO: This needs a lot more checked. See https://stackoverflow.com/a/70213161.
     pub fn form(&self) -> TypeForm {
         match self {
-            Self::Structure(_) | Self::StructureOf(_) | Self::Choice(_) => TypeForm::Constructed,
+            Self::Structure(_) | Self::StructureOf(_) => TypeForm::Constructed,
             _ => TypeForm::Primitive,
         }
     }
@@ -382,19 +414,6 @@ impl BuiltinType {
         valref: &AstElement<Value>,
     ) -> Result<()> {
         let value = valref.resolve(context)?;
-        let tag_type = self
-            .tag_type()
-            .expect("ensure_satisfied_by_value: no tag type");
-        if tag_type != value.tag_type(context)? {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "expecting {} but found {}",
-                    tag_type,
-                    value.tag_type(context)?
-                )),
-                loc: valref.loc,
-            });
-        }
 
         let (constraints, item) = match (self, value) {
             (Self::BitString(bit_string), BuiltinValue::BitString(value)) => (

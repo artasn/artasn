@@ -11,7 +11,7 @@ use crate::{
     },
     module::QualifiedIdentifier,
     types::*,
-    values::{Date, DateTime, Duration, Oid, Time, TimeOfDay, UTCTime},
+    values::*,
 };
 
 #[derive(Debug)]
@@ -260,8 +260,18 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
     })
 }
 
-fn tag_eq_tlv(tag: &Tag, tlv_tag: &TlvTag) -> bool {
-    tag.class == tlv_tag.class && tag.num == tlv_tag.num
+fn type_eq_tlv(
+    context: &Context,
+    resolved_type: &ResolvedType,
+    tlv_tag: &TlvTag,
+) -> parser::Result<Option<BuiltinType>> {
+    let tags = resolved_type.get_possible_tags(context)?;
+    for (tag, ty) in tags {
+        if tag.class == tlv_tag.class && tag.num == tlv_tag.num {
+            return Ok(Some(ty));
+        }
+    }
+    Ok(None)
 }
 
 struct ComponentData<'a> {
@@ -289,15 +299,24 @@ fn get_component_by_tag<'a>(
                         .resolve(context)
                         .map_err(DecodeError::Parser)?;
 
-                    let tag_matches = tag_eq_tlv(&component_type.tag, &tlv_tag.element);
+                    let tag_matches = type_eq_tlv(context, &component_type, &tlv_tag.element)
+                        .map_err(DecodeError::Parser)?
+                        .is_some();
                     if !tag_matches {
                         if component.optional || component.default_value.is_some() {
                             continue;
                         } else {
+                            let tag_str = resolved
+                                .get_possible_tags(context)
+                                .map_err(DecodeError::Parser)?
+                                .into_iter()
+                                .map(|(tag, _)| tag.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" | ");
                             return Err(DecodeError::Decoder {
-                            message: format!("SEQUENCE component at index {} is defined with tag {} but the encoded value has tag {}", component_index, component_type.tag, tlv_tag.element),
-                            pos: tlv_tag.pos,
-                        });
+                                message: format!("SEQUENCE component at index {} is defined with tag {} but the encoded value has tag {}", component_index, tag_str, tlv_tag.element),
+                                pos: tlv_tag.pos,
+                            });
                         }
                     }
 
@@ -342,16 +361,22 @@ impl DecodedValue {
                             DecodedValueKind::Raw(tlv.value.element.to_vec())
                         }
                         DecodeMode::SpecificType { resolved, .. } => {
-                            if tag_eq_tlv(&resolved.tag, &tlv.tag.element) {
-                                // we use resolved.ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
-                                der_decode_universal(
-                                    &tlv,
-                                    resolved.ty.tag_type().expect("tag_type"),
-                                )
-                                .map_err(DecodeError::Io)?
+                            if let Some(ty) = type_eq_tlv(context, resolved, &tlv.tag.element)
+                                .map_err(DecodeError::Parser)?
+                            {
+                                // we use ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
+                                der_decode_universal(&tlv, ty.tag_type().expect("tag_type"))
+                                    .map_err(DecodeError::Io)?
                             } else {
+                                let tag_str = resolved
+                                    .get_possible_tags(context)
+                                    .map_err(DecodeError::Parser)?
+                                    .into_iter()
+                                    .map(|(tag, _)| tag.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(" | ");
                                 return Err(DecodeError::Decoder {
-                                    message: format!("DecodeMode is SpecificType but encoded tag {} does not match provided tag {}", tlv.tag.element, resolved.tag),
+                                    message: format!("DecodeMode is SpecificType but encoded tag {} does not match provided tag {}", tlv.tag.element, tag_str),
                                     pos: tlv.tag.pos,
                                 });
                             }

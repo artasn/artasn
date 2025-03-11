@@ -235,9 +235,9 @@ pub fn parse_value(
                     BuiltinType::CharacterString(tag_type) => {
                         parse_character_string(str_lit, *tag_type)?
                     }
-                    BuiltinType::Time => BuiltinValue::Time(Time::parse(
-                        &str_lit.as_ref().map(|lit| &lit.data),
-                    )?),
+                    BuiltinType::Time => {
+                        BuiltinValue::Time(Time::parse(&str_lit.as_ref().map(|lit| &lit.data))?)
+                    }
                     BuiltinType::UTCTime => BuiltinValue::UTCTime(UTCTime::parse(
                         &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
                     )?),
@@ -294,7 +294,49 @@ pub fn parse_value(
                     }
                     BuiltinValue::SequenceOf(elements)
                 }
-                other_builtin => todo!("{:#?}", other_builtin),
+                AstBuiltinValue::ChoiceValue(choice) => {
+                    let alternative_ty = match &target_type.ty {
+                        BuiltinType::Choice(ty) => 'block: {
+                            for alternative in &ty.alternatives {
+                                if alternative.name.element == choice.element.alternative.element.0
+                                {
+                                    break 'block &alternative.ty;
+                                }
+                            }
+
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "CHOICE type does not define an alternative named '{}'",
+                                    choice.element.alternative.element.0,
+                                )),
+                                loc: builtin.loc,
+                            });
+                        }
+                        other_type => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "CHOICE value cannot be assigned to {}",
+                                    other_type,
+                                )),
+                                loc: builtin.loc,
+                            })
+                        }
+                    };
+
+                    let resolved_alternative_ty = alternative_ty.resolve(parser.context)?;
+                    let alternative_value =
+                        parse_value(parser, &choice.element.value, &resolved_alternative_ty)?;
+
+                    BuiltinValue::Choice(ChoiceValue {
+                        alternative: choice
+                            .element
+                            .alternative
+                            .as_ref()
+                            .map(|name| name.0.clone()),
+                        alternative_type: resolved_alternative_ty,
+                        value: Box::new(alternative_value),
+                    })
+                }
             }),
             AstValue::ValueReference(valref) => match &target_type.ty {
                 BuiltinType::Enumerated(items) => 'block: {

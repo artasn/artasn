@@ -1,0 +1,7 @@
+[
+    "compile error: SEQUENCE component 'num1' and component 'num2' must have distinct tags",
+    "compile error: SEQUENCE component 'num1' and component 'num2' must have distinct tags",
+    "compile error: SEQUENCE component 'num1' and component 'num2' must have distinct tags",
+    "compile error: SET component 'num1' and component 'num2' must have distinct tags",
+    "compile error: SET component 'num1' and component 'num2' must have distinct tags"
+]

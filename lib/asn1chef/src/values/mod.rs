@@ -166,6 +166,10 @@ impl BuiltinValue {
                     resolved.der_encode(buf, context, &component_type)?;
                 }
             }
+            Self::Choice(choice) => {
+                let value = choice.value.resolve(context)?;
+                value.der_encode(buf, context, &choice.alternative_type)?;
+            }
             Self::CharacterString(tag_type, str) => {
                 encoding::der_encode_character_string(buf, *tag_type, str);
             }
@@ -187,110 +191,40 @@ impl BuiltinValue {
             other => todo!("{:#02X?}", other),
         }
 
-        let end_len = buf.len();
-        if resolved_type.tag.kind == TagKind::Explicit {
+        let tag = resolved_type.tag.as_ref();
+        if let Some(tag) = tag {
+            let end_len = buf.len();
+            if tag.kind == TagKind::Explicit {
+                if let Some(tag_type) = resolved_type.ty.tag_type() {
+                    encoding::write_tlv_len((end_len - start_len) as u64, buf);
+                    Tag::universal(tag_type).der_encode(
+                        buf,
+                        TagContext {
+                            is_outer_explicit: false,
+                            ty: &resolved_type.ty,
+                        },
+                    );
+                }
+            }
+
+            let end_len = buf.len();
             encoding::write_tlv_len((end_len - start_len) as u64, buf);
-            Tag::universal(resolved_type.ty.tag_type().expect("tag_type")).der_encode(
+            tag.der_encode(
                 buf,
                 TagContext {
-                    is_outer_explicit: false,
+                    is_outer_explicit: tag.kind == TagKind::Explicit,
                     ty: &resolved_type.ty,
                 },
             );
+        } else {
+            assert!(
+                matches!(resolved_type.ty, BuiltinType::Choice(_)),
+                "der_encode: resolved_type tag is None but type is not CHOICE"
+            );
         }
-
-        let end_len = buf.len();
-        encoding::write_tlv_len((end_len - start_len) as u64, buf);
-        resolved_type.tag.der_encode(
-            buf,
-            TagContext {
-                is_outer_explicit: resolved_type.tag.kind == TagKind::Explicit,
-                ty: &resolved_type.ty,
-            },
-        );
 
         Ok(())
     }
-
-    // pub fn der_encode(&self, writer: io::BufWriter<Vec<u8>>) {
-    //     match self {
-    //         Self::BitString(uint_data) => {
-
-    //         }
-    //         Self::OctetString(binary) => {
-    //             let (bit_modulus, pad_size) = match self. {
-    //                 StringKind::BString => (8, 1),
-    //                 StringKind::HString => (2, 4),
-    //                 _ => unreachable!(),
-    //             };
-    //             let pad_len = match sbits.len() {
-    //                 0 => match from_literal {
-    //                     StringKind::BString => 8,
-    //                     StringKind::HString => {
-    //                         sbits = "";
-    //                         0
-    //                     }
-    //                     _ => unreachable!(),
-    //                 },
-    //                 len => {
-    //                     let padding = bit_modulus - (len % bit_modulus);
-    //                     if padding == bit_modulus {
-    //                         0
-    //                     } else {
-    //                         padding
-    //                     }
-    //                 }
-    //             };
-    //             let mut dbits = String::with_capacity(sbits.len() + pad_len);
-    //             dbits.write_str(&sbits);
-    //             for _ in 0..pad_len {
-    //                 dbits.write_char('0');
-    //             }
-    //             println!(
-    //                 "sbits: {:X?}, dbits: {:X?}, pad_size={pad_size:} pad_len={pad_len:}",
-    //                 sbits, dbits
-    //             );
-
-    //             let big = match BigUint::from_str_radix(
-    //                 &dbits,
-    //                 match from_literal {
-    //                     StringKind::BString => 2,
-    //                     StringKind::HString => 16,
-    //                     _ => unreachable!(),
-    //                 },
-    //             ) {
-    //                 Ok(parsed) => parsed,
-    //                 Err(err) => {
-    //                     if format!("{}", err) == "cannot parse integer from empty string" {
-    //                         BigUint::ZERO
-    //                     } else {
-    //                         panic!("{:?}", err);
-    //                     }
-    //                 }
-    //             };
-
-    //             let mut buf: Vec<u8> = Vec::new();
-    //             buf.push(to_tag as u8);
-    //             let be_bytes = big.to_bytes_be();
-    //             let len = be_bytes.len();
-    //             if to_tag == TagType::BitString {
-    //                 if pad_len == 8 {
-    //                     buf.push(1);
-    //                 } else {
-    //                     buf.push(1 + len as u8); // L (pad-len + big-endian bytes)
-    //                     buf.push((pad_len * pad_size) as u8);
-    //                 }
-    //             } else if to_tag == TagType::OctetString {
-    //                 if len > 0 {
-    //                     buf.push(len as u8);
-    //                 }
-    //             }
-    //             buf.extend(be_bytes);
-
-    //             writer.write_all(&buf).unwrap();
-    //         }
-    //     }
-    // }
 }
 
 #[derive(Debug, Clone)]
@@ -339,9 +273,25 @@ mod test {
     }
 
     #[test]
-    pub fn test_enumerated_encoding() {
+    pub fn test_encode_enumerated() {
         let module_file = include_str!("../../test-data/encode/EnumeratedTest.asn");
         let test_file = include_str!("../../test-data/encode/EnumeratedTest.test.json");
+
+        test::execute_json_test(module_file, test_file);
+    }
+
+    #[test]
+    pub fn test_encode_choice_implicit_tagging() {
+        let module_file = include_str!("../../test-data/encode/ChoiceTestImplicitTagging.asn");
+        let test_file = include_str!("../../test-data/encode/ChoiceTestImplicitTagging.test.json");
+
+        test::execute_json_test(module_file, test_file);
+    }
+
+    #[test]
+    pub fn test_encode_choice_automatic_tagging() {
+        let module_file = include_str!("../../test-data/encode/ChoiceTestAutomaticTagging.asn");
+        let test_file = include_str!("../../test-data/encode/ChoiceTestAutomaticTagging.test.json");
 
         test::execute_json_test(module_file, test_file);
     }

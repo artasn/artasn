@@ -2,9 +2,12 @@ use std::fmt::Display;
 
 use num::bigint::Sign;
 
-use crate::compiler::{
-    parser::{AstElement, Error, ErrorKind, Result},
-    Context,
+use crate::{
+    compiler::{
+        parser::{AstElement, Error, ErrorKind, Result},
+        Context,
+    },
+    types::ResolvedType,
 };
 
 use super::{BuiltinValue, Value, ValueResolve};
@@ -24,6 +27,7 @@ pub struct StructureValue {
 #[derive(Debug, Clone)]
 pub struct ChoiceValue {
     pub alternative: AstElement<String>,
+    pub alternative_type: ResolvedType,
     pub value: Box<AstElement<Value>>,
 }
 

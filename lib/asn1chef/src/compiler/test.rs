@@ -61,7 +61,12 @@ struct TestFile {
     pub values: Vec<ValueTestEntry>,
 }
 
-fn test_encode_value(context: &Context, declared_value: &DeclaredValue, expected_der: &[u8]) {
+fn test_encode_value(
+    context: &Context,
+    ident: &QualifiedIdentifier,
+    declared_value: &DeclaredValue,
+    expected_der: &[u8],
+) {
     let tagged_type = declared_value
         .ty
         .resolve(context)
@@ -74,15 +79,18 @@ fn test_encode_value(context: &Context, declared_value: &DeclaredValue, expected
     let mut buf = Vec::with_capacity(expected_der.len());
     value
         .der_encode(&mut buf, context, &tagged_type)
-        .expect("failed to encode sequenceValue");
+        .unwrap_or_else(|_| panic!("failed to encode value '{}'", ident));
     let buf = buf.into_iter().rev().collect::<Vec<u8>>();
 
     assert!(
         expected_der == buf.as_slice(),
-        "expected = {}\nfound    = {}",
+        "value    = {}\nexpected = {}\nfound    = {}",
+        ident,
         hex::encode_upper(expected_der),
         hex::encode_upper(&buf)
     );
+
+    println!("validated encoding of value '{}'", ident);
 }
 
 fn compare_constructed_decoded_value_to_json_values(
@@ -197,16 +205,16 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
         let name = &entry.name;
         let der = hex::decode(&entry.der).expect("invalid DER hex");
 
+        let ident = QualifiedIdentifier {
+            module: ModuleIdentifier {
+                name: test_file.module.clone(),
+                oid: None,
+            },
+            name: name.to_string(),
+        };
         let declared_value = context
-            .lookup_value(&QualifiedIdentifier {
-                module: ModuleIdentifier {
-                    name: test_file.module.clone(),
-                    oid: None,
-                },
-                name: name.to_string(),
-            })
-            .unwrap_or_else(|| panic!("value '{}.{}' does not exist",
-                test_file.module, name));
+            .lookup_value(&ident)
+            .unwrap_or_else(|| panic!("value '{}.{}' does not exist", test_file.module, name));
 
         let tests = entry
             .tests
@@ -214,7 +222,7 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
             .or(test_file.tests.as_ref())
             .unwrap_or(&all_tests);
         if tests.contains(&TestMode::Encode) {
-            test_encode_value(&context, declared_value, &der);
+            test_encode_value(&context, &ident, declared_value, &der);
         }
         if tests.contains(&TestMode::Decode) {
             let value = entry.value.as_ref().expect("missing 'value' in test JSON");
@@ -223,13 +231,10 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
     }
 }
 
-#[test]
-pub fn test_unique_tag_compliance() {
-    let module_file = include_str!("../../test-data/compile/UniqueTagTest.asn");
+fn execute_json_compile_test(module_name: &str, module_file: &str, data_file: &str) {
     let mut context = Context::new();
-    let errors = compile_module_fallible(&mut context, "UniqueTagTest.asn", module_file);
+    let errors = compile_module_fallible(&mut context, module_name, module_file);
 
-    let data_file = include_str!("../../test-data/compile/UniqueTagTest.data");
     let entries: Vec<String> = serde_json::from_str(data_file).expect("malformed data file");
 
     assert_eq!(errors.len(), entries.len());
@@ -245,3 +250,40 @@ pub fn test_unique_tag_compliance() {
         );
     }
 }
+
+#[test]
+pub fn test_unique_tag_compliance() {
+    let module_file = include_str!("../../test-data/compile/UniqueTagTest.asn");
+    let data_file = include_str!("../../test-data/compile/UniqueTagTest.test.json");
+
+    execute_json_compile_test("UniqueTagTest.asn", module_file, data_file);
+}
+
+#[test]
+pub fn test_unique_alternative_compliance_implicit_tagging() {
+    let module_file =
+        include_str!("../../test-data/compile/UniqueAlternativeTestImplicitTagging.asn");
+    let data_file =
+        include_str!("../../test-data/compile/UniqueAlternativeTestImplicitTagging.test.json");
+
+    execute_json_compile_test(
+        "UniqueAlternativeTestImplicitTagging.asn",
+        module_file,
+        data_file,
+    );
+}
+
+// TODO: make this work
+// #[test]
+// pub fn test_unique_alternative_compliance_automatic_tagging() {
+//     let module_file =
+//         include_str!("../../test-data/compile/UniqueAlternativeTestAutomaticTagging.asn");
+//     let data_file =
+//         include_str!("../../test-data/compile/UniqueAlternativeTestAutomaticTagging.test.json");
+
+//     execute_json_compile_test(
+//         "UniqueAlternativeTestAutomaticTagging.asn",
+//         module_file,
+//         data_file,
+//     );
+// }

@@ -92,7 +92,7 @@ fn parse_constraints(
 
 fn parse_structure_components(
     parser: &AstParser<'_>,
-    components: &Vec<AstElement<AstStructureComponent>>,
+    components: &[AstElement<AstStructureComponent>],
 ) -> Result<Vec<StructureComponent>> {
     let has_tags = components
         .iter()
@@ -174,6 +174,39 @@ fn parse_structure_type(
     })
 }
 
+fn parse_choice_type(
+    parser: &AstParser<'_>,
+    alternatives: &[AstElement<AstChoiceAlternative>],
+) -> Result<BuiltinType> {
+    let has_tags = alternatives
+        .iter()
+        .any(|alternative| match &alternative.element.ty.element {
+            AstType::TaggedType(_) => true,
+            AstType::UntaggedType(_) => false,
+        });
+    Ok(BuiltinType::Choice(Choice {
+        alternatives: alternatives
+            .iter()
+            .enumerate()
+            .map(|(i, alternative)| {
+                let ty = parse_type(
+                    parser,
+                    &alternative.element.ty,
+                    TypeContext::StructureComponent {
+                        index: i as u16,
+                        has_tags,
+                    },
+                )?;
+
+                Ok(ChoiceAlternative {
+                    name: alternative.element.name.as_ref().map(|name| name.0.clone()),
+                    ty: Box::new(ty),
+                })
+            })
+            .collect::<Result<Vec<ChoiceAlternative>>>()?,
+    }))
+}
+
 fn parse_enumerated_type(
     parser: &AstParser<'_>,
     enumerated: &AstElement<AstEnumerated>,
@@ -249,6 +282,7 @@ fn parse_builtin_type(
         AstBuiltinType::Set(sequence) => {
             parse_structure_type(parser, TagType::Set, &sequence.element.0)?
         }
+        AstBuiltinType::Choice(choice) => parse_choice_type(parser, &choice.element.0)?,
         AstBuiltinType::NumericString(_) => BuiltinType::CharacterString(TagType::NumericString),
         AstBuiltinType::PrintableString(_) => {
             BuiltinType::CharacterString(TagType::PrintableString)
@@ -340,8 +374,8 @@ pub fn parse_type(
                 });
             }
             let tag_number = class_number.element.0 as u16;
-            let (kind, source) = match tagged_type.element.kind {
-                Some(ref kind) => (
+            let (mut kind, source) = match &tagged_type.element.kind {
+                Some(kind) => (
                     match kind.element {
                         AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
                         AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
@@ -350,13 +384,34 @@ pub fn parse_type(
                 ),
                 None => (
                     match tag_default {
-                        // TODO: Automatic is not always Implicit, there are special cases where it means Explicit
+                        // AUTOMATIC does not always mean IMPLICIT
+                        // see checks below
                         TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
                         TagDefault::Explicit => TagKind::Explicit,
                     },
                     TagSource::KindImplied,
                 ),
             };
+
+            if let UntaggedType::BuiltinType(BuiltinType::Choice(_)) = ty {
+                if kind == TagKind::Implicit {
+                    match source {
+                        TagSource::KindSpecified => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "CHOICE is not permitted to have IMPLICIT tagging"
+                                        .to_string(),
+                                ),
+                                loc: tagged_type.element.kind.as_ref().unwrap().loc,
+                            })
+                        }
+                        _ => {
+                            kind = TagKind::Explicit;
+                        }
+                    }
+                }
+            }
+
             let tag = Tag::new(class, tag_number, kind, source);
             TaggedType { tag: Some(tag), ty }
         }
@@ -369,9 +424,10 @@ pub fn parse_type(
                 },
                 TypeContext::Contextless => None,
             };
-            let tag = match (tag_default, index) {
+            let mut tag = match (tag_default, index) {
                 (TagDefault::Automatic, Some(index)) => {
-                    // TODO: Automatic is not always Implicit, there are special cases where it means Explicit
+                    // Automatic is not always Implicit, there are special cases where it means Explicit
+                    // see below for how this is done with CHOICE
                     Some(Tag::new(
                         Class::ContextSpecific,
                         index,
@@ -381,11 +437,16 @@ pub fn parse_type(
                 }
                 _ => match &ty {
                     UntaggedType::BuiltinType(builtin) => {
-                        Some(Tag::universal(builtin.tag_type().expect("tag_type")))
+                        builtin.tag_type().map(Tag::universal)
                     }
                     UntaggedType::Reference(_) => None,
                 },
             };
+            if let Some(tag) = &mut tag {
+                if let UntaggedType::BuiltinType(BuiltinType::Choice(_)) = ty {
+                    tag.kind = TagKind::Explicit;
+                }
+            }
             TaggedType { tag, ty }
         }
     })

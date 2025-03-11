@@ -1,0 +1,160 @@
+UniqueAlternativeTestAutomaticTagging DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+Compliant1 ::= CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+Compliant2 ::= CHOICE {
+    foo INTEGER,
+    bar BOOLEAN
+}
+
+Compliant3 ::= CHOICE {
+    foo [0] INTEGER,
+    bar [1] BOOLEAN
+}
+
+Compliant4 ::= CHOICE {
+    foo INTEGER,
+    bar [0] CHOICE {
+        baz INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Compliant5 ::= CHOICE {
+    foo INTEGER,
+    bar CHOICE {
+        baz [0] INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Compliant6 ::= CHOICE {
+    foo CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Compliant7 ::= CHOICE {
+    foo CHOICE {
+        bar [2] CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Compliant8 ::= CHOICE {
+    i1 INTEGER,
+    i2 INTEGER
+}
+
+Compliant9 ::= CHOICE {
+    foo INTEGER,
+    bar CHOICE {
+        baz INTEGER,
+        quz BOOLEAN
+    }
+}
+
+Compliant10 ::= CHOICE {
+    foo CHOICE {
+        a INTEGER,
+        b BOOLEAN
+    },
+    bar CHOICE {
+        a INTEGER,
+        b BOOLEAN
+    }
+}
+
+Compliant11 ::= CHOICE {
+    foo CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Noncompliant1 ::= CHOICE {
+    foo [0] CHOICE {
+        bar CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof [0] CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Noncompliant2 ::= CHOICE {
+    foo CHOICE {
+        bar [0] CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+Noncompliant3 ::= CHOICE {
+    foo CHOICE {
+        bar [1] CHOICE {
+            quz OCTET STRING,
+            qop BOOLEAN
+        },
+        baz CHOICE {
+            zuq BIT STRING,
+            poq UTF8String
+        }
+    },
+    oof CHOICE {
+        rab INTEGER,
+        zab BOOLEAN
+    }
+}
+
+END
