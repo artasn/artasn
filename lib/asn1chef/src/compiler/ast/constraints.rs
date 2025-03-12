@@ -315,10 +315,7 @@ pub fn parse_type_assignment_constraint(
     type_assignment: &AstElement<AstTypeAssignment>,
 ) -> Result<(QualifiedIdentifier, PendingConstraint)> {
     let name = type_assignment.element.name.element.0.clone();
-    let ident = QualifiedIdentifier {
-        module: parser.module.clone(),
-        name,
-    };
+    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
 
     let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
     let constrained_type = constrained_type.resolve(parser.context)?;

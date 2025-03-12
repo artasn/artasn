@@ -400,11 +400,5 @@ pub fn parse_type_assignment(
         TypeContext::Contextless,
     )?;
 
-    Ok((
-        QualifiedIdentifier {
-            module: parser.module.clone(),
-            name,
-        },
-        ty,
-    ))
+    Ok((QualifiedIdentifier::new(parser.module.clone(), name), ty))
 }

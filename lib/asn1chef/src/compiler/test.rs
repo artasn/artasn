@@ -213,13 +213,10 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
         let name = &entry.name;
         let der = hex::decode(&entry.der).expect("invalid DER hex");
 
-        let ident = QualifiedIdentifier {
-            module: ModuleIdentifier {
-                name: test_file.module.clone(),
-                oid: None,
-            },
-            name: name.to_string(),
-        };
+        let ident = QualifiedIdentifier::new(
+            ModuleIdentifier::with_name(test_file.module.clone()),
+            name.to_string(),
+        );
         let declared_value = context
             .lookup_value(&ident)
             .unwrap_or_else(|| panic!("value '{}.{}' does not exist", test_file.module, name));
@@ -279,13 +276,20 @@ macro_rules! json_compile_test {
             let module_file = include_str!(concat!("../../test-data/", $name, ".asn"));
             let data_file = include_str!(concat!("../../test-data/", $name, ".test.json"));
 
-            crate::compiler::test::execute_json_compile_test(concat!($name, ".asn"), module_file, data_file);
+            crate::compiler::test::execute_json_compile_test(
+                concat!($name, ".asn"),
+                module_file,
+                data_file,
+            );
         }
     };
 }
 
 json_compile_test!(test_unique_tag_compliance, "compile/UniqueTagTest");
-json_compile_test!(test_unique_alternative_compliance_implicit_tagging, "compile/UniqueAlternativeTestImplicitTagging");
+json_compile_test!(
+    test_unique_alternative_compliance_implicit_tagging,
+    "compile/UniqueAlternativeTestImplicitTagging"
+);
 // TODO: make this work
 // json_compile_test!(test_unique_alternative_compliance_automatic_tagging, "compile/UniqueAlternativeTestAutomaticTagging");
 json_compile_test!(test_constraint_verifier, "compile/ConstraintTest");

@@ -188,10 +188,7 @@ pub fn register_all_modules(
                     Err(err) => return vec![Err(err)],
                 };
                 for name in symbols {
-                    imports.push(QualifiedIdentifier {
-                        module: module.clone(),
-                        name,
-                    });
+                    imports.push(QualifiedIdentifier::new(module.clone(), name));
                 }
             }
         }
@@ -249,7 +246,10 @@ pub fn register_all_constraints(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                results.push(constraints::parse_type_assignment_constraint(&parser, type_assignment));
+                results.push(constraints::parse_type_assignment_constraint(
+                    &parser,
+                    type_assignment,
+                ));
             }
         }
         results

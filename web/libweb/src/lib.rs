@@ -99,10 +99,7 @@ impl TryInto<module::QualifiedIdentifier> for QualifiedIdentifier {
     type Error = ParseIntError;
 
     fn try_into(self) -> Result<module::QualifiedIdentifier, Self::Error> {
-        Ok(module::QualifiedIdentifier {
-            module: self.module.try_into()?,
-            name: self.name,
-        })
+        Ok(module::QualifiedIdentifier::new(self.module.try_into()?, self.name))
     }
 }
 
@@ -206,7 +203,7 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
             Reflect::set(
                 &obj,
                 &"componentType".into(),
-                &serialize_tagged_type(context, &of.component_type).into(),
+                &serialize_tagged_type(context, &of.component_type),
             )
             .unwrap();
         }
@@ -283,7 +280,7 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
         BuiltinValue::SequenceOf(seq_of) => {
             let elements = Array::new();
             for ast_element in seq_of {
-                elements.push(&serialize_valuereference(context, &ast_element.element).into());
+                elements.push(&serialize_valuereference(context, &ast_element.element));
             }
             ("elements", elements.into())
         }
@@ -306,15 +303,13 @@ pub fn libweb_init() -> *mut LibWeb {
 }
 
 #[wasm_bindgen]
-pub fn libweb_deinit(libweb_ptr: *mut LibWeb) {
-    unsafe {
-        std::mem::drop(Box::from_raw(libweb_ptr));
-    }
+pub unsafe fn libweb_deinit(libweb_ptr: *mut LibWeb) {
+    std::mem::drop(Box::from_raw(libweb_ptr));
 }
 
 #[wasm_bindgen]
-pub fn compiler_add_source(libweb_ptr: *mut LibWeb, path: String, source: String) -> JsValue {
-    let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_add_source(libweb_ptr: *mut LibWeb, path: String, source: String) -> JsValue {
+    let mut libweb = Box::from_raw(libweb_ptr);
     let result = libweb.compiler.add_source(path, source);
 
     let _ = Box::into_raw(libweb);
@@ -326,20 +321,20 @@ pub fn compiler_add_source(libweb_ptr: *mut LibWeb, path: String, source: String
 }
 
 #[wasm_bindgen]
-pub fn compiler_remove_source(libweb_ptr: *mut LibWeb, path: String) -> JsValue {
-    let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_remove_source(libweb_ptr: *mut LibWeb, path: String) -> JsValue {
+    let mut libweb = Box::from_raw(libweb_ptr);
     let result = libweb.compiler.remove_source(&path);
     let _ = Box::into_raw(libweb);
     JsValue::from_bool(result)
 }
 
 #[wasm_bindgen]
-pub fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
-    let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
+    let mut libweb = Box::from_raw(libweb_ptr);
     libweb.context.clear();
     let errors = libweb.compiler.compile(&mut libweb.context);
     let _ = Box::into_raw(libweb);
-    if errors.len() == 0 {
+    if errors.is_empty() {
         JsValue::null()
     } else {
         let array = Array::new();
@@ -354,8 +349,8 @@ pub fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
-    let libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
+    let libweb = Box::from_raw(libweb_ptr);
     let modules = libweb.context.list_modules();
     let definitions = modules
         .into_iter()
@@ -366,8 +361,8 @@ pub fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn compiler_list_types(libweb_ptr: *mut LibWeb) -> JsValue {
-    let libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_list_types(libweb_ptr: *mut LibWeb) -> JsValue {
+    let libweb = Box::from_raw(libweb_ptr);
     let types = Array::new();
     for (ident, ty) in libweb.context.list_types() {
         types.push(
@@ -383,8 +378,8 @@ pub fn compiler_list_types(libweb_ptr: *mut LibWeb) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn compiler_list_values(libweb_ptr: *mut LibWeb) -> JsValue {
-    let libweb = unsafe { Box::from_raw(libweb_ptr) };
+pub unsafe fn compiler_list_values(libweb_ptr: *mut LibWeb) -> JsValue {
+    let libweb = Box::from_raw(libweb_ptr);
     let types = Array::new();
     for (ident, val) in libweb.context.list_values() {
         types.push(
@@ -401,7 +396,7 @@ pub fn compiler_list_values(libweb_ptr: *mut LibWeb) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn compiler_der_encode(
+pub unsafe fn compiler_der_encode(
     libweb_ptr: *mut LibWeb,
     module_name: String,
     oid: Option<String>,
@@ -413,14 +408,14 @@ pub fn compiler_der_encode(
             .map(|node| node.parse::<u64>().expect("parse oid node"))
             .collect())
     });
-    let ident = module::QualifiedIdentifier {
-        module: module::ModuleIdentifier {
+    let ident = module::QualifiedIdentifier::new(
+        module::ModuleIdentifier {
             name: module_name,
             oid,
         },
-        name: value_name,
-    };
-    let mut libweb = unsafe { Box::from_raw(libweb_ptr) };
+        value_name,
+    );
+    let mut libweb = Box::from_raw(libweb_ptr);
     if let Some(value_decl) = libweb.context.lookup_value(&ident) {
         match value_decl.ty.resolve(&libweb.context) {
             Ok(ty) => match value_decl.value.resolve(&libweb.context) {

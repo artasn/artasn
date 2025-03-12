@@ -161,10 +161,9 @@ fn main() {
                     exit_with_error(format_args!("module '{}' could not be found", module_name))
                 }
             };
-            let declared_value = match context.lookup_value(&QualifiedIdentifier {
-                module,
-                name: value_name.to_string(),
-            }) {
+            let declared_value = match context
+                .lookup_value(&QualifiedIdentifier::new(module, value_name.to_string()))
+            {
                 Some(value) => value,
                 None => exit_with_error(format_args!(
                     "value '{}' could not be found in module '{}'",

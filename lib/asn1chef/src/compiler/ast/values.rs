@@ -470,10 +470,7 @@ pub fn parse_value_assignment(
     let val = parse_value(parser, &value_assignment.element.value, &resolved_ty)?;
 
     Ok((
-        QualifiedIdentifier {
-            module: parser.module.clone(),
-            name,
-        },
+        QualifiedIdentifier::new(parser.module.clone(), name),
         DeclaredValue { value: val, ty },
     ))
 }

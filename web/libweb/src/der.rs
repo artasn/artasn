@@ -86,12 +86,12 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
                 Reflect::set(&obj, &"second".into(), &second.into()).unwrap();
             }
             let tz: JsValue = match utc.tz {
-                UTCTimeZone::Z => "Z".into(),
-                UTCTimeZone::Offset { sign, hour, minute } => {
+                TimeZone::Z => "Z".into(),
+                TimeZone::Offset { sign, hour, minute } => {
                     let obj = Object::new();
                     let sign = match sign {
-                        UTCTimeZoneSign::Plus => "+",
-                        UTCTimeZoneSign::Minus => "-",
+                        TimeZoneSign::Plus => "+",
+                        TimeZoneSign::Minus => "-",
                     };
                     Reflect::set(&obj, &"sign".into(), &sign.into()).unwrap();
                     Reflect::set(&obj, &"hour".into(), &hour.into()).unwrap();
@@ -102,24 +102,24 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             Reflect::set(&obj, &"tz".into(), &tz).unwrap();
             ("data", "UTCTime".into(), obj.into())
         }
-        DecodedValueKind::Date(date) => ("data", "DATE".into(), serialize_date(&date).into()),
+        DecodedValueKind::Date(date) => ("data", "DATE".into(), serialize_date(&date)),
         DecodedValueKind::TimeOfDay(time_of_day) => (
             "data",
             "TIME-OF-DAY".into(),
-            serialize_time_of_day(&time_of_day).into(),
+            serialize_time_of_day(&time_of_day),
         ),
         DecodedValueKind::DateTime(date_time) => {
             let obj = Object::new();
             Reflect::set(
                 &obj,
                 &"date".into(),
-                &serialize_date(&date_time.date).into(),
+                &serialize_date(&date_time.date),
             )
             .unwrap();
             Reflect::set(
                 &obj,
                 &"time".into(),
-                &serialize_time_of_day(&date_time.time_of_day).into(),
+                &serialize_time_of_day(&date_time.time_of_day),
             )
             .unwrap();
             ("data", "DATE-TIME".into(), obj.into())
@@ -153,9 +153,8 @@ fn serialize_decoded_value_metadata(metadata: &DecodedValueMetadata) -> JsValue 
         Reflect::set(
             &obj,
             &"typeIdent".into(),
-            &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&type_ident))
-                .expect("serialize typeIdent")
-                .into(),
+            &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(type_ident))
+                .expect("serialize typeIdent"),
         )
         .unwrap();
     }
@@ -259,7 +258,7 @@ pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsV
 
     let arr = Array::new();
     for value in values {
-        arr.push(&serialize_decoded_value(value).into());
+        arr.push(&serialize_decoded_value(value));
     }
     arr.into()
 }
