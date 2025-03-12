@@ -1,9 +1,31 @@
 Real DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
+SpecialReal ::= ENUMERATED {
+    plus-infinity (0),
+    minus-infinity (1)
+}
+
 Real ::= [UNIVERSAL 9] SEQUENCE {
     mantissa INTEGER,
     base INTEGER (2 | 10),
-    exponent INTEGER
+    exponent INTEGER,
+    special SpecialReal OPTIONAL
+    -- the `special` component is not part of the standard definition of REAL,
+    -- and is used internally by asn1chef for specia real values
+}
+
+plus-infinity Real ::= {
+    mantissa 0,
+    base 2,
+    exponent 0,
+    special plus-infinity
+}
+
+minus-infinity Real ::= {
+    mantissa 0,
+    base 2,
+    exponent 0,
+    special minus-infinity
 }
 
 END

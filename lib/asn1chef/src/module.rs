@@ -2,13 +2,26 @@ use std::{fmt::Display, marker::PhantomData};
 
 use crate::{
     types::TaggedType,
-    values::{Oid, BuiltinValue},
+    values::{BuiltinValue, Oid},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleIdentifier {
     pub name: String,
     pub oid: Option<Oid>,
+}
+
+impl ModuleIdentifier {
+    pub fn with_name(name: String) -> ModuleIdentifier {
+        ModuleIdentifier { name, oid: None }
+    }
+
+    pub fn with_id(name: String, oid: Oid) -> ModuleIdentifier {
+        ModuleIdentifier {
+            name,
+            oid: Some(oid),
+        }
+    }
 }
 
 impl ModuleIdentifier {
@@ -50,6 +63,12 @@ impl Display for ModuleIdentifier {
 pub struct QualifiedIdentifier {
     pub module: ModuleIdentifier,
     pub name: String,
+}
+
+impl QualifiedIdentifier {
+    pub fn new(module: ModuleIdentifier, name: String) -> QualifiedIdentifier {
+        QualifiedIdentifier { module, name }
+    }
 }
 
 impl Display for QualifiedIdentifier {

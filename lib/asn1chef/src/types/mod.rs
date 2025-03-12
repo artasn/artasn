@@ -125,7 +125,7 @@ impl Tag {
             Class::ContextSpecific => 0b10,
             Class::Private => 0b11,
         };
-        let form = match (ctx.is_outer_explicit, ctx.ty.form()) {
+        let form = match (ctx.is_outer_explicit, ctx.ty.form(self)) {
             // if not the outer tag of an EXPLICIT definition and is primitive, form = 0
             (false, TypeForm::Primitive) => 0b0,
             // if either the outer tag of an EXPLICIT definition or is constructed, form = 1
@@ -417,9 +417,14 @@ impl BuiltinType {
     }
 
     /// TODO: This needs a lot more checked. See https://stackoverflow.com/a/70213161.
-    pub fn form(&self) -> TypeForm {
+    pub fn form(&self, tag: &Tag) -> TypeForm {
         match self {
-            Self::Structure(_) | Self::StructureOf(_) => TypeForm::Constructed,
+            Self::Structure(_) | Self::StructureOf(_) => {
+                match (tag.class, TagType::try_from(tag.num)) {
+                    (Class::Universal, Ok(TagType::Real)) => TypeForm::Primitive,
+                    _ => TypeForm::Constructed,
+                }
+            }
             _ => TypeForm::Primitive,
         }
     }

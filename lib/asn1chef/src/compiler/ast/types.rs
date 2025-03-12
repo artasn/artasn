@@ -2,20 +2,18 @@ use super::{values, AstParser};
 use crate::{compiler::parser::*, module::*, types::*};
 
 lazy_static::lazy_static! {
-    static ref EMBEDDED_PDV_IDENT: QualifiedIdentifier = QualifiedIdentifier {
-        module: ModuleIdentifier {
-            name: String::from("EmbeddedPDV"),
-            oid: None,
-        },
-        name: String::from("EmbeddedPDV"),
-    };
-    static ref CHARACTER_STRING_IDENT: QualifiedIdentifier = QualifiedIdentifier {
-        module: ModuleIdentifier {
-            name: String::from("CharacterString"),
-            oid: None,
-        },
-        name: String::from("CharacterString"),
-    };
+    static ref REAL_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("Real")),
+        String::from("Real"),
+    );
+    static ref EMBEDDED_PDV_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("EmbeddedPDV")),
+        String::from("EmbeddedPDV"),
+    );
+    static ref CHARACTER_STRING_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("CharacterString")),
+        String::from("CharacterString"),
+    );
 }
 
 fn parse_structure_components(
@@ -178,7 +176,12 @@ fn parse_builtin_type(
             BuiltinType::CharacterString(TagType::ObjectDescriptor)
         }
         AstBuiltinType::External(_) => todo!("External"),
-        AstBuiltinType::Real(_) => todo!("Real"),
+        AstBuiltinType::Real(_) => {
+            return Ok(UntaggedType::Reference(AstElement::new(
+                REAL_IDENT.clone(),
+                builtin.loc,
+            )))
+        }
         AstBuiltinType::Enumerated(enumerated) => parse_enumerated_type(parser, enumerated)?,
         AstBuiltinType::EmbeddedPDV(_) => {
             return Ok(UntaggedType::Reference(AstElement::new(

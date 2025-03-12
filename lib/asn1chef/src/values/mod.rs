@@ -25,7 +25,6 @@ pub enum BuiltinValue {
     Null,
     ObjectIdentifier(ObjectIdentifier),
     RelativeOid(ObjectIdentifier),
-    Real(f64),
     Enumerated(Box<AstElement<Value>>),
     Time(Time),
     Sequence(StructureValue),
@@ -36,7 +35,6 @@ pub enum BuiltinValue {
     CharacterString(TagType, String),
     UTCTime(UTCTime),
     GeneralizedTime(GeneralizedTime),
-    // GeneralizedTime(GeneralizedTime),
     Date(Date),
     TimeOfDay(TimeOfDay),
     DateTime(DateTime),
@@ -53,7 +51,6 @@ impl BuiltinValue {
             Self::Null => TagType::Null,
             Self::ObjectIdentifier(_) => TagType::ObjectIdentifier,
             Self::RelativeOid(_) => TagType::RelativeOid,
-            Self::Real(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
             Self::Time(_) => TagType::Time,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
@@ -87,7 +84,7 @@ impl BuiltinValue {
                     buf.push(0x00);
                 }
             }
-            Self::Integer(num) => encoding::der_encode_integer(buf, num.clone()),
+            Self::Integer(num) => encoding::der_encode_integer(buf, num),
             Self::BitString(bit_string) => {
                 let le_bytes = bit_string.to_bytes_le();
                 buf.extend(&le_bytes);
@@ -137,32 +134,96 @@ impl BuiltinValue {
                         })
                     }
                 };
-                encoding::der_encode_integer(buf, num);
+                encoding::der_encode_integer(buf, &num);
             }
             Self::Time(time) => {
                 buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
             }
             Self::Sequence(structure) | Self::Set(structure) => {
-                // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
-                // and that the value provides only components in the SEQUENCE/SET type,
-                // and that the component values are in the same order as in the type definition
                 let ty_components = match &resolved_type.ty {
                     BuiltinType::Structure(structure) => &structure.components,
                     _ => unreachable!(),
                 };
-                for component in structure.components.iter().rev() {
-                    // default values aren't encoded
-                    if component.is_default {
-                        continue;
+
+                let tag = resolved_type
+                    .tag
+                    .as_ref()
+                    .expect("SEQUENCE or SET without a tag");
+                match (tag.class, TagType::try_from(tag.num)) {
+                    (Class::Universal, Ok(TagType::Real)) => {
+                        let special = structure
+                            .components
+                            .iter()
+                            .find(|component| component.name.element.as_str() == "special");
+                        if let Some(special) = special {
+                            match special.value.resolve(context)? {
+                                BuiltinValue::Enumerated(enumerated) => {
+                                    match enumerated.resolve(context)? {
+                                        BuiltinValue::Integer(int) => {
+                                            let int: u32 = int
+                                                .try_into()
+                                                .expect("SpecialReal is out of bounds");
+                                            if int == 0 {
+                                                // PLUS-INFINITY
+                                                buf.push(0x40);
+                                            } else if int == 1 {
+                                                // MINUS-INFINITY
+                                                buf.push(0x41);
+                                            } else {
+                                                unreachable!();
+                                            }
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            macro_rules! to_int {
+                                ( $component:expr) => {{
+                                    let component = &$component;
+                                    match component.value.resolve(context)? {
+                                        BuiltinValue::Integer(int) => int.clone(),
+                                        _ => unreachable!(),
+                                    }
+                                }};
+                            }
+
+                            let mantissa = to_int!(structure.components[0]);
+                            let base = to_int!(structure.components[1]);
+                            let exponent = to_int!(structure.components[2]);
+
+                            encoding::der_encode_real(
+                                buf,
+                                mantissa,
+                                base.try_into().expect("base is out of bounds"),
+                                exponent,
+                            );
+                        }
                     }
-                    let value = component.value.resolve(context)?;
-                    let value_ty = ty_components
-                        .iter()
-                        .find(|ty_component| ty_component.name.element == component.name.element)
-                        .expect("find type component matching value component for SEQUENCE/SET")
-                        .component_type
-                        .resolve(context)?;
-                    value.der_encode(buf, context, &value_ty)?;
+                    _ => {
+                        // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
+                        // and that the value provides only components in the SEQUENCE/SET type,
+                        // and that the component values are in the same order as in the type definition
+                        for component in structure.components.iter().rev() {
+                            // default values aren't encoded
+                            if component.is_default {
+                                continue;
+                            }
+                            let value = component.value.resolve(context)?;
+                            let value_ty = ty_components
+                                .iter()
+                                .find(|ty_component| {
+                                    ty_component.name.element == component.name.element
+                                })
+                                .expect(
+                                    "find type component matching value component for SEQUENCE/SET",
+                                )
+                                .component_type
+                                .resolve(context)?;
+                            value.der_encode(buf, context, &value_ty)?;
+                        }
+                    }
                 }
             }
             Self::SequenceOf(structure) | Self::SetOf(structure) => {
@@ -201,7 +262,6 @@ impl BuiltinValue {
             Self::Duration(duration) => {
                 buf.extend(duration.to_ber_string().into_bytes().into_iter().rev());
             }
-            other => todo!("{:#?}", other),
         }
 
         let tag = resolved_type.tag.as_ref();
@@ -285,7 +345,6 @@ impl ValueResolve for AstElement<Value> {
             (BuiltinValue::ObjectIdentifier(lhs), BuiltinValue::ObjectIdentifier(rhs)) => {
                 lhs.resolve_oid(context)? == rhs.resolve_oid(context)?
             }
-            (BuiltinValue::Real(lhs), BuiltinValue::Real(rhs)) => lhs == rhs,
             (BuiltinValue::Enumerated(lhs), BuiltinValue::Enumerated(rhs)) => {
                 lhs.try_eq(context, rhs)?
             }

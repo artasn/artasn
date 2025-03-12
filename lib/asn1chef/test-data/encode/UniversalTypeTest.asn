@@ -32,7 +32,7 @@ SequenceType ::= SEQUENCE {
     objectIdentifier OBJECT IDENTIFIER,
     objectDescriptor ObjectDescriptor,
     -- external EXTERNAL,
-    -- real REAL,
+    real REAL,
     enumerated EnumeratedType,
     embeddedPDV EMBEDDED PDV,
     utf8String UTF8String,
@@ -69,7 +69,7 @@ sequenceValue SequenceType ::= {
     objectIdentifier { joint-iso-itu-t asn1chef(1337) test(47) oid(81) },
     objectDescriptor "ObjectDescriptor",
     -- external EXTERNAL,
-    -- real REAL,
+    real { mantissa 1, base 2, exponent -1 },
     enumerated baz,
     embeddedPDV {
         identification syntax : { joint-iso-itu-t asn1chef(1337) test(47) embedded-pdv-syntax(82) },

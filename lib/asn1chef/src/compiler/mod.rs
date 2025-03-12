@@ -91,6 +91,14 @@ impl Display for CompileError {
     }
 }
 
+lazy_static::lazy_static! {
+    static ref STDLIB_MODULES: Vec<(&'static str, &'static str)> = vec![
+        ("Real.asn", include_str!("../../stdlib/Real.asn")),
+        ("EmbeddedPDV.asn", include_str!("../../stdlib/EmbeddedPDV.asn")),
+        ("CharacterString.asn", include_str!("../../stdlib/CharacterString.asn")),
+    ];
+}
+
 pub struct Compiler {
     sources: Vec<SourceFile>,
     pub config: CompilerConfig,
@@ -105,14 +113,9 @@ impl Compiler {
     }
 
     pub fn add_stdlib(&mut self) -> CompileResult<()> {
-        self.add_source(
-            String::from("EmbeddedPDV.asn"),
-            include_str!("../../stdlib/EmbeddedPDV.asn").to_string(),
-        )?;
-        self.add_source(
-            String::from("CharacterString.asn"),
-            include_str!("../../stdlib/CharacterString.asn").to_string(),
-        )?;
+        for (name, source) in STDLIB_MODULES.iter() {
+            self.add_source(name.to_string(), source.to_string())?;
+        }
 
         Ok(())
     }
