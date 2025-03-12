@@ -109,6 +109,10 @@ impl Compiler {
             String::from("EmbeddedPDV.asn"),
             include_str!("../../stdlib/EmbeddedPDV.asn").to_string(),
         )?;
+        self.add_source(
+            String::from("CharacterString.asn"),
+            include_str!("../../stdlib/CharacterString.asn").to_string(),
+        )?;
 
         Ok(())
     }

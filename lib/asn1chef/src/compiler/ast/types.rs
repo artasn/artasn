@@ -9,6 +9,13 @@ lazy_static::lazy_static! {
         },
         name: String::from("EmbeddedPDV"),
     };
+    static ref CHARACTER_STRING_IDENT: QualifiedIdentifier = QualifiedIdentifier {
+        module: ModuleIdentifier {
+            name: String::from("CharacterString"),
+            oid: None,
+        },
+        name: String::from("CharacterString"),
+    };
 }
 
 fn parse_structure_components(
@@ -200,7 +207,10 @@ fn parse_builtin_type(
             BuiltinType::CharacterString(TagType::UniversalString)
         }
         AstBuiltinType::CharacterString(_) => {
-            BuiltinType::CharacterString(TagType::CharacterString)
+            return Ok(UntaggedType::Reference(AstElement::new(
+                CHARACTER_STRING_IDENT.clone(),
+                builtin.loc,
+            )))
         }
         AstBuiltinType::BMPString(_) => BuiltinType::CharacterString(TagType::BMPString),
         AstBuiltinType::Date(_) => BuiltinType::Date,

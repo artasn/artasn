@@ -312,4 +312,5 @@ mod test {
         "encode/ChoiceTestAutomaticTagging"
     );
     json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
+    json_test!(test_encode_character_string, "encode/CharacterStringTest");
 }

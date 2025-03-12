@@ -1,0 +1,32 @@
+{
+    "module": "CharacterStringTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "with-syntaxes",
+            "der": "3D14A00EA00C80048B092F0081048B092F0182021337"
+        },
+        {
+            "name": "with-syntax",
+            "der": "3D0CA00681048B092F0282021337"
+        },
+        {
+            "name": "with-presentation-context-id",
+            "der": "3D0AA0048202232982021337"
+        },
+        {
+            "name": "with-context-negotiation",
+            "der": "3D12A00CA30A8002232981048B092F0182021337"
+        },
+        {
+            "name": "with-transfer-syntax",
+            "der": "3D0CA00684048B092F0182021337"
+        },
+        {
+            "name": "with-fixed",
+            "der": "3D08A002850082021337"
+        }
+    ]
+}

@@ -239,6 +239,7 @@ fn parse_type_constraint(
     })
 }
 
+// TODO: apply constraints to components of structures recursively
 pub fn parse_type_assignment_constraint(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
