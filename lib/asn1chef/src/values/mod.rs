@@ -35,6 +35,7 @@ pub enum BuiltinValue {
     Choice(ChoiceValue),
     CharacterString(TagType, String),
     UTCTime(UTCTime),
+    GeneralizedTime(GeneralizedTime),
     // GeneralizedTime(GeneralizedTime),
     Date(Date),
     TimeOfDay(TimeOfDay),
@@ -60,6 +61,7 @@ impl BuiltinValue {
             Self::Choice(choice) => choice.value.resolve(context)?.tag_type(context)?,
             Self::CharacterString(tag_type, _) => *tag_type,
             Self::UTCTime(_) => TagType::UTCTime,
+            Self::GeneralizedTime(_) => TagType::GeneralizedTime,
             Self::Date(_) => TagType::Date,
             Self::TimeOfDay(_) => TagType::TimeOfDay,
             Self::DateTime(_) => TagType::DateTime,
@@ -184,6 +186,9 @@ impl BuiltinValue {
             Self::UTCTime(utc) => {
                 buf.extend(utc.to_ber_string().into_bytes().into_iter().rev());
             }
+            Self::GeneralizedTime(gt) => {
+                buf.extend(gt.to_ber_string().into_bytes().into_iter().rev());
+            }
             Self::Date(date) => {
                 buf.extend(date.to_ber_string().into_bytes().into_iter().rev());
             }
@@ -196,7 +201,7 @@ impl BuiltinValue {
             Self::Duration(duration) => {
                 buf.extend(duration.to_ber_string().into_bytes().into_iter().rev());
             }
-            other => todo!("{:#02X?}", other),
+            other => todo!("{:#?}", other),
         }
 
         let tag = resolved_type.tag.as_ref();

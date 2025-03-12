@@ -121,7 +121,7 @@ fn parse_choice_type(
 
                 Ok(ChoiceAlternative {
                     name: alternative.element.name.as_ref().map(|name| name.0.clone()),
-                    ty: Box::new(ty),
+                    alternative_type: Box::new(ty),
                 })
             })
             .collect::<Result<Vec<ChoiceAlternative>>>()?,
@@ -199,7 +199,7 @@ fn parse_builtin_type(
         AstBuiltinType::VideotexString(_) => BuiltinType::CharacterString(TagType::VideotexString),
         AstBuiltinType::IA5String(_) => BuiltinType::CharacterString(TagType::IA5String),
         AstBuiltinType::UTCTime(_) => BuiltinType::UTCTime,
-        AstBuiltinType::GeneralizedTime(_) => todo!("GeneralizedTime"),
+        AstBuiltinType::GeneralizedTime(_) => BuiltinType::GeneralizedTime,
         AstBuiltinType::GraphicString(_) => BuiltinType::CharacterString(TagType::GraphicString),
         AstBuiltinType::VisibleString(_) => BuiltinType::CharacterString(TagType::VisibleString),
         AstBuiltinType::GeneralString(_) => BuiltinType::CharacterString(TagType::GeneralString),

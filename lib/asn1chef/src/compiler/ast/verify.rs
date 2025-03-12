@@ -127,7 +127,7 @@ fn get_choice_alternative_leaves(
     parent_tag_series: Vec<TagData>,
 ) -> Result<()> {
     for alternative in &choice.alternatives {
-        let alternative_ty = alternative.ty.resolve(context)?;
+        let alternative_ty = alternative.alternative_type.resolve(context)?;
         match &alternative_ty.ty {
             BuiltinType::Choice(choice) => {
                 let mut tag_series = parent_tag_series.clone();

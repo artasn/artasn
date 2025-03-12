@@ -39,16 +39,16 @@ fn parse_base_10_integer<T: Num + NumCast + Copy, R: RangeBounds<u64>>(
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum UTCTimeZoneSign {
+pub enum TimeZoneSign {
     Plus,
     Minus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum UTCTimeZone {
+pub enum TimeZone {
     Z,
     Offset {
-        sign: UTCTimeZoneSign,
+        sign: TimeZoneSign,
         hour: u8,
         minute: u8,
     },
@@ -62,7 +62,7 @@ pub struct UTCTime {
     pub hour: u8,
     pub minute: u8,
     pub second: Option<u8>,
-    pub tz: UTCTimeZone,
+    pub tz: TimeZone,
 }
 
 impl UTCTime {
@@ -78,16 +78,16 @@ impl UTCTime {
         }
 
         let (time, tz) = if value[value.len() - 1] == b'Z' {
-            (&value[..value.len() - 1], UTCTimeZone::Z)
+            (&value[..value.len() - 1], TimeZone::Z)
         } else {
             let tz_sign = value[value.len() - 5];
             if tz_sign == b'+' || tz_sign == b'-' {
                 (
                     &value[..value.len() - 5],
-                    UTCTimeZone::Offset {
+                    TimeZone::Offset {
                         sign: match tz_sign {
-                            b'+' => UTCTimeZoneSign::Plus,
-                            b'-' => UTCTimeZoneSign::Minus,
+                            b'+' => TimeZoneSign::Plus,
+                            b'-' => TimeZoneSign::Minus,
                             _ => unreachable!(),
                         },
                         hour: parse_base_10_integer(
@@ -103,7 +103,7 @@ impl UTCTime {
                 )
             } else {
                 return Err(Error {
-                    kind: ErrorKind::Ast("UTCTime time zone is malformed".to_string()),
+                    kind: ErrorKind::Ast("time zone is malformed".to_string()),
                     loc: str.loc,
                 });
             }
@@ -118,7 +118,7 @@ impl UTCTime {
         let year = parse_base_10_integer(&str.as_ref().map(|_| &time[..2]), 0..100)?;
         let month = parse_base_10_integer(&str.as_ref().map(|_| &time[2..4]), 1..=12)?;
         let day = parse_base_10_integer(&str.as_ref().map(|_| &time[4..6]), 1..=31)?;
-        let hour = parse_base_10_integer(&str.as_ref().map(|_| &time[6..8]), 0..=24)?;
+        let hour = parse_base_10_integer(&str.as_ref().map(|_| &time[6..8]), 0..24)?;
         let minute = parse_base_10_integer(&str.as_ref().map(|_| &time[8..10]), 0..60)?;
         let second = match time.len() {
             10 => None,
@@ -151,16 +151,182 @@ impl UTCTime {
             str.write_fmt(format_args!("{:02}", second)).unwrap();
         }
         match &self.tz {
-            UTCTimeZone::Z => str.write_str("Z").unwrap(),
-            UTCTimeZone::Offset { sign, hour, minute } => {
+            TimeZone::Z => str.write_str("Z").unwrap(),
+            TimeZone::Offset { sign, hour, minute } => {
                 str.write_str(match sign {
-                    UTCTimeZoneSign::Plus => "+",
-                    UTCTimeZoneSign::Minus => "-",
+                    TimeZoneSign::Plus => "+",
+                    TimeZoneSign::Minus => "-",
                 })
                 .unwrap();
                 str.write_fmt(format_args!("{:02}", hour)).unwrap();
                 str.write_fmt(format_args!("{:02}", minute)).unwrap();
             }
+        }
+        str
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GeneralizedTime {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: Option<u8>,
+    pub second: Option<u8>,
+    pub millisecond: Option<u16>,
+    pub tz: Option<TimeZone>,
+}
+
+impl GeneralizedTime {
+    pub fn parse(str: &AstElement<&[u8]>) -> Result<GeneralizedTime> {
+        let mut value = str.element;
+
+        // shorted possible value is YYYYMMDDHH
+        if value.len() < 10 {
+            return Err(Error {
+                kind: ErrorKind::Ast("GeneralizedTime value is too short".to_string()),
+                loc: str.loc,
+            });
+        }
+
+        let tz = if value[value.len() - 1] == b'Z' {
+            value = &value[..value.len() - 1];
+            Some(TimeZone::Z)
+        } else {
+            let tz_sign = value[value.len() - 5];
+            if tz_sign == b'+' || tz_sign == b'-' {
+                let tz = TimeZone::Offset {
+                    sign: match tz_sign {
+                        b'+' => TimeZoneSign::Plus,
+                        b'-' => TimeZoneSign::Minus,
+                        _ => unreachable!(),
+                    },
+                    hour: parse_base_10_integer(
+                        &str.as_ref()
+                            .map(|_| &value[value.len() - 4..value.len() - 2]),
+                        0..24,
+                    )?,
+                    minute: parse_base_10_integer(
+                        &str.as_ref().map(|_| &value[value.len() - 2..]),
+                        0..60,
+                    )?,
+                };
+                value = &value[..value.len() - 5];
+                Some(tz)
+            } else {
+                return Err(Error {
+                    kind: ErrorKind::Ast("time zone is malformed".to_string()),
+                    loc: str.loc,
+                });
+            }
+        };
+
+        let year = parse_base_10_integer(&str.as_ref().map(|_| &value[..4]), 0..10000)?;
+        let month = parse_base_10_integer(&str.as_ref().map(|_| &value[4..6]), 1..=12)?;
+        let day = parse_base_10_integer(&str.as_ref().map(|_| &value[6..8]), 1..=31)?;
+        let hour = parse_base_10_integer(&str.as_ref().map(|_| &value[8..10]), 0..24)?;
+
+        value = &value[10..];
+        let minute = if value.len() > 0 {
+            if value.len() < 2 {
+                return Err(Error {
+                    kind: ErrorKind::Ast(
+                        "GeneralizedTime is malformed (expecting 2-digit minute)".to_string(),
+                    ),
+                    loc: str.loc,
+                });
+            }
+            let minute = parse_base_10_integer(&str.as_ref().map(|_| &value[..2]), 0..60)?;
+            value = &value[2..];
+            Some(minute)
+        } else {
+            None
+        };
+        let second = if value.len() > 0 {
+            if value.len() < 2 {
+                return Err(Error {
+                    kind: ErrorKind::Ast(
+                        "GeneralizedTime is malformed (expecting 2-digit second)".to_string(),
+                    ),
+                    loc: str.loc,
+                });
+            }
+            let second = parse_base_10_integer(&str.as_ref().map(|_| &value[..2]), 0..60)?;
+            value = &value[2..];
+            Some(second)
+        } else {
+            None
+        };
+        let millisecond = if value.len() > 0 {
+            if value[0] != b'.' {
+                return Err(Error {
+                    kind: ErrorKind::Ast(
+                        "GeneralizedTime is malformed (expecting '.' before fractional second)"
+                            .to_string(),
+                    ),
+                    loc: str.loc,
+                });
+            }
+            value = &value[1..];
+            if value.len() == 0 || value.len() > 3 {
+                return Err(Error {
+                    kind: ErrorKind::Ast(
+                        "GeneralizedTime is malformed (expecting 1-3 digit fractional second)"
+                            .to_string(),
+                    ),
+                    loc: str.loc,
+                });
+            }
+            Some(parse_base_10_integer(
+                &str.as_ref().map(|_| value),
+                0..1000,
+            )?)
+        } else {
+            None
+        };
+
+        Ok(GeneralizedTime {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            millisecond,
+            tz,
+        })
+    }
+
+    pub fn to_ber_string(&self) -> String {
+        let mut str = String::with_capacity(17);
+        str.write_fmt(format_args!("{:02}", self.year)).unwrap();
+        str.write_fmt(format_args!("{:02}", self.month)).unwrap();
+        str.write_fmt(format_args!("{:02}", self.day)).unwrap();
+        str.write_fmt(format_args!("{:02}", self.hour)).unwrap();
+        if let Some(minute) = &self.minute {
+            str.write_fmt(format_args!("{:02}", minute)).unwrap();
+        }
+        if let Some(second) = &self.second {
+            str.write_fmt(format_args!("{:02}", second)).unwrap();
+        }
+        if let Some(millisecond) = &self.millisecond {
+            str.write_fmt(format_args!(".{}", millisecond)).unwrap();
+        }
+        match &self.tz {
+            Some(tz) => match tz {
+                TimeZone::Z => str.write_str("Z").unwrap(),
+                TimeZone::Offset { sign, hour, minute } => {
+                    str.write_str(match sign {
+                        TimeZoneSign::Plus => "+",
+                        TimeZoneSign::Minus => "-",
+                    })
+                    .unwrap();
+                    str.write_fmt(format_args!("{:02}", hour)).unwrap();
+                    str.write_fmt(format_args!("{:02}", minute)).unwrap();
+                }
+            },
+            None => (),
         }
         str
     }
@@ -400,7 +566,7 @@ impl Duration {
 mod test {
     use crate::{
         compiler::parser::{AstElement, Loc},
-        values::{Date, DateTime, TimeOfDay, UTCTime, UTCTimeZone, UTCTimeZoneSign},
+        values::{Date, DateTime, TimeOfDay, TimeZone, TimeZoneSign, UTCTime},
     };
 
     #[test]
@@ -414,7 +580,7 @@ mod test {
                 hour: 20,
                 minute: 30,
                 second: None,
-                tz: UTCTimeZone::Z,
+                tz: TimeZone::Z,
             }
         );
         assert_eq!(
@@ -426,7 +592,7 @@ mod test {
                 hour: 20,
                 minute: 30,
                 second: Some(22),
-                tz: UTCTimeZone::Z,
+                tz: TimeZone::Z,
             }
         );
         assert_eq!(
@@ -438,8 +604,8 @@ mod test {
                 hour: 20,
                 minute: 30,
                 second: None,
-                tz: UTCTimeZone::Offset {
-                    sign: UTCTimeZoneSign::Minus,
+                tz: TimeZone::Offset {
+                    sign: TimeZoneSign::Minus,
                     hour: 6,
                     minute: 0
                 },
@@ -454,8 +620,8 @@ mod test {
                 hour: 20,
                 minute: 30,
                 second: None,
-                tz: UTCTimeZone::Offset {
-                    sign: UTCTimeZoneSign::Plus,
+                tz: TimeZone::Offset {
+                    sign: TimeZoneSign::Plus,
                     hour: 16,
                     minute: 30
                 },

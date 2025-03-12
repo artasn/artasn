@@ -249,19 +249,15 @@ pub fn register_all_constraints(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                match constraints::parse_type_assignment_constraint(&parser, type_assignment) {
-                    Ok(Some(result)) => results.push(Ok(result)),
-                    Ok(None) => (),
-                    Err(err) => results.push(Err(err)),
-                }
+                results.push(constraints::parse_type_assignment_constraint(&parser, type_assignment));
             }
         }
         results
     }) {
-        Ok(constraints) => {
-            for (ident, constraint) in constraints {
+        Ok(pending_constraints) => {
+            for (ident, pending) in pending_constraints {
                 let ty = context.lookup_type_mut(&ident).expect("lookup_type");
-                ty.constraint = Some(constraint);
+                constraints::apply_pending_constraint(ty, pending);
             }
             Vec::new()
         }

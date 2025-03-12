@@ -28,7 +28,7 @@ pub struct StructureOf {
 #[derive(Debug, Clone)]
 pub struct ChoiceAlternative {
     pub name: AstElement<String>,
-    pub ty: Box<TaggedType>,
+    pub alternative_type: Box<TaggedType>,
 }
 
 #[derive(Debug, Clone)]

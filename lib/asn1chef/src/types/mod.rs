@@ -197,7 +197,7 @@ impl ResolvedType {
             None => match &self.ty {
                 BuiltinType::Choice(choice) => {
                     for alternative in &choice.alternatives {
-                        let alternative_ty = alternative.ty.resolve(context)?;
+                        let alternative_ty = alternative.alternative_type.resolve(context)?;
                         alternative_ty.extend_possible_tags(context, tags)?;
                     }
                 }
@@ -383,6 +383,7 @@ pub enum BuiltinType {
     Choice(Choice),
     CharacterString(TagType),
     UTCTime,
+    GeneralizedTime,
     Date,
     TimeOfDay,
     DateTime,
@@ -407,6 +408,7 @@ impl BuiltinType {
             Self::Choice(_) => return None,
             Self::CharacterString(tag_type) => *tag_type,
             Self::UTCTime => TagType::UTCTime,
+            Self::GeneralizedTime => TagType::GeneralizedTime,
             Self::Date => TagType::Date,
             Self::TimeOfDay => TagType::TimeOfDay,
             Self::DateTime => TagType::DateTime,

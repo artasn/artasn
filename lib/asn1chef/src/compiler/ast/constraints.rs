@@ -208,27 +208,93 @@ fn parse_constrained_type(
     parser: &AstParser<'_>,
     ast_constrained_type: &AstElement<AstConstrainedType>,
     constrained_type: &ResolvedType,
-) -> Result<Option<Constraint>> {
+) -> Result<PendingConstraint> {
     let ast_constraint = match &ast_constrained_type.element {
         AstConstrainedType::Suffixed(suffixed) => suffixed.element.constraint.clone(),
         AstConstrainedType::TypeWithConstraint(twc) => parse_type_with_constraint(&twc.element.0),
     };
-    match ast_constraint {
-        Some(ast_constraint) => Ok(Some(parse_constraint(
+    let constraint = match ast_constraint {
+        Some(ast_constraint) => Some(parse_constraint(
             parser,
             &ast_constraint,
             constrained_type,
             ConstraintContext::Contextless,
-        )?)),
-        None => Ok(None),
-    }
+        )?),
+        None => None,
+    };
+    let component_constraints = match &ast_constrained_type.element {
+        AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
+            AstUntaggedType::BuiltinType(builtin) => match &builtin.element {
+                AstBuiltinType::Structure(structure) => {
+                    let resolved_components = match &constrained_type.ty {
+                        BuiltinType::Structure(structure) => &structure.components,
+                        _ => unreachable!(),
+                    };
+
+                    let mut component_constraints =
+                        Vec::with_capacity(structure.element.components.len());
+                    for component in &structure.element.components {
+                        let resolved_component = resolved_components
+                            .iter()
+                            .find(|resolved_component| {
+                                resolved_component.name.element == component.element.name.element.0
+                            })
+                            .expect("resolved type missing component from ast type");
+                        let component_type =
+                            resolved_component.component_type.resolve(parser.context)?;
+                        component_constraints.push((
+                            resolved_component.name.element.clone(),
+                            parse_type_constraint(parser, &component.element.ty, &component_type)?,
+                        ));
+                    }
+                    component_constraints
+                }
+                AstBuiltinType::Choice(choice) => {
+                    let resolved_alternatives = match &constrained_type.ty {
+                        BuiltinType::Choice(choice) => &choice.alternatives,
+                        _ => unreachable!(),
+                    };
+
+                    let mut alternative_constraints = Vec::with_capacity(choice.element.0.len());
+                    for alternative in &choice.element.0 {
+                        let resolved_alternative = resolved_alternatives
+                            .iter()
+                            .find(|resolved_alternative| {
+                                resolved_alternative.name.element
+                                    == alternative.element.name.element.0
+                            })
+                            .expect("resolved type missing alternative from ast type");
+                        let component_type = resolved_alternative
+                            .alternative_type
+                            .resolve(parser.context)?;
+                        alternative_constraints.push((
+                            resolved_alternative.name.element.clone(),
+                            parse_type_constraint(
+                                parser,
+                                &alternative.element.ty,
+                                &component_type,
+                            )?,
+                        ));
+                    }
+                    alternative_constraints
+                }
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
+    Ok(PendingConstraint {
+        constraint,
+        component_constraints,
+    })
 }
 
 fn parse_type_constraint(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
     constrained_type: &ResolvedType,
-) -> Result<Option<Constraint>> {
+) -> Result<PendingConstraint> {
     Ok(match &ty.element {
         AstType::TaggedType(tagged_type) => {
             parse_constrained_type(parser, &tagged_type.element.ty, constrained_type)?
@@ -239,11 +305,15 @@ fn parse_type_constraint(
     })
 }
 
-// TODO: apply constraints to components of structures recursively
+pub struct PendingConstraint {
+    pub constraint: Option<Constraint>,
+    pub component_constraints: Vec<(String, PendingConstraint)>,
+}
+
 pub fn parse_type_assignment_constraint(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
-) -> Result<Option<(QualifiedIdentifier, Constraint)>> {
+) -> Result<(QualifiedIdentifier, PendingConstraint)> {
     let name = type_assignment.element.name.element.0.clone();
     let ident = QualifiedIdentifier {
         module: parser.module.clone(),
@@ -253,10 +323,40 @@ pub fn parse_type_assignment_constraint(
     let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
     let constrained_type = constrained_type.resolve(parser.context)?;
 
-    let constraint = parse_type_constraint(parser, &type_assignment.element.ty, &constrained_type)?;
+    let pending = parse_type_constraint(parser, &type_assignment.element.ty, &constrained_type)?;
+    Ok((ident, pending))
+}
 
-    match constraint {
-        Some(constraint) => Ok(Some((ident, constraint))),
-        None => Ok(None),
+pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingConstraint) {
+    if let Some(constraint) = pending.constraint {
+        tagged_type.constraint = Some(constraint);
+    }
+    if pending.component_constraints.len() > 0 {
+        match &mut tagged_type.ty {
+            UntaggedType::BuiltinType(builtin) => match builtin {
+                BuiltinType::Structure(structure) => {
+                    for (component_name, pending) in pending.component_constraints {
+                        let component = structure
+                            .components
+                            .iter_mut()
+                            .find(|component| component.name.element == component_name)
+                            .expect("pending constraint component not found in type");
+                        apply_pending_constraint(&mut component.component_type, pending);
+                    }
+                }
+                BuiltinType::Choice(choice) => {
+                    for (alternative_name, pending) in pending.component_constraints {
+                        let alternative = choice
+                            .alternatives
+                            .iter_mut()
+                            .find(|alternative| alternative.name.element == alternative_name)
+                            .expect("pending constraint alternative not found in type");
+                        apply_pending_constraint(&mut alternative.alternative_type, pending);
+                    }
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!("typereference aliases can't have constrained components"),
+        }
     }
 }

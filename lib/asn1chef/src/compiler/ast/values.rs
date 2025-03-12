@@ -275,6 +275,9 @@ pub fn parse_value(
                     BuiltinType::UTCTime => BuiltinValue::UTCTime(UTCTime::parse(
                         &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
                     )?),
+                    BuiltinType::GeneralizedTime => BuiltinValue::GeneralizedTime(
+                        GeneralizedTime::parse(&str_lit.as_ref().map(|lit| lit.data.as_bytes()))?,
+                    ),
                     BuiltinType::Date => BuiltinValue::Date(Date::parse(
                         &str_lit.as_ref().map(|lit| lit.data.as_bytes()),
                     )?),
@@ -297,31 +300,31 @@ pub fn parse_value(
                         })
                     }
                 },
-                AstBuiltinValue::ObjectIdentifierValue(object_id) => {
-                    match &target_type.ty {
-                        BuiltinType::ObjectIdentifier => {
-                            BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
-                                parser,
-                                object_id,
-                                TagType::ObjectIdentifier,
-                            )?)
-                        }
-                        BuiltinType::RelativeOid => {
-                            BuiltinValue::RelativeOid(object_id::parse_object_identifier(
-                                parser,
-                                object_id,
-                                TagType::RelativeOid,
-                            )?)
-                        }
-                        other_type => return Err(Error {
+                AstBuiltinValue::ObjectIdentifierValue(object_id) => match &target_type.ty {
+                    BuiltinType::ObjectIdentifier => {
+                        BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
+                            parser,
+                            object_id,
+                            TagType::ObjectIdentifier,
+                        )?)
+                    }
+                    BuiltinType::RelativeOid => {
+                        BuiltinValue::RelativeOid(object_id::parse_object_identifier(
+                            parser,
+                            object_id,
+                            TagType::RelativeOid,
+                        )?)
+                    }
+                    other_type => {
+                        return Err(Error {
                             kind: ErrorKind::Ast(format!(
                                 "OBJECT IDENTIFIER or RELATIVE-OID value cannot be assigned to {}",
                                 other_type,
                             )),
                             loc: builtin.loc,
-                        }),
+                        })
                     }
-                }
+                },
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
                 AstBuiltinValue::StructureValue(seq_val) => {
                     parse_structure_value(parser, seq_val, target_type)?
@@ -354,7 +357,7 @@ pub fn parse_value(
                             for alternative in &ty.alternatives {
                                 if alternative.name.element == choice.element.alternative.element.0
                                 {
-                                    break 'block &alternative.ty;
+                                    break 'block &alternative.alternative_type;
                                 }
                             }
 
