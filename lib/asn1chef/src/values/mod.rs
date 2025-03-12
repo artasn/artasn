@@ -25,6 +25,7 @@ pub enum BuiltinValue {
     Null,
     ObjectIdentifier(ObjectIdentifier),
     RelativeOid(ObjectIdentifier),
+    RealLiteral(RealLiteral),
     Enumerated(Box<AstElement<Value>>),
     Time(Time),
     Sequence(StructureValue),
@@ -51,6 +52,7 @@ impl BuiltinValue {
             Self::Null => TagType::Null,
             Self::ObjectIdentifier(_) => TagType::ObjectIdentifier,
             Self::RelativeOid(_) => TagType::RelativeOid,
+            Self::RealLiteral(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
             Self::Time(_) => TagType::Time,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
@@ -84,7 +86,18 @@ impl BuiltinValue {
                     buf.push(0x00);
                 }
             }
-            Self::Integer(num) => encoding::der_encode_integer(buf, num),
+            Self::Integer(num) => {
+                if let Some(tag) = &resolved_type.tag {
+                    match (tag.class, TagType::try_from(tag.num)) {
+                        (Class::Universal, Ok(TagType::Real)) => {
+                            encoding::der_encode_real(buf, num.clone(), 10, BigInt::ZERO)
+                        }
+                        _ => encoding::der_encode_integer(buf, num),
+                    }
+                } else {
+                    encoding::der_encode_integer(buf, num);
+                }
+            }
             Self::BitString(bit_string) => {
                 let le_bytes = bit_string.to_bytes_le();
                 buf.extend(&le_bytes);
@@ -120,6 +133,9 @@ impl BuiltinValue {
                     encoding::write_vlq(*node, buf);
                 }
             }
+            Self::RealLiteral(lit) => {
+                encoding::der_encode_real(buf, lit.mantissa.clone(), 10, lit.exponent.clone());
+            }
             Self::Enumerated(enumerated) => {
                 let resolved = enumerated.resolve(context)?;
                 let num = match resolved {
@@ -151,10 +167,9 @@ impl BuiltinValue {
                     .expect("SEQUENCE or SET without a tag");
                 match (tag.class, TagType::try_from(tag.num)) {
                     (Class::Universal, Ok(TagType::Real)) => {
-                        let special = structure
-                            .components
-                            .iter()
-                            .find(|component| component.name.element.as_str() == "special");
+                        let special = structure.components.iter().find(|component| {
+                            component.name.element.as_str() == "asn1chef-special"
+                        });
                         if let Some(special) = special {
                             match special.value.resolve(context)? {
                                 BuiltinValue::Enumerated(enumerated) => {
@@ -169,6 +184,9 @@ impl BuiltinValue {
                                             } else if int == 1 {
                                                 // MINUS-INFINITY
                                                 buf.push(0x41);
+                                            } else if int == 2 {
+                                                // NOT-A-NUMBER
+                                                buf.push(0x42);
                                             } else {
                                                 unreachable!();
                                             }
@@ -385,4 +403,5 @@ mod test {
     );
     json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
     json_test!(test_encode_character_string, "encode/CharacterStringTest");
+    json_test!(test_encode_real, "encode/RealTest");
 }

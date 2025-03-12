@@ -331,7 +331,7 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
     if let Some(constraint) = pending.constraint {
         tagged_type.constraint = Some(constraint);
     }
-    if pending.component_constraints.len() > 0 {
+    if !pending.component_constraints.is_empty() {
         match &mut tagged_type.ty {
             UntaggedType::BuiltinType(builtin) => match builtin {
                 BuiltinType::Structure(structure) => {

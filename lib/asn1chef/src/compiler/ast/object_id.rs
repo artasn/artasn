@@ -14,6 +14,13 @@ fn lookup_root_oid_component_str(component: &str) -> Option<&OidTreeNode> {
     oid_tree::lookup_root_node(component)
 }
 
+fn big_uint_to_u64(big: &AstElement<AstNumber>) -> Result<u64> {
+    TryInto::<u64>::try_into(&big.element.0).map_err(|_| Error {
+        kind: ErrorKind::Ast("number is too large for an object identifier node".to_string()),
+        loc: big.loc,
+    })
+}
+
 pub fn name_and_oid_to_module_ident(
     name: &AstElement<AstTypeReference>,
     oid: Option<&AstElement<AstDefinitiveOid>>,
@@ -26,20 +33,22 @@ pub fn name_and_oid_to_module_ident(
                     .element
                     .0
                     .iter()
-                    .map(|elem| match &elem.element {
-                        AstDefinitiveOidComponent::Number(num) => {
-                            OidTreeNodeSearch::Number(num.element.0)
-                        }
-                        AstDefinitiveOidComponent::NamedNumber(named_num) => {
-                            OidTreeNodeSearch::Number(named_num.element.num.element.0)
-                        }
-                        AstDefinitiveOidComponent::ValueReference(val_ref) => {
-                            OidTreeNodeSearch::Name(
-                                val_ref.as_ref().map(|val_ref| val_ref.0.clone()),
-                            )
-                        }
+                    .map(|elem| {
+                        Ok(match &elem.element {
+                            AstDefinitiveOidComponent::Number(num) => {
+                                OidTreeNodeSearch::Number(big_uint_to_u64(num)?)
+                            }
+                            AstDefinitiveOidComponent::NamedNumber(named_num) => {
+                                OidTreeNodeSearch::Number(big_uint_to_u64(&named_num.element.num)?)
+                            }
+                            AstDefinitiveOidComponent::ValueReference(val_ref) => {
+                                OidTreeNodeSearch::Name(
+                                    val_ref.as_ref().map(|val_ref| val_ref.0.clone()),
+                                )
+                            }
+                        })
                     })
-                    .collect::<Vec<OidTreeNodeSearch>>();
+                    .collect::<Result<Vec<OidTreeNodeSearch>>>()?;
                 oid_tree::search(searches)?
             }),
             None => None,
@@ -77,12 +86,16 @@ pub fn parse_object_identifier(
             .map(|elem| {
                 Ok(match &elem.element {
                     AstObjectIdentifierComponent::Number(num) => {
-                        ObjectIdentifierComponent::IntegerLiteral(num.as_ref().map(|num| num.0))
+                        ObjectIdentifierComponent::IntegerLiteral(AstElement::new(
+                            big_uint_to_u64(num)?,
+                            num.loc,
+                        ))
                     }
                     AstObjectIdentifierComponent::NamedNumber(named_num) => {
-                        ObjectIdentifierComponent::IntegerLiteral(
-                            named_num.as_ref().map(|named_num| named_num.num.element.0),
-                        )
+                        ObjectIdentifierComponent::IntegerLiteral(AstElement::new(
+                            big_uint_to_u64(&named_num.element.num)?,
+                            named_num.element.num.loc,
+                        ))
                     }
                     AstObjectIdentifierComponent::ValueReference(val_ref) => {
                         parse_object_identifier_component_valref(parser, val_ref, ty)

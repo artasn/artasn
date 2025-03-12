@@ -228,7 +228,7 @@ impl GeneralizedTime {
         let hour = parse_base_10_integer(&str.as_ref().map(|_| &value[8..10]), 0..24)?;
 
         value = &value[10..];
-        let minute = if value.len() > 0 {
+        let minute = if !value.is_empty() {
             if value.len() < 2 {
                 return Err(Error {
                     kind: ErrorKind::Ast(
@@ -243,7 +243,7 @@ impl GeneralizedTime {
         } else {
             None
         };
-        let second = if value.len() > 0 {
+        let second = if !value.is_empty() {
             if value.len() < 2 {
                 return Err(Error {
                     kind: ErrorKind::Ast(
@@ -258,7 +258,7 @@ impl GeneralizedTime {
         } else {
             None
         };
-        let millisecond = if value.len() > 0 {
+        let millisecond = if !value.is_empty() {
             if value[0] != b'.' {
                 return Err(Error {
                     kind: ErrorKind::Ast(
@@ -269,7 +269,7 @@ impl GeneralizedTime {
                 });
             }
             value = &value[1..];
-            if value.len() == 0 || value.len() > 3 {
+            if value.is_empty() || value.len() > 3 {
                 return Err(Error {
                     kind: ErrorKind::Ast(
                         "GeneralizedTime is malformed (expecting 1-3 digit fractional second)"
@@ -313,21 +313,18 @@ impl GeneralizedTime {
         if let Some(millisecond) = &self.millisecond {
             str.write_fmt(format_args!(".{}", millisecond)).unwrap();
         }
-        match &self.tz {
-            Some(tz) => match tz {
-                TimeZone::Z => str.write_str("Z").unwrap(),
-                TimeZone::Offset { sign, hour, minute } => {
-                    str.write_str(match sign {
-                        TimeZoneSign::Plus => "+",
-                        TimeZoneSign::Minus => "-",
-                    })
-                    .unwrap();
-                    str.write_fmt(format_args!("{:02}", hour)).unwrap();
-                    str.write_fmt(format_args!("{:02}", minute)).unwrap();
-                }
-            },
-            None => (),
-        }
+        if let Some(tz) = &self.tz { match tz {
+            TimeZone::Z => str.write_str("Z").unwrap(),
+            TimeZone::Offset { sign, hour, minute } => {
+                str.write_str(match sign {
+                    TimeZoneSign::Plus => "+",
+                    TimeZoneSign::Minus => "-",
+                })
+                .unwrap();
+                str.write_fmt(format_args!("{:02}", hour)).unwrap();
+                str.write_fmt(format_args!("{:02}", minute)).unwrap();
+            }
+        } }
         str
     }
 }

@@ -189,7 +189,7 @@ impl Parseable for AstStringLiteral {
 }
 
 #[derive(Debug, Clone)]
-pub struct AstNumber(pub u64);
+pub struct AstNumber(pub num::BigUint);
 
 impl Parseable for AstNumber {
     fn parse(context: ParseContext) -> ParseResult<Self> {

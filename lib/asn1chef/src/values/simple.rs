@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use num::bigint::Sign;
+use num::{bigint::Sign, BigInt};
 
 use crate::{
     compiler::{
@@ -139,4 +139,10 @@ impl Display for Oid {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealLiteral {
+    pub mantissa: BigInt,
+    pub exponent: BigInt,
 }

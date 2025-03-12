@@ -1,5 +1,4 @@
 #![allow(unused)]
-
 use crate::parser::*;
 use std::{
     collections::HashSet,
@@ -255,7 +254,7 @@ impl Display for StringKind {
 #[derive(Debug, Clone)]
 pub enum TokenData {
     Named(String),
-    Number(u64),
+    Number(num::BigUint),
     String(StringKind, String),
     Keyword(Keyword),
     Operator(Operator),
@@ -325,9 +324,6 @@ pub enum ErrorKind {
         ident: String,
     },
     MalformedNumber {
-        number: String,
-    },
-    NumberTooLarge {
         number: String,
     },
     VariantUnmatched {
@@ -411,7 +407,6 @@ impl ErrorKind {
                 format!("malformed identifier '{}'", ident)
             }
             ErrorKind::MalformedNumber { number } => format!("malformed integer '{}'", number),
-            ErrorKind::NumberTooLarge { number } => format!("number {} is too large", number),
             ErrorKind::UnterminatedString => "unterminated string".to_string(),
             ErrorKind::VariantUnmatched { variant } => {
                 format!("unmatched variant '{}'", variant)
@@ -689,17 +684,14 @@ impl Tokenizer {
                 });
             }
 
-            if let Ok(number) = num.parse::<u64>() {
+            if let Ok(number) = num.parse() {
                 Ok(Some(Token {
                     kind: TokenKind::Number,
                     data: Some(TokenData::Number(number)),
                     loc,
                 }))
             } else {
-                Err(Error {
-                    kind: ErrorKind::NumberTooLarge { number: num },
-                    loc,
-                })
+                unreachable!("the tokenizer should catch malformed numbers");
             }
         } else {
             Ok(None)

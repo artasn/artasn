@@ -891,12 +891,35 @@ rule IntegerValue {
     value = Number
 }
 
+rule DecimalValue {
+    captures {
+        sign = optional: Negative
+        whole = Number
+        fraction = Number
+    }
+    optional {
+        sign = Negative
+    }
+    whole = Number
+    operator .
+    persist
+    fraction = Number
+}
+
 variant BooleanValue = True {
     keyword TRUE
 } | False {
     keyword FALSE
 };
 
-variant BuiltinValue = Null | BooleanValue | StringLiteral | IntegerValue | StructureOfValue | StructureValue | ObjectIdentifierValue | ChoiceValue;
+variant SpecialRealValue = PlusInfinity {
+    keyword PLUS-INFINITY
+} | MinusInfinity {
+    keyword MINUS-INFINITY
+} | NotANumber {
+    keyword NOT-A-NUMBER
+};
+
+variant BuiltinValue = Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | StructureOfValue | StructureValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

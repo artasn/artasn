@@ -11,6 +11,21 @@ use crate::{
 
 use super::{object_id, types, AstParser};
 
+lazy_static::lazy_static! {
+    static ref PLUS_INFINITY_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("Real")),
+        String::from("plus-infinity"),
+    );
+    static ref MINUS_INFINITY_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("Real")),
+        String::from("minus-infinity"),
+    );
+    static ref NOT_A_NUMBER_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("Real")),
+        String::from("not-a-number"),
+    );
+}
+
 pub fn parse_valuereference(
     parser: &AstParser<'_>,
     valref: &AstElement<AstValueReference>,
@@ -27,37 +42,35 @@ pub fn parse_valuereference(
 }
 
 pub fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<BuiltinValue> {
-    if num.element.sign.is_none() {
-        let uint = num.element.value.element.0;
-        if uint > i64::MAX as u64 {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "number {} too large for a 64-bit signed integer",
-                    uint,
-                )),
-                loc: num.loc,
-            });
-        }
-        Ok(BuiltinValue::Integer(BigInt::from_biguint(
-            Sign::Plus,
-            BigUint::from(uint),
-        )))
+    let sign = if num.element.sign.is_none() {
+        Sign::Plus
     } else {
-        let int = num.element.value.element.0;
-        if int > i64::MIN as u64 {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "number -{} too small for a 64-bit signed integer",
-                    int,
-                )),
-                loc: num.loc,
-            });
-        }
-        Ok(BuiltinValue::Integer(BigInt::from_biguint(
-            Sign::Minus,
-            BigUint::from(int),
-        )))
-    }
+        Sign::Minus
+    };
+
+    Ok(BuiltinValue::Integer(BigInt::from_biguint(
+        sign,
+        num.element.value.element.0.clone(),
+    )))
+}
+
+pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<BuiltinValue> {
+    let sign = if dec.element.sign.is_none() {
+        Sign::Plus
+    } else {
+        Sign::Minus
+    };
+
+    let whole = BigInt::from_biguint(sign, dec.element.whole.element.0.clone());
+    let ufraction = dec.element.fraction.element.0.clone();
+    let fraction_len = ufraction.to_str_radix(10).len() as u32;
+    let fraction = BigInt::from_biguint(sign, ufraction);
+    let mantissa = whole * BigInt::from(10u64.pow(fraction_len)) + fraction;
+
+    Ok(BuiltinValue::RealLiteral(RealLiteral {
+        mantissa,
+        exponent: BigInt::from_biguint(Sign::Minus, fraction_len.into()),
+    }))
 }
 
 fn parse_structure_value(
@@ -326,6 +339,7 @@ pub fn parse_value(
                     }
                 },
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
+                AstBuiltinValue::DecimalValue(dec) => parse_decimal_value(dec)?,
                 AstBuiltinValue::StructureValue(seq_val) => {
                     parse_structure_value(parser, seq_val, target_type)?
                 }
@@ -394,6 +408,26 @@ pub fn parse_value(
                         value: Box::new(alternative_value),
                     })
                 }
+                AstBuiltinValue::SpecialRealValue(special) => match &special.element {
+                    AstSpecialRealValue::PlusInfinity(_) => {
+                        return Ok(AstElement::new(
+                            Value::Reference(PLUS_INFINITY_IDENT.clone()),
+                            builtin.loc,
+                        ))
+                    }
+                    AstSpecialRealValue::MinusInfinity(_) => {
+                        return Ok(AstElement::new(
+                            Value::Reference(MINUS_INFINITY_IDENT.clone()),
+                            builtin.loc,
+                        ))
+                    }
+                    AstSpecialRealValue::NotANumber(_) => {
+                        return Ok(AstElement::new(
+                            Value::Reference(NOT_A_NUMBER_IDENT.clone()),
+                            builtin.loc,
+                        ))
+                    }
+                },
             }),
             AstValue::ValueReference(valref) => match &target_type.ty {
                 BuiltinType::Enumerated(items) => 'block: {

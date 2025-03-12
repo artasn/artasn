@@ -1,0 +1,100 @@
+RealTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+RealList ::= SEQUENCE OF REAL
+
+special-rl RealList ::= { PLUS-INFINITY, MINUS-INFINITY, NOT-A-NUMBER }
+
+-- TODO: 'mantissa 0' should raise a warning in the future
+b2-zero-1 REAL ::= { mantissa 0, base 2, exponent 0 }
+b2-zero-2 REAL ::= { mantissa 0, base 2, exponent 1 }
+b2-zero-3 REAL ::= { mantissa 0, base 2, exponent 255 }
+b2-zero-rl RealList ::= { b2-zero-1, b2-zero-2, b2-zero-3 }
+
+b2-one REAL ::= { mantissa 1, base 2, exponent 0 }
+
+b2-two-1 REAL ::= { mantissa 1, base 2, exponent 1 }
+b2-two-2 REAL ::= { mantissa 2, base 2, exponent 0 }
+b2-two-rl RealList ::= { b2-two-1, b2-two-2 }
+
+b2-eight-1 REAL ::= { mantissa 8, base 2, exponent 0 }
+b2-eight-2 REAL ::= { mantissa 4, base 2, exponent 1 }
+b2-eight-3 REAL ::= { mantissa 2, base 2, exponent 2 }
+b2-eight-4 REAL ::= { mantissa 1, base 2, exponent 3 }
+b2-eight-rl RealList ::= { b2-eight-1, b2-eight-2, b2-eight-3, b2-eight-4 }
+
+b2-one-half-1 REAL ::= { mantissa 1, base 2, exponent -1 }
+b2-one-half-2 REAL ::= { mantissa 2, base 2, exponent -2 }
+b2-one-half-3 REAL ::= { mantissa 4, base 2, exponent -3 }
+b2-one-half-4 REAL ::= { mantissa 8, base 2, exponent -4 }
+b2-one-half-rl RealList ::= { b2-one-half-1, b2-one-half-2, b2-one-half-3, b2-one-half-4 }
+
+b2-m-one REAL ::= { mantissa -1, base 2, exponent 0 }
+
+b2-m-two-1 REAL ::= { mantissa -1, base 2, exponent 1 }
+b2-m-two-2 REAL ::= { mantissa -2, base 2, exponent 0 }
+b2-m-two-rl RealList ::= { b2-m-two-1, b2-m-two-2 }
+
+b2-m-eight-1 REAL ::= { mantissa -8, base 2, exponent 0 }
+b2-m-eight-2 REAL ::= { mantissa -4, base 2, exponent 1 }
+b2-m-eight-3 REAL ::= { mantissa -2, base 2, exponent 2 }
+b2-m-eight-4 REAL ::= { mantissa -1, base 2, exponent 3 }
+b2-m-eight-rl RealList ::= { b2-m-eight-1, b2-m-eight-2, b2-m-eight-3, b2-m-eight-4 }
+
+b2-m-one-half-1 REAL ::= { mantissa -1, base 2, exponent -1 }
+b2-m-one-half-2 REAL ::= { mantissa -2, base 2, exponent -2 }
+b2-m-one-half-3 REAL ::= { mantissa -4, base 2, exponent -3 }
+b2-m-one-half-4 REAL ::= { mantissa -8, base 2, exponent -4 }
+b2-m-one-half-rl RealList ::= { b2-m-one-half-1, b2-m-one-half-2, b2-m-one-half-3, b2-m-one-half-4 }
+
+b10-zero-1 REAL ::= { mantissa 0, base 10, exponent 0 }
+b10-zero-2 REAL ::= { mantissa 0, base 10, exponent 1 }
+b10-zero-3 REAL ::= { mantissa 0, base 10, exponent 255 }
+b10-zero-rl RealList ::= { b10-zero-1, b10-zero-2, b10-zero-3 }
+
+b10-one REAL ::= { mantissa 1, base 10, exponent 0 }
+
+b10-ten-1 REAL ::= { mantissa 1, base 10, exponent 1 }
+b10-ten-2 REAL ::= { mantissa 10, base 10, exponent 0 }
+b10-ten-rl RealList ::= { b10-ten-1, b10-ten-2 }
+
+b10-thousand-1 REAL ::= { mantissa 1000, base 10, exponent 0 }
+b10-thousand-2 REAL ::= { mantissa 100, base 10, exponent 1 }
+b10-thousand-3 REAL ::= { mantissa 10, base 10, exponent 2 }
+b10-thousand-4 REAL ::= { mantissa 1, base 10, exponent 3 }
+b10-thousand-rl RealList ::= { b10-thousand-1, b10-thousand-2, b10-thousand-3, b10-thousand-4 }
+
+b10-one-tenth-1 REAL ::= { mantissa 1, base 10, exponent -1 }
+b10-one-tenth-2 REAL ::= { mantissa 10, base 10, exponent -2 }
+b10-one-tenth-3 REAL ::= { mantissa 100, base 10, exponent -3 }
+b10-one-tenth-4 REAL ::= { mantissa 1000, base 10, exponent -4 }
+b10-one-tenth-rl RealList ::= { b10-one-tenth-1, b10-one-tenth-2, b10-one-tenth-3, b10-one-tenth-4 }
+
+b10-m-one REAL ::= { mantissa -1, base 10, exponent 0 }
+
+b10-m-ten-1 REAL ::= { mantissa -1, base 10, exponent 1 }
+b10-m-ten-2 REAL ::= { mantissa -10, base 10, exponent 0 }
+b10-m-ten-rl RealList ::= { b10-m-ten-1, b10-m-ten-2 }
+
+b10-m-thousand-1 REAL ::= { mantissa -1000, base 10, exponent 0 }
+b10-m-thousand-2 REAL ::= { mantissa -100, base 10, exponent 1 }
+b10-m-thousand-3 REAL ::= { mantissa -10, base 10, exponent 2 }
+b10-m-thousand-4 REAL ::= { mantissa -1, base 10, exponent 3 }
+b10-m-thousand-rl RealList ::= { b10-m-thousand-1, b10-m-thousand-2, b10-m-thousand-3, b10-m-thousand-4 }
+
+b10-m-one-tenth-1 REAL ::= { mantissa -1, base 10, exponent -1 }
+b10-m-one-tenth-2 REAL ::= { mantissa -10, base 10, exponent -2 }
+b10-m-one-tenth-3 REAL ::= { mantissa -100, base 10, exponent -3 }
+b10-m-one-tenth-4 REAL ::= { mantissa -1000, base 10, exponent -4 }
+b10-m-one-tenth-rl RealList ::= { b10-m-one-tenth-1, b10-m-one-tenth-2, b10-m-one-tenth-3, b10-m-one-tenth-4 }
+
+lit-zero-int REAL ::= 0
+lit-zero-dec REAL ::= 0.0
+lit-one-int REAL ::= 1
+lit-one-dec REAL ::= 1.0
+lit-thousand-int REAL ::= 1000
+lit-thousand-dec REAL ::= 1000.0
+lit-1337-int REAL ::= 1337
+lit-1337-dec REAL ::= 1.337
+lit-rl RealList ::= { lit-zero-int, lit-zero-dec, lit-one-int, lit-one-dec, lit-thousand-int, lit-thousand-dec, lit-1337-int, lit-1337-dec }
+
+END

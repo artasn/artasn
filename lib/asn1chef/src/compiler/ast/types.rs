@@ -293,13 +293,18 @@ pub fn parse_type(
                 None => Class::ContextSpecific,
             };
             let class_number = &tag.element.class_number;
-            if class_number.element.0 > Tag::MAX_TAG as u64 {
+            if class_number.element.0 > num::BigUint::from(Tag::MAX_TAG as u64) {
                 return Err(Error {
                     kind: ErrorKind::Ast(format!("tag number must not exceed {}", Tag::MAX_TAG)),
                     loc: class_number.loc,
                 });
             }
-            let tag_number = class_number.element.0 as u16;
+            let tag_number = class_number
+                .element
+                .0
+                .clone()
+                .try_into()
+                .expect("tag is out of bounds");
             let (mut kind, source) = match &tagged_type.element.kind {
                 Some(kind) => (
                     match kind.element {
