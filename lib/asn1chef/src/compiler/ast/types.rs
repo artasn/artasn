@@ -187,7 +187,7 @@ fn parse_builtin_type(
             )))
         }
         AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
-        AstBuiltinType::RelativeOid(_) => todo!("RelativeOid"),
+        AstBuiltinType::RelativeOid(_) => BuiltinType::RelativeOid,
         AstBuiltinType::Time(_) => BuiltinType::Time,
         AstBuiltinType::Structure(sequence) => parse_structure_type(parser, sequence)?,
         AstBuiltinType::Choice(choice) => parse_choice_type(parser, &choice.element.0)?,

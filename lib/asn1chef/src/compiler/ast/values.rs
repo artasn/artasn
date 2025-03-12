@@ -298,9 +298,29 @@ pub fn parse_value(
                     }
                 },
                 AstBuiltinValue::ObjectIdentifierValue(object_id) => {
-                    BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
-                        parser, object_id,
-                    )?)
+                    match &target_type.ty {
+                        BuiltinType::ObjectIdentifier => {
+                            BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
+                                parser,
+                                object_id,
+                                TagType::ObjectIdentifier,
+                            )?)
+                        }
+                        BuiltinType::RelativeOid => {
+                            BuiltinValue::RelativeOid(object_id::parse_object_identifier(
+                                parser,
+                                object_id,
+                                TagType::RelativeOid,
+                            )?)
+                        }
+                        other_type => return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "OBJECT IDENTIFIER or RELATIVE-OID value cannot be assigned to {}",
+                                other_type,
+                            )),
+                            loc: builtin.loc,
+                        }),
+                    }
                 }
                 AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
                 AstBuiltinValue::StructureValue(seq_val) => {

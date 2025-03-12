@@ -7,7 +7,7 @@ use crate::{
         parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
-    types::ResolvedType,
+    types::{ResolvedType, TagType},
 };
 
 use super::{BuiltinValue, Value, ValueResolve};
@@ -32,13 +32,16 @@ pub struct ChoiceValue {
 }
 
 #[derive(Debug, Clone)]
-pub struct ObjectIdentifier(pub Vec<ObjectIdentifierComponent>);
+pub struct ObjectIdentifier {
+    pub ty: TagType,
+    pub components: Vec<ObjectIdentifierComponent>,
+}
 
 impl ObjectIdentifier {
     pub fn resolve_oid(&self, context: &Context) -> Result<Oid> {
         let mut nodes = Vec::new();
 
-        for (i, component) in self.0.iter().enumerate() {
+        for (i, component) in self.components.iter().enumerate() {
             match component {
                 ObjectIdentifierComponent::ValueReference(valref) => {
                     let resolved_value = valref.resolve(context)?;
@@ -47,40 +50,55 @@ impl ObjectIdentifier {
                             let (sign, digits) = integer.to_u64_digits();
                             if sign == Sign::Minus {
                                 return Err(Error {
-                                    kind: ErrorKind::Ast(
-                                        "OBJECT IDENTIFIER node must be a non-negative integer"
-                                            .to_string(),
-                                    ),
+                                    kind: ErrorKind::Ast(format!(
+                                        "{} node must be a non-negative integer",
+                                        self.ty
+                                    )),
                                     loc: valref.loc,
                                 });
                             }
                             if digits.len() > 1 {
                                 return Err(Error {
-                                    kind: ErrorKind::Ast(
-                                        "OBJECT IDENTIFIER node is too large to fit in a 64-bit unsigned integer"
-                                            .to_string(),
-                                    ),
+                                    kind: ErrorKind::Ast(format!(
+                                        "{} node is too large to fit in a 64-bit unsigned integer",
+                                        self.ty
+                                    )),
                                     loc: valref.loc,
                                 });
                             }
                             nodes.push(digits[0]);
                         }
-                        BuiltinValue::ObjectIdentifier(relative_oid) => {
-                            if i != 0 {
+                        BuiltinValue::ObjectIdentifier(parent_oid) => {
+                            if self.ty != TagType::ObjectIdentifier || i != 0 {
                                 return Err(Error{
-                                    kind: ErrorKind::Ast("relative OBJECT IDENTIFIER can only be used as the first component of another OBJECT IDENTIFIER".to_string()),
+                                    kind: ErrorKind::Ast("OBJECT IDENTIFIER can only be used as the first component of another OBJECT IDENTIFIER".to_string()),
                                     loc: valref.loc,
                                 });
                             }
-                            let resolved_oid = relative_oid.resolve_oid(context)?;
+                            let resolved_oid = parent_oid.resolve_oid(context)?;
+                            nodes.extend(resolved_oid.0);
+                        }
+                        BuiltinValue::RelativeOid(parent_oid) => {
+                            if self.ty != TagType::RelativeOid || i != 0 {
+                                return Err(Error{
+                                    kind: ErrorKind::Ast("RELATIVE-OID can only be used as the first component of another RELATIVE-OID".to_string()),
+                                    loc: valref.loc,
+                                });
+                            }
+                            let resolved_oid = parent_oid.resolve_oid(context)?;
                             nodes.extend(resolved_oid.0);
                         }
                         other => {
                             return Err(Error {
-                                kind: ErrorKind::Ast(format!(
-                                    "expecting OBJECT IDENTIFIER or INTEGER; found {}",
-                                    other.tag_type(context)?
-                                )),
+                                kind: ErrorKind::Ast(if i == 0 {
+                                    format!(
+                                        "expecting {} or INTEGER, found {}",
+                                        self.ty,
+                                        other.tag_type(context)?
+                                    )
+                                } else {
+                                    format!("expecting INTEGER, found {}", other.tag_type(context)?)
+                                }),
                                 loc: valref.loc,
                             });
                         }

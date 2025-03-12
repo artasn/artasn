@@ -4,6 +4,7 @@ use crate::{
         parser::*,
     },
     module::ModuleIdentifier,
+    types::TagType,
     values::*,
 };
 
@@ -49,8 +50,14 @@ pub fn name_and_oid_to_module_ident(
 fn parse_object_identifier_component_valref(
     parser: &AstParser<'_>,
     value: &AstElement<AstValueReference>,
+    ty: TagType,
 ) -> ObjectIdentifierComponent {
-    lookup_root_oid_component_str(&value.element.0).map_or_else(
+    let base = match ty {
+        TagType::ObjectIdentifier => lookup_root_oid_component_str(&value.element.0),
+        TagType::RelativeOid => None,
+        _ => unreachable!(),
+    };
+    base.map_or_else(
         || ObjectIdentifierComponent::ValueReference(values::parse_valuereference(parser, value)),
         |lit| ObjectIdentifierComponent::IntegerLiteral(AstElement::new(lit.node, value.loc)),
     )
@@ -59,9 +66,11 @@ fn parse_object_identifier_component_valref(
 pub fn parse_object_identifier(
     parser: &AstParser<'_>,
     object_id: &AstElement<AstObjectIdentifierValue>,
+    ty: TagType,
 ) -> Result<ObjectIdentifier> {
-    Ok(ObjectIdentifier(
-        object_id
+    Ok(ObjectIdentifier {
+        ty,
+        components: object_id
             .element
             .components
             .iter()
@@ -76,13 +85,17 @@ pub fn parse_object_identifier(
                         )
                     }
                     AstObjectIdentifierComponent::ValueReference(val_ref) => {
-                        parse_object_identifier_component_valref(parser, val_ref)
+                        parse_object_identifier_component_valref(parser, val_ref, ty)
                     }
                     AstObjectIdentifierComponent::DefinedValue(defined_val) => {
-                        parse_object_identifier_component_valref(parser, &defined_val.element.value)
+                        parse_object_identifier_component_valref(
+                            parser,
+                            &defined_val.element.value,
+                            ty,
+                        )
                     }
                 })
             })
             .collect::<Result<Vec<ObjectIdentifierComponent>>>()?,
-    ))
+    })
 }

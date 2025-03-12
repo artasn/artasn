@@ -24,6 +24,7 @@ pub enum BuiltinValue {
     OctetString(Vec<u8>),
     Null,
     ObjectIdentifier(ObjectIdentifier),
+    RelativeOid(ObjectIdentifier),
     Real(f64),
     Enumerated(Box<AstElement<Value>>),
     Time(Time),
@@ -50,6 +51,7 @@ impl BuiltinValue {
             Self::OctetString(_) => TagType::OctetString,
             Self::Null => TagType::Null,
             Self::ObjectIdentifier(_) => TagType::ObjectIdentifier,
+            Self::RelativeOid(_) => TagType::RelativeOid,
             Self::Real(_) => TagType::Real,
             Self::Enumerated(_) => TagType::Enumerated,
             Self::Time(_) => TagType::Time,
@@ -112,6 +114,12 @@ impl BuiltinValue {
 
                 let prefix = oid[0] * 40 + oid[1];
                 encoding::write_vlq(prefix, buf);
+            }
+            Self::RelativeOid(oid) => {
+                let oid = oid.resolve_oid(context)?.0;
+                for node in oid.iter().rev() {
+                    encoding::write_vlq(*node, buf);
+                }
             }
             Self::Enumerated(enumerated) => {
                 let resolved = enumerated.resolve(context)?;
