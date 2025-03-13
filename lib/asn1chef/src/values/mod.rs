@@ -6,18 +6,22 @@ pub use simple::*;
 mod time;
 pub use time::*;
 
+mod special;
+pub use special::*;
+
 use crate::{
     compiler::{
         parser::{AstElement, Error, ErrorKind, Loc, Result},
         Context,
     },
-    encoding,
+    encoding::{self, BasicEncodingKind, TransferSyntax},
     module::QualifiedIdentifier,
     types::*,
 };
 
 #[derive(Debug, Clone)]
 pub enum BuiltinValue {
+    // simple built-in values
     Boolean(bool),
     Integer(BigInt),
     BitString(BigUint),
@@ -40,6 +44,9 @@ pub enum BuiltinValue {
     TimeOfDay(TimeOfDay),
     DateTime(DateTime),
     Duration(Duration),
+
+    // special values
+    Containing(ContainingValue),
 }
 
 impl BuiltinValue {
@@ -65,6 +72,7 @@ impl BuiltinValue {
             Self::TimeOfDay(_) => TagType::TimeOfDay,
             Self::DateTime(_) => TagType::DateTime,
             Self::Duration(_) => TagType::Duration,
+            Self::Containing(containing) => containing.container_type,
         })
     }
 
@@ -214,14 +222,12 @@ impl BuiltinValue {
                             );
                         }
                     }
-                    (Class::Universal, Ok(TagType::External)) => {
-                        encoding::der_encode_external(
-                            buf,
-                            context,
-                            &structure.components,
-                            resolved_type,
-                        )?
-                    }
+                    (Class::Universal, Ok(TagType::External)) => encoding::der_encode_external(
+                        buf,
+                        context,
+                        &structure.components,
+                        resolved_type,
+                    )?,
                     _ => {
                         encoding::der_encode_structure(
                             buf,
@@ -267,6 +273,80 @@ impl BuiltinValue {
             }
             Self::Duration(duration) => {
                 buf.extend(duration.to_ber_string().into_bytes().into_iter().rev());
+            }
+            Self::Containing(containing) => {
+                let constraint = resolved_type
+                    .constraint
+                    .as_ref()
+                    .map(|constraint| {
+                        constraint
+                            .flatten()
+                            .iter()
+                            .find_map(|subtype| match &subtype.element {
+                                SubtypeElement::Contents(contents) => Some(contents),
+                                _ => None,
+                            })
+                    })
+                    .expect("CONTAINING value for type without constraint")
+                    .expect("CONTAINING value for type without contents constraint");
+                let contained_type = constraint.ty.resolve(context)?;
+
+                let encoding = match &constraint.encoded_by {
+                    Some(encoded_by) => {
+                        let resolved = encoded_by.resolve(context)?;
+                        match resolved {
+                            BuiltinValue::ObjectIdentifier(oid) => {
+                                let oid = oid.resolve_oid(context)?;
+                                match TransferSyntax::get_by_oid(&oid) {
+                                    Some(ts) => {
+                                        if ts.get_support().encode {
+                                            ts
+                                        } else {
+                                            return Err(Error {
+                                                kind: ErrorKind::Ast(format!("encoding with the {} transfer syntax is not yet implemented", ts.name())),
+                                                loc: encoded_by.loc,
+                                            })
+                                        }
+                                    }
+                                    None => {
+                                        return Err(Error {
+                                            kind: ErrorKind::Ast(format!("the provided OBJECT IDENTIFIER ({}) does not represent a registered transfer syntax", oid)),
+                                            loc: encoded_by.loc,
+                                        })
+                                    }
+                                }
+                            }
+                            other => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(format!(
+                                    "expecting OBJECT IDENTIFIER for the transfer syntax, found {}",
+                                    other.tag_type(context)?
+                                )),
+                                    loc: encoded_by.loc,
+                                })
+                            }
+                        }
+                    }
+                    // TODO: DER is the only supported transfer syntax currently,
+                    // but this should default to the current transfer syntax in the future
+                    None => &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+                };
+
+                if encoding != &TransferSyntax::Basic(BasicEncodingKind::Distinguished) {
+                    todo!();
+                }
+
+                containing
+                    .value
+                    .resolve(context)?
+                    .der_encode(buf, context, &contained_type)?;
+
+                match &resolved_type.ty {
+                    // write the bit string unused bits count
+                    BuiltinType::BitString(_) => buf.push(0x00),
+                    BuiltinType::OctetString => (),
+                    _ => unreachable!(),
+                }
             }
         }
 
@@ -393,4 +473,8 @@ mod test {
     json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
     json_test!(test_encode_character_string, "encode/CharacterStringTest");
     json_test!(test_encode_real, "encode/RealTest");
+    json_test!(
+        test_encode_contents_constraint,
+        "encode/ContentsConstraintTest"
+    );
 }

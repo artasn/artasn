@@ -408,26 +408,54 @@ pub fn parse_value(
                         value: Box::new(alternative_value),
                     })
                 }
-                AstBuiltinValue::SpecialRealValue(special) => match &special.element {
-                    AstSpecialRealValue::PlusInfinity(_) => {
-                        return Ok(AstElement::new(
-                            Value::Reference(PLUS_INFINITY_IDENT.clone()),
-                            builtin.loc,
-                        ))
-                    }
-                    AstSpecialRealValue::MinusInfinity(_) => {
-                        return Ok(AstElement::new(
-                            Value::Reference(MINUS_INFINITY_IDENT.clone()),
-                            builtin.loc,
-                        ))
-                    }
-                    AstSpecialRealValue::NotANumber(_) => {
-                        return Ok(AstElement::new(
-                            Value::Reference(NOT_A_NUMBER_IDENT.clone()),
-                            builtin.loc,
-                        ))
-                    }
-                },
+                AstBuiltinValue::SpecialRealValue(special) => {
+                    return Ok(AstElement::new(
+                        Value::Reference(match &special.element {
+                            AstSpecialRealValue::PlusInfinity(_) => PLUS_INFINITY_IDENT.clone(),
+                            AstSpecialRealValue::MinusInfinity(_) => MINUS_INFINITY_IDENT.clone(),
+                            AstSpecialRealValue::NotANumber(_) => NOT_A_NUMBER_IDENT.clone(),
+                        }),
+                        builtin.loc,
+                    ))
+                }
+                AstBuiltinValue::ContainingValue(containing) => {
+                    let constraints = target_type.constraint.as_ref().map(|constraint| {
+                        constraint
+                            .flatten()
+                            .iter()
+                            .find_map(|subtype| match &subtype.element {
+                                SubtypeElement::Contents(contents) => Some(contents),
+                                _ => None,
+                            })
+                    });
+                    let constraints = match constraints {
+                        Some(Some(constraints)) => constraints,
+                        _ => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast("CONTAINING value can not be applied to a type that does not have a contents constraint".to_string()),
+                                loc: value.loc,
+                            })
+                        }
+                    };
+
+                    let container_type = match &target_type.ty {
+                        BuiltinType::BitString(_) => TagType::BitString,
+                        BuiltinType::OctetString => TagType::OctetString,
+                        // constraint parser (compiler/ast/constraints.rs)
+                        // ensures that content constraints can only be applied to BIT STRING or OCTET STRING
+                        _ => unreachable!(),
+                    };
+
+                    let contained_type = constraints.ty.resolve(parser.context)?;
+                    BuiltinValue::Containing(ContainingValue {
+                        container_type,
+                        value: Box::new(parse_value(
+                            parser,
+                            &containing.element.0,
+                            &contained_type,
+                        )?),
+                    })
+                }
             }),
             AstValue::ValueReference(valref) => match &target_type.ty {
                 BuiltinType::Enumerated(items) => 'block: {

@@ -213,8 +213,7 @@ pub fn der_encode_external(
 ) -> Result<()> {
     if components
         .iter()
-        .find(|component| component.name.element.as_str() == "encoding")
-        .is_some()
+        .any(|component| component.name.element.as_str() == "encoding")
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure

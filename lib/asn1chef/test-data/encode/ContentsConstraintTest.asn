@@ -1,0 +1,53 @@
+ContentsConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+-- TODO: implement tests with other transfer syntaxes
+transfer-syntax-der OBJECT IDENTIFIER ::= { joint-iso-itu-t asn1(1) ber-derived(2) distinguished-encoding(1) }
+
+Signature ::= SEQUENCE {
+	a INTEGER,
+	b INTEGER
+}
+
+TBS ::= SEQUENCE {
+	version INTEGER,
+	serial OCTET STRING,
+	name UTF8String
+}
+
+BitStringSignedContaining ::= SEQUENCE {
+	tbs TBS,
+	signature BIT STRING (CONTAINING Signature)
+}
+bssc BitStringSignedContaining ::= {
+	tbs { version 3, serial '1337'H, name "bssc" },
+	signature CONTAINING { a 1, b 2 }
+}
+
+OctetStringSignedContaining ::= SEQUENCE {
+	tbs TBS,
+	signature OCTET STRING (CONTAINING Signature)
+}
+ossc OctetStringSignedContaining ::= {
+	tbs { version 3, serial 'DEAD'H, name "ossc" },
+	signature CONTAINING { a 1, b 2 }
+}
+
+BitStringSignedEncodedByDER ::= SEQUENCE {
+	tbs TBS,
+	signature BIT STRING (CONTAINING Signature ENCODED BY transfer-syntax-der)
+}
+bssebd BitStringSignedEncodedByDER ::= {
+	tbs { version 3, serial 'BEEF'H, name "bssebd" },
+	signature CONTAINING { a 1, b 2 }
+}
+
+OctetStringSignedEncodedByDER ::= SEQUENCE {
+	tbs TBS,
+	signature OCTET STRING (CONTAINING Signature ENCODED BY transfer-syntax-der)
+}
+ossebd OctetStringSignedEncodedByDER ::= {
+	tbs { version 3, serial '7331'H, name "ossebd" },
+	signature CONTAINING { a 1, b 2 }
+}
+
+END

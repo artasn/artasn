@@ -359,7 +359,7 @@ rule SubtypeElementSet {
     return elements
 }
 
-variant SubtypeElement = ValueRangeConstraint {
+variant SubtypeElement = ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -368,7 +368,7 @@ variant SubtypeElement = ValueRangeConstraint {
     operator ..
     persist
     upper = RangeUpperBound
-} | SizeConstraint | InnerTypeConstraints | SingleValueConstraint {
+} | SingleValueConstraint {
     captures {
         value = Value
     }
@@ -376,18 +376,25 @@ variant SubtypeElement = ValueRangeConstraint {
     return value
 };
 
-rule ContentsConstraint {
+variant ContentsConstraint = EncodedBy {
     captures {
         ty = Type
         value = Value
     }
     keyword CONTAINING
-    persist
     ty = Type
     keyword ENCODED
+    persist
     keyword BY
     value = Value
-}
+} | Containing {
+    captures {
+        ty = Type
+    }
+    keyword CONTAINING
+    ty = Type
+    return ty
+};
 
 rule SizeConstraint {
     captures {
@@ -933,6 +940,17 @@ variant SpecialRealValue = PlusInfinity {
     keyword NOT-A-NUMBER
 };
 
-variant BuiltinValue = Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | StructureOfValue | StructureValue | ObjectIdentifierValue | ChoiceValue;
+rule ContainingValue {
+    captures {
+        value = boxed Value
+    }
+    keyword CONTAINING
+    persist
+    value = Value
+    return value
+}
+
+variant BuiltinValue = ContainingValue | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | StructureOfValue |
+    StructureValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;

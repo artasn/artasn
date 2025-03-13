@@ -1,6 +1,9 @@
 use crate::{compiler::parser::*, module::QualifiedIdentifier, types::*};
 
-use super::{values, AstParser};
+use super::{
+    types::{self, TypeContext},
+    values, AstParser,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConstraintContext {
@@ -84,7 +87,44 @@ fn parse_subtype_element(
         AstSubtypeElement::InnerTypeConstraints(itc) => {
             SubtypeElement::InnerType(parse_inner_type_constraints(parser, itc, constrained_type)?)
         }
+        AstSubtypeElement::ContentsConstraint(contents) => SubtypeElement::Contents(
+            parse_contents_constraint(parser, contents, constrained_type)?,
+        ),
     })
+}
+
+fn parse_contents_constraint(
+    parser: &AstParser<'_>,
+    contents: &AstElement<AstContentsConstraint>,
+    constrained_type: &ResolvedType,
+) -> Result<ContentsConstraint> {
+    match &constrained_type.ty {
+        BuiltinType::BitString(_) | BuiltinType::OctetString => (),
+        other => {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "contents constraint is invalid for {}",
+                    other,
+                )),
+                loc: contents.loc,
+            })
+        }
+    };
+
+    let (ty, encoded_by) = match &contents.element {
+        AstContentsConstraint::Containing(containing) => (&containing.element.0, None),
+        AstContentsConstraint::EncodedBy(eb) => (&eb.element.ty, Some(&eb.element.value)),
+    };
+    let ty = types::parse_type(parser, ty, TypeContext::Contextless)?;
+    let encoded_by = match encoded_by {
+        Some(encoded_by) => Some(values::parse_value(
+            parser,
+            encoded_by,
+            &ResolvedType::universal(TagType::ObjectIdentifier),
+        )?),
+        None => None,
+    };
+    Ok(ContentsConstraint { ty, encoded_by })
 }
 
 fn parse_inner_type_constraints(

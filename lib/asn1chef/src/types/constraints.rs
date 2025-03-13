@@ -8,6 +8,8 @@ use crate::{
     values::{BuiltinValue, Value, ValueResolve},
 };
 
+use super::TaggedType;
+
 /// The following example constraint spec...
 ///
 /// ```asn1
@@ -44,6 +46,13 @@ pub enum SubtypeElement {
     ValueRange(ValueRange),
     Size(Constraint),
     InnerType(InnerTypeConstraints),
+    Contents(ContentsConstraint),
+}
+
+#[derive(Debug, Clone)]
+pub struct ContentsConstraint {
+    pub ty: TaggedType,
+    pub encoded_by: Option<AstElement<Value>>,
 }
 
 #[derive(Debug, Clone)]

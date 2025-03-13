@@ -36,176 +36,199 @@ pub enum TransferSyntax {
     Octet(OctetEncodingKind),
 }
 
+pub struct TransferSyntaxSupport {
+    /// True if encoding values in the transfer syntax is supported by asn1chef.
+    pub encode: bool,
+    /// True if decoding values in the transfer syntax is supported by asn1chef.
+    pub decode: bool,
+}
+
+impl TransferSyntaxSupport {
+    pub fn new(encode: bool, decode: bool) -> TransferSyntaxSupport {
+        TransferSyntaxSupport { encode, decode }
+    }
+}
+
+struct TransferSyntaxData {
+    pub syntax: TransferSyntax,
+    pub oid: Oid,
+    pub name: &'static str,
+}
+
 lazy_static::lazy_static! {
-    static ref TRANFER_SYNTAX_OIDS: Vec<(TransferSyntax, Oid)> = vec![
-        (
-            TransferSyntax::Basic(BasicEncodingKind::Basic),
-            Oid(vec![
+    static ref TRANFER_SYNTAXES: Vec<TransferSyntaxData> = vec![
+        TransferSyntaxData {
+            syntax: TransferSyntax::Basic(BasicEncodingKind::Basic),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 1, // basic-encoding
             ]),
-        ),
-        (
-            TransferSyntax::Basic(BasicEncodingKind::Canonical),
-            Oid(vec![
+            name: "BER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Basic(BasicEncodingKind::Canonical),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 2, // ber-derived
                 0, // canonical-encoding
             ]),
-        ),
-        (
-            TransferSyntax::Basic(BasicEncodingKind::Distinguished),
-            Oid(vec![
+            name: "CER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 2, // ber-derived
                 1, // distinguished-encoding
             ]),
-        ),
-        (
-            TransferSyntax::Packed(PackedEncodingKind::BasicAligned),
-            Oid(vec![
+            name: "DER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Packed(PackedEncodingKind::BasicAligned),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 3, // packed-encoding
                 0, // basic
                 0, // aligned
             ]),
-        ),
-        (
-            TransferSyntax::Packed(PackedEncodingKind::BasicUnaligned),
-            Oid(vec![
+            name: "PER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Packed(PackedEncodingKind::BasicUnaligned),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 3, // packed-encoding
                 0, // basic
                 1, // unaligned
             ]),
-        ),
-        (
-            TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
-            Oid(vec![
+            name: "UPER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 3, // packed-encoding
                 1, // canonical
                 0, // aligned
             ]),
-        ),
-        (
-            TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
-            Oid(vec![
+            name: "CPER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 3, // packed-encoding
                 1, // canonical
                 1, // unaligned
             ]),
-        ),
-        (
-            TransferSyntax::Xml(XmlEncodingKind::Basic),
-            Oid(vec![
+            name: "CUPER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Xml(XmlEncodingKind::Basic),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 5, // xer-encoding
                 0, // basic
             ]),
-        ),
-        (
-            TransferSyntax::Xml(XmlEncodingKind::Canonical),
-            Oid(vec![
+            name: "XER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Xml(XmlEncodingKind::Canonical),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 5, // xer-encoding
                 1, // canonical
             ]),
-        ),
-        (
-            TransferSyntax::Xml(XmlEncodingKind::Extended),
-            Oid(vec![
+            name: "CXER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Xml(XmlEncodingKind::Extended),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 5, // xer-encoding
                 2, // extended
             ]),
-        ),
-        (
-            TransferSyntax::Octet(OctetEncodingKind::Basic),
-            Oid(vec![
+            name: "E-XER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Octet(OctetEncodingKind::Basic),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 6, // oer-encoding
                 0, // basic
             ]),
-        ),
-        (
-            TransferSyntax::Octet(OctetEncodingKind::Canonical),
-            Oid(vec![
+            name: "OER",
+        },
+        TransferSyntaxData {
+            syntax: TransferSyntax::Octet(OctetEncodingKind::Canonical),
+            oid: Oid(vec![
                 2, // joint-iso-itu-t
                 1, // asn1
                 6, // oer-encoding
                 1, // canonical
             ]),
-        ),
+            name: "COER",
+        },
     ];
 }
 
 impl TransferSyntax {
-    pub fn get_by_oid(oid: &Oid) -> Option<Self> {
-        for (ts, ts_oid) in TRANFER_SYNTAX_OIDS.iter() {
-            if oid == ts_oid {
-                return Some(ts.clone());
+    pub fn syntaxes<'a>() -> Vec<&'a TransferSyntax> {
+        let mut syntaxes = Vec::with_capacity(TRANFER_SYNTAXES.len());
+        for data in TRANFER_SYNTAXES.iter() {
+            syntaxes.push(&data.syntax);
+        }
+        syntaxes
+    }
+
+    pub fn get_by_oid<'a>(oid: &Oid) -> Option<&'a TransferSyntax> {
+        for data in TRANFER_SYNTAXES.iter() {
+            if oid == &data.oid {
+                return Some(&data.syntax);
             }
         }
 
         None
     }
 
-    pub fn get_oid(&self) -> Oid {
-        for (ts, ts_oid) in TRANFER_SYNTAX_OIDS.iter() {
-            if self == ts {
-                return ts_oid.clone();
+    pub fn get_oid<'a>(&self) -> &'a Oid {
+        for data in TRANFER_SYNTAXES.iter() {
+            if self == &data.syntax {
+                return &data.oid;
             }
         }
 
-        unreachable!();
+        unreachable!()
     }
 
     pub fn name(&self) -> &'static str {
-        match self {
-            Self::Basic(kind) => match kind {
-                BasicEncodingKind::Basic => "BER",
-                BasicEncodingKind::Canonical => "CER",
-                BasicEncodingKind::Distinguished => "DER",
-            },
-            Self::Packed(kind) => match kind {
-                PackedEncodingKind::BasicAligned => "PER",
-                PackedEncodingKind::BasicUnaligned => "UPER",
-                PackedEncodingKind::CanonicalAligned => "CPER",
-                PackedEncodingKind::CanonicalUnaligned => "CUPER",
-            },
-            Self::Xml(kind) => match kind {
-                XmlEncodingKind::Basic => "XER",
-                XmlEncodingKind::Canonical => "CXER",
-                XmlEncodingKind::Extended => "E-XER",
-            },
-            Self::Octet(kind) => match kind {
-                OctetEncodingKind::Basic => "OER",
-                OctetEncodingKind::Canonical => "COER",
-            },
+        for data in TRANFER_SYNTAXES.iter() {
+            if self == &data.syntax {
+                return data.name;
+            }
         }
+
+        unreachable!()
     }
 
-    /// True if asn1chef currently supports this transfer syntax, otherwise false.
-    pub fn is_implemented(&self) -> bool {
+    pub fn get_support(&self) -> TransferSyntaxSupport {
         match self {
             Self::Basic(kind) => match kind {
-                BasicEncodingKind::Distinguished => true,
-                _ => false,
+                BasicEncodingKind::Distinguished => TransferSyntaxSupport::new(true, true),
+                _ => TransferSyntaxSupport::new(true, false),
             },
-            _ => false,
+            _ => TransferSyntaxSupport::new(false, false),
         }
     }
 }
