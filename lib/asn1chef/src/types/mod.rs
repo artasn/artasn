@@ -17,7 +17,6 @@ use crate::{
         parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
-    encoding,
     module::QualifiedIdentifier,
     values::{BuiltinValue, Value, ValueResolve},
 };
@@ -116,30 +115,6 @@ impl Tag {
             TagKind::Implicit,
             TagSource::TagImplied,
         )
-    }
-
-    pub fn der_encode(&self, buf: &mut Vec<u8>, ctx: TagContext<'_>) {
-        let class = match self.class {
-            Class::Universal => 0b00,
-            Class::Application => 0b01,
-            Class::ContextSpecific => 0b10,
-            Class::Private => 0b11,
-        };
-        let form = match (ctx.is_outer_explicit, ctx.ty.form(self)) {
-            // if not the outer tag of an EXPLICIT definition and is primitive, form = 0
-            (false, TypeForm::Primitive) => 0b0,
-            // if either the outer tag of an EXPLICIT definition or is constructed, form = 1
-            _ => 0b1,
-        };
-        if self.num >= 31 {
-            encoding::write_vlq(self.num as u64, buf);
-        }
-        let msb_tag = if self.num <= 30 {
-            self.num as u8
-        } else {
-            0b11111
-        };
-        buf.push(class << 6 | form << 5 | msb_tag);
     }
 }
 

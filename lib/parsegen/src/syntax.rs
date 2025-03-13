@@ -357,7 +357,7 @@ pub fn parse_syntax(
                     x => unreachable!("{:?}", x),
                 }
             }
-            Ok(cb.to_string())
+            Ok(cb.into_string())
         }
         Err(err) => Err(err.with_path(syntax_path)),
     }

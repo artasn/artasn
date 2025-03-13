@@ -150,7 +150,7 @@ fn parse_character_string(
     tag_type: TagType,
 ) -> Result<BuiltinValue> {
     let cstring = match &str_lit.element.kind {
-        StringKind::CString => str_lit.element.data.clone(),
+        StringKind::C => str_lit.element.data.clone(),
         _ => {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
@@ -245,9 +245,9 @@ pub fn parse_value(
                             BuiltinValue::OctetString(Vec::new())
                         } else {
                             let radix = match str_lit.element.kind {
-                                StringKind::BString => 2,
-                                StringKind::HString => 16,
-                                StringKind::CString => {
+                                StringKind::B => 2,
+                                StringKind::H => 16,
+                                StringKind::C => {
                                     return Err(Error {
                                         kind: ErrorKind::Ast(
                                             "cstring value cannot be assigned to BIT STRING"
@@ -265,9 +265,9 @@ pub fn parse_value(
                     }
                     BuiltinType::OctetString => {
                         let radix = match str_lit.element.kind {
-                            StringKind::BString => 2,
-                            StringKind::HString => 16,
-                            StringKind::CString => {
+                            StringKind::B => 2,
+                            StringKind::H => 16,
+                            StringKind::C => {
                                 return Err(Error {
                                     kind: ErrorKind::Ast(
                                         "cstring value cannot be assigned to OCTET STRING"

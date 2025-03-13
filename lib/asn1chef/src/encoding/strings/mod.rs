@@ -80,8 +80,4 @@ impl CharEncodingMap {
         }
         Some(str)
     }
-
-    pub fn contains_char(&self, ch: char) -> bool {
-        self.char_to_byte.contains_key(&ch)
-    }
 }

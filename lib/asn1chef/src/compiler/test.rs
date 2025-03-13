@@ -1,10 +1,9 @@
+use std::path::Path;
+
 use serde::Deserialize;
 
 use crate::{
-    encoding::{
-        DecodeError, DecodeMode, DecodeResult, DecodedValue, DecodedValueForm, DecodedValueKind,
-        DerReader,
-    },
+    encoding::*,
     module::{ModuleIdentifier, QualifiedIdentifier},
     types::UntaggedType,
     values::ValueResolve,
@@ -85,8 +84,7 @@ fn test_encode_value(
         .expect("failed to resolve value");
 
     let mut buf = Vec::with_capacity(expected_der.len());
-    value
-        .der_encode(&mut buf, context, &tagged_type)
+    ber::der_encode_value(&mut buf, value, context, &tagged_type)
         .unwrap_or_else(|_| panic!("failed to encode value '{}'", ident));
     let buf = buf.into_iter().rev().collect::<Vec<u8>>();
 
@@ -189,10 +187,10 @@ fn test_decode_value(
             .resolve(context)
             .expect("failed resolving type"),
     };
-    let reader = DerReader::new(der, 0);
+    let reader = ber::DerReader::new(der, 0);
     let values = reader
         .into_iter()
-        .map(|tlv| DecodedValue::der_decode(context, tlv.map_err(DecodeError::Io)?, &mode))
+        .map(|tlv| ber::der_decode_value(context, tlv.map_err(DecodeError::Io)?, &mode))
         .collect::<DecodeResult<Vec<DecodedValue>>>()
         .unwrap();
     compare_decoded_values_to_json_values(&values, json_value)
@@ -260,8 +258,8 @@ macro_rules! json_test {
     ( $test:ident, $name:literal ) => {
         #[test]
         pub fn $test() {
-            let module_file = include_str!(concat!("../../test-data/", $name, ".asn"));
-            let data_file = include_str!(concat!("../../test-data/", $name, ".test.json"));
+            let module_file = include_str!(concat!($name, ".asn"));
+            let data_file = include_str!(concat!($name, ".test.json"));
 
             crate::compiler::test::execute_json_test(module_file, data_file);
         }
@@ -273,11 +271,11 @@ macro_rules! json_compile_test {
     ( $test:ident, $name:literal ) => {
         #[test]
         pub fn $test() {
-            let module_file = include_str!(concat!("../../test-data/", $name, ".asn"));
-            let data_file = include_str!(concat!("../../test-data/", $name, ".test.json"));
+            let module_file = include_str!(concat!($name, ".asn"));
+            let data_file = include_str!(concat!($name, ".test.json"));
 
             crate::compiler::test::execute_json_compile_test(
-                concat!($name, ".asn"),
+                Path::new(concat!($name, ".asn")).file_name().unwrap().to_str().unwrap(),
                 module_file,
                 data_file,
             );
@@ -285,11 +283,17 @@ macro_rules! json_compile_test {
     };
 }
 
-json_compile_test!(test_unique_tag_compliance, "compile/UniqueTagTest");
+json_compile_test!(
+    test_unique_tag_compliance,
+    "../../test-data/compile/UniqueTagTest"
+);
 json_compile_test!(
     test_unique_alternative_compliance_implicit_tagging,
-    "compile/UniqueAlternativeTestImplicitTagging"
+    "../../test-data/compile/UniqueAlternativeTestImplicitTagging"
 );
 // TODO: make this work
-// json_compile_test!(test_unique_alternative_compliance_automatic_tagging, "compile/UniqueAlternativeTestAutomaticTagging");
-json_compile_test!(test_constraint_verifier, "compile/ConstraintTest");
+// json_compile_test!(test_unique_alternative_compliance_automatic_tagging, "../../test-data/compile/UniqueAlternativeTestAutomaticTagging");
+json_compile_test!(
+    test_constraint_verifier,
+    "../../test-data/compile/ConstraintTest"
+);

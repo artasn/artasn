@@ -1,4 +1,4 @@
-use asn1chef::{encoding::*, values::*};
+use asn1chef::{encoding::{ber::DerReader, *}, values::*};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
@@ -245,7 +245,7 @@ pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsV
     let libweb = unsafe { Box::from_raw(libweb_ptr) };
     let values = match tlvs
         .into_iter()
-        .map(|tlv| DecodedValue::der_decode(&libweb.context, tlv, &mode))
+        .map(|tlv| ber::der_decode_value(&libweb.context, tlv, &mode))
         .collect::<DecodeResult<Vec<DecodedValue>>>()
     {
         Ok(values) => values,

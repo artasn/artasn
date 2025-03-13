@@ -1,9 +1,7 @@
 use std::{fmt::Display, fs, time::Instant};
 
 use asn1chef::{
-    compiler::{options::CompilerConfig, Compiler, Context},
-    module::QualifiedIdentifier,
-    values::ValueResolve,
+    compiler::{options::CompilerConfig, Compiler, Context}, encoding::ber, module::QualifiedIdentifier, values::ValueResolve
 };
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -187,7 +185,7 @@ fn main() {
             };
 
             let mut buf = Vec::with_capacity(64 * 1024);
-            match value.der_encode(&mut buf, &context, &resolved_type) {
+            match ber::der_encode_value(&mut buf, value, &context, &resolved_type) {
                 Ok(()) => (),
                 Err(err) => exit_with_error(format_args!(
                     "failed to encode value: {}",

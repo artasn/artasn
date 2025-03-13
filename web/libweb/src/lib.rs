@@ -1,10 +1,7 @@
 use std::{num::ParseIntError, panic};
 
 use asn1chef::{
-    compiler::{options::CompilerConfig, CompileError, Compiler, Context},
-    module,
-    types::{BuiltinType, Tag, TaggedType, UntaggedType},
-    values::{BuiltinValue, Oid, Value, ValueResolve},
+    compiler::{options::CompilerConfig, CompileError, Compiler, Context}, encoding::ber, module, types::{BuiltinType, Tag, TaggedType, UntaggedType}, values::{BuiltinValue, Oid, Value, ValueResolve}
 };
 use js_sys::{Array, Object, Reflect};
 use serde::{Deserialize, Serialize};
@@ -421,7 +418,7 @@ pub unsafe fn compiler_der_encode(
             Ok(ty) => match value_decl.value.resolve(&libweb.context) {
                 Ok(value) => {
                     libweb.buffer.clear();
-                    match value.der_encode(&mut libweb.buffer, &libweb.context, &ty) {
+                    match ber::der_encode_value(&mut libweb.buffer, value, &libweb.context, &ty) {
                         Ok(()) => {
                             let mut reverse = Vec::with_capacity(libweb.buffer.len());
                             for b in libweb.buffer.iter().rev() {

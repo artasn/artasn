@@ -11,10 +11,9 @@ pub use special::*;
 
 use crate::{
     compiler::{
-        parser::{AstElement, Error, ErrorKind, Loc, Result},
+        parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
-    encoding::{self, BasicEncodingKind, TransferSyntax},
     module::QualifiedIdentifier,
     types::*,
 };
@@ -74,315 +73,6 @@ impl BuiltinValue {
             Self::Duration(_) => TagType::Duration,
             Self::Containing(containing) => containing.container_type,
         })
-    }
-
-    /// Reverse-encodes the value, including its tag.
-    /// The resulting bytes are in reverse order.
-    /// The bytes of the final output must be reversed to be valid DER.
-    pub fn der_encode(
-        &self,
-        buf: &mut Vec<u8>,
-        context: &Context,
-        resolved_type: &ResolvedType,
-    ) -> Result<()> {
-        let start_len = buf.len();
-        match self {
-            Self::Boolean(b) => {
-                if *b {
-                    buf.push(0xff);
-                } else {
-                    buf.push(0x00);
-                }
-            }
-            Self::Integer(num) => {
-                if let Some(tag) = &resolved_type.tag {
-                    match (tag.class, TagType::try_from(tag.num)) {
-                        (Class::Universal, Ok(TagType::Real)) => {
-                            encoding::der_encode_real(buf, num.clone(), 10, BigInt::ZERO)
-                        }
-                        _ => encoding::der_encode_integer(buf, num),
-                    }
-                } else {
-                    encoding::der_encode_integer(buf, num);
-                }
-            }
-            Self::BitString(bit_string) => {
-                let le_bytes = bit_string.to_bytes_le();
-                buf.extend(&le_bytes);
-                buf.push(0x00); // TODO: implement support for bit strings with bit length not a multiple of 8
-            }
-            Self::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
-            Self::Null => (),
-            Self::ObjectIdentifier(oid) => {
-                let oid = oid.resolve_oid(context)?.0;
-
-                match oid.len() {
-                    2.. => {
-                        for node in oid.iter().skip(2).rev() {
-                            encoding::write_vlq(*node, buf);
-                        }
-                    }
-                    _ => {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(
-                                "illegal OBJECT IDENTIFIER with less than two nodes".to_string(),
-                            ),
-                            loc: Loc::default(), // TODO: add loc info to the entire oid, not just its elements
-                        });
-                    }
-                }
-
-                let prefix = oid[0] * 40 + oid[1];
-                encoding::write_vlq(prefix, buf);
-            }
-            Self::RelativeOid(oid) => {
-                let oid = oid.resolve_oid(context)?.0;
-                for node in oid.iter().rev() {
-                    encoding::write_vlq(*node, buf);
-                }
-            }
-            Self::RealLiteral(lit) => {
-                encoding::der_encode_real(buf, lit.mantissa.clone(), 10, lit.exponent.clone());
-            }
-            Self::Enumerated(enumerated) => {
-                let resolved = enumerated.resolve(context)?;
-                let num = match resolved {
-                    Self::Integer(num) => num.clone(),
-                    other => {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "ENUMERATED value must be of type INTEGER, but found {}",
-                                other.tag_type(context)?
-                            )),
-                            loc: enumerated.loc,
-                        })
-                    }
-                };
-                encoding::der_encode_integer(buf, &num);
-            }
-            Self::Time(time) => {
-                buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::Sequence(structure) | Self::Set(structure) => {
-                let tag = resolved_type
-                    .tag
-                    .as_ref()
-                    .expect("SEQUENCE or SET without a tag");
-                match (tag.class, TagType::try_from(tag.num)) {
-                    (Class::Universal, Ok(TagType::Real)) => {
-                        let special = structure.components.iter().find(|component| {
-                            component.name.element.as_str() == "asn1chef-special"
-                        });
-                        if let Some(special) = special {
-                            match special.value.resolve(context)? {
-                                BuiltinValue::Enumerated(enumerated) => {
-                                    match enumerated.resolve(context)? {
-                                        BuiltinValue::Integer(int) => {
-                                            let int: u32 = int
-                                                .try_into()
-                                                .expect("SpecialReal is out of bounds");
-                                            if int == 0 {
-                                                // PLUS-INFINITY
-                                                buf.push(0x40);
-                                            } else if int == 1 {
-                                                // MINUS-INFINITY
-                                                buf.push(0x41);
-                                            } else if int == 2 {
-                                                // NOT-A-NUMBER
-                                                buf.push(0x42);
-                                            } else {
-                                                unreachable!();
-                                            }
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                }
-                                _ => unreachable!(),
-                            }
-                        } else {
-                            macro_rules! to_int {
-                                ( $component:expr) => {{
-                                    let component = &$component;
-                                    match component.value.resolve(context)? {
-                                        BuiltinValue::Integer(int) => int.clone(),
-                                        _ => unreachable!(),
-                                    }
-                                }};
-                            }
-
-                            let mantissa = to_int!(structure.components[0]);
-                            let base = to_int!(structure.components[1]);
-                            let exponent = to_int!(structure.components[2]);
-
-                            encoding::der_encode_real(
-                                buf,
-                                mantissa,
-                                base.try_into().expect("base is out of bounds"),
-                                exponent,
-                            );
-                        }
-                    }
-                    (Class::Universal, Ok(TagType::External)) => encoding::der_encode_external(
-                        buf,
-                        context,
-                        &structure.components,
-                        resolved_type,
-                    )?,
-                    _ => {
-                        encoding::der_encode_structure(
-                            buf,
-                            context,
-                            &structure.components,
-                            resolved_type,
-                        )?;
-                    }
-                }
-            }
-            Self::SequenceOf(structure) | Self::SetOf(structure) => {
-                let component_type = match &resolved_type.ty {
-                    BuiltinType::StructureOf(structure_ty) => &structure_ty.component_type,
-                    other => unreachable!("value is SequenceOf but type is {:?}", other),
-                };
-                let component_type = component_type.resolve(context)?;
-                for element in structure.iter().rev() {
-                    let resolved = element.resolve(context)?;
-                    resolved.der_encode(buf, context, &component_type)?;
-                }
-            }
-            Self::Choice(choice) => {
-                let value = choice.value.resolve(context)?;
-                value.der_encode(buf, context, &choice.alternative_type)?;
-            }
-            Self::CharacterString(tag_type, str) => {
-                encoding::der_encode_character_string(buf, *tag_type, str);
-            }
-            Self::UTCTime(utc) => {
-                buf.extend(utc.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::GeneralizedTime(gt) => {
-                buf.extend(gt.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::Date(date) => {
-                buf.extend(date.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::TimeOfDay(time_of_day) => {
-                buf.extend(time_of_day.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::DateTime(date_time) => {
-                buf.extend(date_time.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::Duration(duration) => {
-                buf.extend(duration.to_ber_string().into_bytes().into_iter().rev());
-            }
-            Self::Containing(containing) => {
-                let constraint = resolved_type
-                    .constraint
-                    .as_ref()
-                    .map(|constraint| {
-                        constraint
-                            .flatten()
-                            .iter()
-                            .find_map(|subtype| match &subtype.element {
-                                SubtypeElement::Contents(contents) => Some(contents),
-                                _ => None,
-                            })
-                    })
-                    .expect("CONTAINING value for type without constraint")
-                    .expect("CONTAINING value for type without contents constraint");
-                let contained_type = constraint.ty.resolve(context)?;
-
-                let encoding = match &constraint.encoded_by {
-                    Some(encoded_by) => {
-                        let resolved = encoded_by.resolve(context)?;
-                        match resolved {
-                            BuiltinValue::ObjectIdentifier(oid) => {
-                                let oid = oid.resolve_oid(context)?;
-                                match TransferSyntax::get_by_oid(&oid) {
-                                    Some(ts) => {
-                                        if ts.get_support().encode {
-                                            ts
-                                        } else {
-                                            return Err(Error {
-                                                kind: ErrorKind::Ast(format!("encoding with the {} transfer syntax is not yet implemented", ts.name())),
-                                                loc: encoded_by.loc,
-                                            })
-                                        }
-                                    }
-                                    None => {
-                                        return Err(Error {
-                                            kind: ErrorKind::Ast(format!("the provided OBJECT IDENTIFIER ({}) does not represent a registered transfer syntax", oid)),
-                                            loc: encoded_by.loc,
-                                        })
-                                    }
-                                }
-                            }
-                            other => {
-                                return Err(Error {
-                                    kind: ErrorKind::Ast(format!(
-                                    "expecting OBJECT IDENTIFIER for the transfer syntax, found {}",
-                                    other.tag_type(context)?
-                                )),
-                                    loc: encoded_by.loc,
-                                })
-                            }
-                        }
-                    }
-                    // TODO: DER is the only supported transfer syntax currently,
-                    // but this should default to the current transfer syntax in the future
-                    None => &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
-                };
-
-                if encoding != &TransferSyntax::Basic(BasicEncodingKind::Distinguished) {
-                    todo!();
-                }
-
-                containing
-                    .value
-                    .resolve(context)?
-                    .der_encode(buf, context, &contained_type)?;
-
-                match &resolved_type.ty {
-                    // write the bit string unused bits count
-                    BuiltinType::BitString(_) => buf.push(0x00),
-                    BuiltinType::OctetString => (),
-                    _ => unreachable!(),
-                }
-            }
-        }
-
-        let tag = resolved_type.tag.as_ref();
-        if let Some(tag) = tag {
-            let end_len = buf.len();
-            if tag.kind == TagKind::Explicit {
-                if let Some(tag_type) = resolved_type.ty.tag_type() {
-                    encoding::write_tlv_len((end_len - start_len) as u64, buf);
-                    Tag::universal(tag_type).der_encode(
-                        buf,
-                        TagContext {
-                            is_outer_explicit: false,
-                            ty: &resolved_type.ty,
-                        },
-                    );
-                }
-            }
-
-            let end_len = buf.len();
-            encoding::write_tlv_len((end_len - start_len) as u64, buf);
-            tag.der_encode(
-                buf,
-                TagContext {
-                    is_outer_explicit: tag.kind == TagKind::Explicit,
-                    ty: &resolved_type.ty,
-                },
-            );
-        } else {
-            assert!(
-                matches!(resolved_type.ty, BuiltinType::Choice(_)),
-                "der_encode: resolved_type tag is None but type is not CHOICE"
-            );
-        }
-
-        Ok(())
     }
 }
 
@@ -459,22 +149,22 @@ impl ValueResolve for AstElement<Value> {
 mod test {
     use crate::compiler::test::json_test;
 
-    json_test!(test_encode_universal_types, "encode/UniversalTypeTest");
-    json_test!(test_encode_enumerated, "encode/EnumeratedTest");
+    json_test!(test_encode_universal_types, "../../test-data/encode/UniversalTypeTest");
+    json_test!(test_encode_enumerated, "../../test-data/encode/EnumeratedTest");
     json_test!(
         test_encode_choice_implicit_tagging,
-        "encode/ChoiceTestImplicitTagging"
+        "../../test-data/encode/ChoiceTestImplicitTagging"
     );
     json_test!(
         test_encode_choice_automatic_tagging,
-        "encode/ChoiceTestAutomaticTagging"
+        "../../test-data/encode/ChoiceTestAutomaticTagging"
     );
-    json_test!(test_encode_external_x680, "encode/External-X680Test");
-    json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
-    json_test!(test_encode_character_string, "encode/CharacterStringTest");
-    json_test!(test_encode_real, "encode/RealTest");
+    json_test!(test_encode_external_x680, "../../test-data/encode/External-X680Test");
+    json_test!(test_encode_embedded_pdv, "../../test-data/encode/EmbeddedPDVTest");
+    json_test!(test_encode_character_string, "../../test-data/encode/CharacterStringTest");
+    json_test!(test_encode_real, "../../test-data/encode/RealTest");
     json_test!(
         test_encode_contents_constraint,
-        "encode/ContentsConstraintTest"
+        "../../test-data/encode/ContentsConstraintTest"
     );
 }

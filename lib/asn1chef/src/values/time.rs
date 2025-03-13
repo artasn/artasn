@@ -9,11 +9,9 @@ fn parse_base_10_integer<T: Num + NumCast + Copy, R: RangeBounds<u64>>(
     valid_range: R,
 ) -> Result<T> {
     let value = chars.element;
-    let length = value.len();
 
-    let mut digits = Vec::with_capacity(length);
-    for i in 0..length {
-        let digit = value[i];
+    let mut digits = Vec::with_capacity(value.len());
+    for digit in value.iter().cloned() {
         if !(digit as char).is_ascii_digit() {
             return Err(Error {
                 kind: ErrorKind::Ast(format!("invalid base-10 digit: '{}'", digit as char)),

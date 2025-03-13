@@ -27,7 +27,7 @@ impl CodeBuilder {
         self.buf[start..end].to_string()
     } 
 
-    pub fn to_string(self) -> String {
+    pub fn into_string(self) -> String {
         self.buf
     }
 

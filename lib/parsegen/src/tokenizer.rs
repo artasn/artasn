@@ -236,17 +236,17 @@ impl Display for TokenKind {
 
 #[derive(Debug, Clone, Copy)]
 pub enum StringKind {
-    CString,
-    HString,
-    BString,
+    C,
+    H,
+    B,
 }
 
 impl Display for StringKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::CString => "cstring",
-            Self::HString => "hstring",
-            Self::BString => "bstring",
+            Self::C => "cstring",
+            Self::H => "hstring",
+            Self::B => "bstring",
         })
     }
 }
@@ -563,7 +563,7 @@ impl Tokenizer {
 
     fn tokenize_string(&mut self) -> Result<Option<Token>> {
         let (loc, text, kind) = if let Some((loc, text, _)) = self.tokenize_string_delim('"')? {
-            (loc, text, StringKind::CString)
+            (loc, text, StringKind::C)
         } else if let Some((loc, text, suffix)) = self.tokenize_string_delim('\'')? {
             match self.assert_string_validity(loc, text, suffix) {
                 Ok(string) => string,
@@ -595,9 +595,9 @@ impl Tokenizer {
             hstring_indicators = "H";
         }
         let (invalid_char, kind) = if bstring_indicators.contains(suffix) {
-            (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::BString)
+            (BSTRING_NEGATIVE_REGEX.find(&text), StringKind::B)
         } else if hstring_indicators.contains(suffix) {
-            (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::HString)
+            (HSTRING_NEGATIVE_REGEX.find(&text), StringKind::H)
         } else {
             return Err(Error {
                 kind: ErrorKind::InvalidStringIndicator(suffix),

@@ -1,73 +1,122 @@
 use std::io;
 
+use num::bigint::Sign;
 use num::{BigInt, BigUint};
 use widestring::{Utf16String, Utf32String};
 
-use super::*;
+use crate::compiler::parser::Result;
+use crate::encoding::*;
 use crate::{
     compiler::{
-        parser::{self, AstElement, Loc},
+        parser::{AstElement, Loc},
         Context,
     },
-    module::QualifiedIdentifier,
     types::*,
     values::*,
 };
 
-#[derive(Debug)]
-pub enum DecodedValueForm {
-    Primitive(DecodedValueKind),
-    Constructed(Vec<DecodedValue>),
+use super::read_vlq;
+use super::DerReader;
+
+struct ComponentData<'a> {
+    pub name: Option<String>,
+    pub tagged_type: &'a TaggedType,
+    pub index: usize,
 }
 
-#[derive(Debug)]
-pub struct DecodedValueMetadata {
-    pub type_ident: Option<QualifiedIdentifier>,
-    pub component_name: Option<String>,
+fn get_component_by_tag<'a>(
+    context: &Context,
+    mode: &'a DecodeMode,
+    tlv_tag: &TlvElement<TlvTag>,
+    index: usize,
+) -> DecodeResult<Option<ComponentData<'a>>> {
+    // TODO: implement SET
+    Ok(match mode {
+        DecodeMode::Contextless => None,
+        DecodeMode::SpecificType { resolved, .. } => match &resolved.ty {
+            BuiltinType::Structure(structure) => {
+                for (component_index, component) in
+                    structure.components.iter().enumerate().skip(index)
+                {
+                    let component_type = component
+                        .component_type
+                        .resolve(context)
+                        .map_err(DecodeError::Parser)?;
+
+                    let tag_matches = type_eq_tlv(context, &component_type, &tlv_tag.element)
+                        .map_err(DecodeError::Parser)?
+                        .is_some();
+                    if !tag_matches {
+                        if component.optional || component.default_value.is_some() {
+                            continue;
+                        } else {
+                            let tag_str = resolved
+                                .get_possible_tags(context)
+                                .map_err(DecodeError::Parser)?
+                                .into_iter()
+                                .map(|(tag, _)| tag.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" | ");
+                            return Err(DecodeError::Decoder {
+                                message: format!("SEQUENCE component at index {} is defined with tag {} but the encoded value has tag {}", component_index, tag_str, tlv_tag.element),
+                                pos: tlv_tag.pos,
+                            });
+                        }
+                    }
+
+                    let data = ComponentData {
+                        name: Some(component.name.element.clone()),
+                        tagged_type: &component.component_type,
+                        index: component_index,
+                    };
+                    if tag_matches {
+                        return Ok(Some(data));
+                    }
+                }
+                None
+            }
+            BuiltinType::StructureOf(of) => Some(ComponentData {
+                name: None,
+                tagged_type: &of.component_type,
+                index,
+            }),
+            _ => None,
+        },
+    })
 }
 
-#[derive(Debug)]
-pub struct DecodedValue {
-    pub tag: TlvElement<TlvTag>,
-    pub len: TlvElement<u32>,
-    pub value_pos: TlvPos,
-    pub form: DecodedValueForm,
-    pub metadata: Option<DecodedValueMetadata>,
-}
-
-#[derive(Debug)]
-pub enum DecodeMode {
-    Contextless,
-    SpecificType {
-        source_ident: Option<QualifiedIdentifier>,
-        component_name: Option<String>,
-        resolved: ResolvedType,
-    },
-}
-
-#[derive(Debug)]
-pub enum DecodeError {
-    Io(io::Error),
-    Parser(parser::Error),
-    Decoder { message: String, pos: TlvPos },
-}
-
-impl Display for DecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io(err) => f.write_fmt(format_args!("io error: {}", err)),
-            Self::Parser(err) => f.write_fmt(format_args!("parser error: {}", err.kind.message())),
-            Self::Decoder { message, pos } => f.write_fmt(format_args!(
-                "decoder error: {} at bytes {}+{}",
-                message,
-                pos.start,
-                pos.end - pos.start
-            )),
+pub fn type_eq_tlv(
+    context: &Context,
+    resolved_type: &ResolvedType,
+    tlv_tag: &TlvTag,
+) -> Result<Option<BuiltinType>> {
+    let tags = resolved_type.get_possible_tags(context)?;
+    for (tag, ty) in tags {
+        if tag.class == tlv_tag.class && tag.num == tlv_tag.num {
+            return Ok(Some(ty));
         }
     }
+    Ok(None)
 }
 
-pub type DecodeResult<T> = Result<T, DecodeError>;
+fn der_decode_integer(value: &[u8]) -> io::Result<BigInt> {
+    const SIGN_MASK: u8 = 0b1000_0000;
+
+    if value.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "INTEGER must have a value",
+        ));
+    }
+
+    let sign = if value[0] & SIGN_MASK == SIGN_MASK {
+        Sign::Minus
+    } else {
+        Sign::Plus
+    };
+
+    Ok(BigInt::from_bytes_be(sign, value))
+}
 
 fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedValueKind> {
     let value = tlv.value.element;
@@ -260,51 +309,29 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
     })
 }
 
-fn type_eq_tlv(
+pub fn der_decode_value(
     context: &Context,
-    resolved_type: &ResolvedType,
-    tlv_tag: &TlvTag,
-) -> parser::Result<Option<BuiltinType>> {
-    let tags = resolved_type.get_possible_tags(context)?;
-    for (tag, ty) in tags {
-        if tag.class == tlv_tag.class && tag.num == tlv_tag.num {
-            return Ok(Some(ty));
-        }
-    }
-    Ok(None)
-}
-
-struct ComponentData<'a> {
-    pub name: Option<String>,
-    pub tagged_type: &'a TaggedType,
-    pub index: usize,
-}
-
-fn get_component_by_tag<'a>(
-    context: &Context,
-    mode: &'a DecodeMode,
-    tlv_tag: &TlvElement<TlvTag>,
-    index: usize,
-) -> DecodeResult<Option<ComponentData<'a>>> {
-    // TODO: implement SET
-    Ok(match mode {
-        DecodeMode::Contextless => None,
-        DecodeMode::SpecificType { resolved, .. } => match &resolved.ty {
-            BuiltinType::Structure(structure) => {
-                for (component_index, component) in
-                    structure.components.iter().enumerate().skip(index)
-                {
-                    let component_type = component
-                        .component_type
-                        .resolve(context)
-                        .map_err(DecodeError::Parser)?;
-
-                    let tag_matches = type_eq_tlv(context, &component_type, &tlv_tag.element)
-                        .map_err(DecodeError::Parser)?
-                        .is_some();
-                    if !tag_matches {
-                        if component.optional || component.default_value.is_some() {
-                            continue;
+    tlv: Tlv<'_>,
+    mode: &DecodeMode,
+) -> DecodeResult<DecodedValue> {
+    let form = match tlv.tag.element.form {
+        TypeForm::Primitive => {
+            let kind = match tlv.tag.element.class {
+                Class::Universal => match TagType::try_from(tlv.tag.element.num) {
+                    Ok(tag_type) => {
+                        der_decode_universal(&tlv, tag_type).map_err(DecodeError::Io)?
+                    }
+                    Err(_) => DecodedValueKind::Raw(tlv.value.element.to_vec()),
+                },
+                _ => match &mode {
+                    DecodeMode::Contextless => DecodedValueKind::Raw(tlv.value.element.to_vec()),
+                    DecodeMode::SpecificType { resolved, .. } => {
+                        if let Some(ty) = type_eq_tlv(context, resolved, &tlv.tag.element)
+                            .map_err(DecodeError::Parser)?
+                        {
+                            // we use ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
+                            der_decode_universal(&tlv, ty.tag_type().expect("tag_type"))
+                                .map_err(DecodeError::Io)?
                         } else {
                             let tag_str = resolved
                                 .get_possible_tags(context)
@@ -314,148 +341,97 @@ fn get_component_by_tag<'a>(
                                 .collect::<Vec<String>>()
                                 .join(" | ");
                             return Err(DecodeError::Decoder {
-                                message: format!("SEQUENCE component at index {} is defined with tag {} but the encoded value has tag {}", component_index, tag_str, tlv_tag.element),
-                                pos: tlv_tag.pos,
+                                message: format!("DecodeMode is SpecificType but encoded tag {} does not match provided tag {}", tlv.tag.element, tag_str),
+                                pos: tlv.tag.pos,
                             });
                         }
                     }
-
-                    let data = ComponentData {
-                        name: Some(component.name.element.clone()),
-                        tagged_type: &component.component_type,
-                        index: component_index,
-                    };
-                    if tag_matches {
-                        return Ok(Some(data));
+                },
+            };
+            DecodedValueForm::Primitive(kind)
+        }
+        TypeForm::Constructed => {
+            let mut index = 0;
+            let mut elements = Vec::new();
+            for tlv in DerReader::new(tlv.value.element, tlv.value.pos.start) {
+                let tlv = tlv.map_err(DecodeError::Io)?;
+                let component = get_component_by_tag(context, mode, &tlv.tag, index)?;
+                let mode = match component {
+                    Some(data) => {
+                        index = data.index + 1;
+                        DecodeMode::SpecificType {
+                            source_ident: match &data.tagged_type.ty {
+                                UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
+                                UntaggedType::BuiltinType(_) => None,
+                            },
+                            component_name: data.name,
+                            resolved: data
+                                .tagged_type
+                                .resolve(context)
+                                .map_err(DecodeError::Parser)?,
+                        }
                     }
-                }
-                None
+                    None => {
+                        index += 1;
+                        DecodeMode::Contextless
+                    }
+                };
+                elements.push(der_decode_value(context, tlv, &mode)?);
             }
-            BuiltinType::StructureOf(of) => Some(ComponentData {
-                name: None,
-                tagged_type: &of.component_type,
-                index,
-            }),
-            _ => None,
-        },
+            DecodedValueForm::Constructed(elements)
+        }
+    };
+    let metadata = match mode {
+        DecodeMode::Contextless => None,
+        DecodeMode::SpecificType {
+            source_ident,
+            component_name,
+            ..
+        } => Some(DecodedValueMetadata {
+            type_ident: source_ident.clone(),
+            component_name: component_name.clone(),
+        }),
+    };
+
+    Ok(DecodedValue {
+        tag: tlv.tag,
+        len: TlvElement::new(tlv.value.element.len() as u32, tlv.len_pos),
+        value_pos: tlv.value.pos,
+        form,
+        metadata,
     })
 }
 
-impl DecodedValue {
-    pub fn der_decode(
-        context: &Context,
-        tlv: Tlv<'_>,
-        mode: &DecodeMode,
-    ) -> DecodeResult<DecodedValue> {
-        let form = match tlv.tag.element.form {
-            TypeForm::Primitive => {
-                let kind = match tlv.tag.element.class {
-                    Class::Universal => match TagType::try_from(tlv.tag.element.num) {
-                        Ok(tag_type) => {
-                            der_decode_universal(&tlv, tag_type).map_err(DecodeError::Io)?
-                        }
-                        Err(_) => DecodedValueKind::Raw(tlv.value.element.to_vec()),
-                    },
-                    _ => match &mode {
-                        DecodeMode::Contextless => {
-                            DecodedValueKind::Raw(tlv.value.element.to_vec())
-                        }
-                        DecodeMode::SpecificType { resolved, .. } => {
-                            if let Some(ty) = type_eq_tlv(context, resolved, &tlv.tag.element)
-                                .map_err(DecodeError::Parser)?
-                            {
-                                // we use ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
-                                der_decode_universal(&tlv, ty.tag_type().expect("tag_type"))
-                                    .map_err(DecodeError::Io)?
-                            } else {
-                                let tag_str = resolved
-                                    .get_possible_tags(context)
-                                    .map_err(DecodeError::Parser)?
-                                    .into_iter()
-                                    .map(|(tag, _)| tag.to_string())
-                                    .collect::<Vec<String>>()
-                                    .join(" | ");
-                                return Err(DecodeError::Decoder {
-                                    message: format!("DecodeMode is SpecificType but encoded tag {} does not match provided tag {}", tlv.tag.element, tag_str),
-                                    pos: tlv.tag.pos,
-                                });
-                            }
-                        }
-                    },
-                };
-                DecodedValueForm::Primitive(kind)
-            }
-            TypeForm::Constructed => {
-                let mut index = 0;
-                let mut elements = Vec::new();
-                for tlv in DerReader::new(tlv.value.element, tlv.value.pos.start) {
-                    let tlv = tlv.map_err(DecodeError::Io)?;
-                    let component = get_component_by_tag(context, mode, &tlv.tag, index)?;
-                    let mode = match component {
-                        Some(data) => {
-                            index = data.index + 1;
-                            DecodeMode::SpecificType {
-                                source_ident: match &data.tagged_type.ty {
-                                    UntaggedType::Reference(typeref) => {
-                                        Some(typeref.element.clone())
-                                    }
-                                    UntaggedType::BuiltinType(_) => None,
-                                },
-                                component_name: data.name,
-                                resolved: data
-                                    .tagged_type
-                                    .resolve(context)
-                                    .map_err(DecodeError::Parser)?,
-                            }
-                        }
-                        None => {
-                            index += 1;
-                            DecodeMode::Contextless
-                        }
-                    };
-                    elements.push(Self::der_decode(context, tlv, &mode)?);
-                }
-                DecodedValueForm::Constructed(elements)
-            }
-        };
-        let metadata = match mode {
-            DecodeMode::Contextless => None,
-            DecodeMode::SpecificType {
-                source_ident,
-                component_name,
-                ..
-            } => Some(DecodedValueMetadata {
-                type_ident: source_ident.clone(),
-                component_name: component_name.clone(),
-            }),
-        };
+#[cfg(test)]
+mod test {
+    use crate::{
+        compiler::{test::json_test, Context},
+        encoding::{ber::DerReader, *},
+    };
 
-        Ok(DecodedValue {
-            tag: tlv.tag,
-            len: TlvElement::new(tlv.value.element.len() as u32, tlv.len_pos),
-            value_pos: tlv.value.pos,
-            form,
-            metadata,
-        })
+    use super::der_decode_value;
+
+    #[test]
+    fn test_der_decode_contextless() {
+        // TODO: once the compiler has the functionality to compile the X.509 modules,
+        // change DecodeMode from Contextless to SpecificType with the Certificate type
+        let reader = DerReader::new(
+            include_bytes!("../../../test-data/decode/LetsEncryptX3.der"),
+            0,
+        );
+        let context = Context::new();
+        reader
+            .into_iter()
+            .map(|tlv| {
+                der_decode_value(
+                    &context,
+                    tlv.map_err(DecodeError::Io)?,
+                    &DecodeMode::Contextless,
+                )
+            })
+            .collect::<DecodeResult<Vec<DecodedValue>>>()
+            .unwrap();
     }
-}
 
-#[derive(Debug)]
-pub enum DecodedValueKind {
-    Raw(Vec<u8>),
-    Boolean(bool),
-    Integer(BigInt),
-    BitString(BigUint),
-    OctetString(Vec<u8>),
-    Null,
-    ObjectIdentifier(Oid),
-    Real(f64),
-    Enumerated(i64),
-    Time(Time),
-    CharacterString(TagType, String),
-    UTCTime(UTCTime),
-    Date(Date),
-    TimeOfDay(TimeOfDay),
-    DateTime(DateTime),
-    Duration(Duration),
+    json_test!(test_der_decode_specific_type, "../../../test-data/decode/DecodeTest");
 }
