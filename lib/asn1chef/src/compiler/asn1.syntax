@@ -376,6 +376,19 @@ variant SubtypeElement = ValueRangeConstraint {
     return value
 };
 
+rule ContentsConstraint {
+    captures {
+        ty = Type
+        value = Value
+    }
+    keyword CONTAINING
+    persist
+    ty = Type
+    keyword ENCODED
+    keyword BY
+    value = Value
+}
+
 rule SizeConstraint {
     captures {
         constraint = Constraint

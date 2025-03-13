@@ -92,8 +92,17 @@ fn parse_inner_type_constraints(
     itc: &AstElement<AstInnerTypeConstraints>,
     constrained_type: &ResolvedType,
 ) -> Result<InnerTypeConstraints> {
-    let components = match &constrained_type.ty {
-        BuiltinType::Structure(structure) => &structure.components,
+    let components: Vec<(&AstElement<String>, &Box<TaggedType>)> = match &constrained_type.ty {
+        BuiltinType::Structure(structure) => structure
+            .components
+            .iter()
+            .map(|component| (&component.name, &component.component_type))
+            .collect(),
+        BuiltinType::Choice(choice) => choice
+            .alternatives
+            .iter()
+            .map(|alternative| (&alternative.name, &alternative.alternative_type))
+            .collect(),
         other => {
             return Err(Error {
                 kind: ErrorKind::Ast(format!(
@@ -124,9 +133,9 @@ fn parse_inner_type_constraints(
                     .map(|name| name.0.clone()),
                 constraint: {
                     let component_type = match components.iter().find(|component| {
-                        component.name.element == ast_component.element.name.element.0
+                        component.0.element == ast_component.element.name.element.0
                     }) {
-                        Some(component) => component.component_type.resolve(parser.context)?,
+                        Some(component) => component.1.resolve(parser.context)?,
                         None => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(

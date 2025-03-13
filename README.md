@@ -9,8 +9,15 @@ The [ASN.1⬢Chef Editor](https://asn1chef.github.io/asn1chef) provides a Visual
 Functionality includes:
 
 - [x] Compiling ASN.1 modules
-  - [x] All UNIVERSAL types (excluding EXTERNAL at this time)
+  - [x] All 34 UNIVERSAL types and CHOICE
   - [x] Constraints (enforced at compile-time, but not at decode-time)
+    - [x] Single Value and Value Range
+    - [x] Size
+    - [x] Inner Type (parsed but not enforced at this time)
+    - [ ] Permitted Alphabet
+    - [ ] Pattern
+    - [ ] Properties
+    - [ ] Type
   - [ ] Parmeterized types
   - [ ] CLASS types
   - [ ] MACRO definitions

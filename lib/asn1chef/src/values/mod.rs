@@ -156,11 +156,6 @@ impl BuiltinValue {
                 buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
             }
             Self::Sequence(structure) | Self::Set(structure) => {
-                let ty_components = match &resolved_type.ty {
-                    BuiltinType::Structure(structure) => &structure.components,
-                    _ => unreachable!(),
-                };
-
                 let tag = resolved_type
                     .tag
                     .as_ref()
@@ -219,28 +214,21 @@ impl BuiltinValue {
                             );
                         }
                     }
+                    (Class::Universal, Ok(TagType::External)) => {
+                        encoding::der_encode_external(
+                            buf,
+                            context,
+                            &structure.components,
+                            resolved_type,
+                        )?
+                    }
                     _ => {
-                        // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
-                        // and that the value provides only components in the SEQUENCE/SET type,
-                        // and that the component values are in the same order as in the type definition
-                        for component in structure.components.iter().rev() {
-                            // default values aren't encoded
-                            if component.is_default {
-                                continue;
-                            }
-                            let value = component.value.resolve(context)?;
-                            let value_ty = ty_components
-                                .iter()
-                                .find(|ty_component| {
-                                    ty_component.name.element == component.name.element
-                                })
-                                .expect(
-                                    "find type component matching value component for SEQUENCE/SET",
-                                )
-                                .component_type
-                                .resolve(context)?;
-                            value.der_encode(buf, context, &value_ty)?;
-                        }
+                        encoding::der_encode_structure(
+                            buf,
+                            context,
+                            &structure.components,
+                            resolved_type,
+                        )?;
                     }
                 }
             }
@@ -401,6 +389,7 @@ mod test {
         test_encode_choice_automatic_tagging,
         "encode/ChoiceTestAutomaticTagging"
     );
+    json_test!(test_encode_external_x680, "encode/External-X680Test");
     json_test!(test_encode_embedded_pdv, "encode/EmbeddedPDVTest");
     json_test!(test_encode_character_string, "encode/CharacterStringTest");
     json_test!(test_encode_real, "encode/RealTest");

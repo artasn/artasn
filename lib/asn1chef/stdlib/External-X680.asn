@@ -1,4 +1,4 @@
-External-X680 DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+External DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 
 -- This is the current implementation of the EXTERNAL type.
 -- It is the same as EMBEDDED PDV but has different components selected.

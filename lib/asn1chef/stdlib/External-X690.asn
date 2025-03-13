@@ -6,6 +6,8 @@ External-X690 DEFINITIONS EXPLICIT TAGS ::= BEGIN
 -- See X.690 clause 8.18 and its subclauses to see how the X.680 EXTERNAL type is mapped to this type.
 -- The X.208 EXTERNAL type is directly equivalent to this type at the presentation layer.
 
+-- This module is not actually loaded as part of the the standard library,
+-- but instead serves as reference material for the `der_encode_external` function in src/encoding/values.rs.
 External ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
     direct-reference      OBJECT IDENTIFIER OPTIONAL,
     indirect-reference    INTEGER           OPTIONAL,

@@ -181,6 +181,14 @@ pub struct ResolvedType {
 }
 
 impl ResolvedType {
+    pub fn universal(tag_type: TagType) -> ResolvedType {
+        ResolvedType {
+            tag: Some(Tag::universal(tag_type)),
+            ty: BuiltinType::universal(tag_type),
+            constraint: None,
+        }
+    }
+
     pub fn get_possible_tags(&self, context: &Context) -> Result<Vec<(Tag, BuiltinType)>> {
         let mut tags = Vec::with_capacity(1);
         self.extend_possible_tags(context, &mut tags)?;
@@ -391,6 +399,28 @@ pub enum BuiltinType {
 }
 
 impl BuiltinType {
+    pub fn universal(tag_type: TagType) -> BuiltinType {
+        match tag_type {
+            TagType::Boolean => Self::Boolean,
+            TagType::Integer => Self::Integer(IntegerType { named_values: None }),
+            TagType::BitString => Self::BitString(BitStringType { named_bits: None }),
+            TagType::OctetString => Self::OctetString,
+            TagType::Null => Self::Null,
+            TagType::ObjectIdentifier => Self::ObjectIdentifier,
+            TagType::ObjectDescriptor => Self::CharacterString(TagType::ObjectDescriptor),
+            TagType::Real => Self::Real,
+            TagType::RelativeOid => Self::RelativeOid,
+            TagType::Time => Self::Time,
+            TagType::UTCTime => Self::UTCTime,
+            TagType::GeneralizedTime => Self::GeneralizedTime,
+            TagType::Date => Self::Date,
+            TagType::TimeOfDay => Self::TimeOfDay,
+            TagType::DateTime => Self::DateTime,
+            TagType::Duration => Self::Duration,
+            tag_type => unimplemented!("default BuiltinType for {}", tag_type),
+        }
+    }
+
     pub fn tag_type(&self) -> Option<TagType> {
         Some(match self {
             Self::Boolean => TagType::Boolean,

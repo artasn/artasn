@@ -7,7 +7,7 @@ pub use context::Context;
 #[path = "asn1.gen.rs"]
 pub mod parser;
 
-use options::CompilerConfig;
+use options::{Asn1Edition, CompilerConfig};
 use parser::*;
 use std::fmt::Display;
 
@@ -116,6 +116,12 @@ impl Compiler {
         for (name, source) in STDLIB_MODULES.iter() {
             self.add_source(name.to_string(), source.to_string())?;
         }
+
+        let (external_name, external_source) = match self.config.edition {
+            Asn1Edition::X208 => ("External-X208.asn", include_str!("../../stdlib/External-X208.asn")),
+            Asn1Edition::X680 => ("External-X680.asn", include_str!("../../stdlib/External-X680.asn")),
+        };
+        self.add_source(external_name.to_string(), external_source.to_string())?;
 
         Ok(())
     }

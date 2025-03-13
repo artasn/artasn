@@ -177,7 +177,7 @@ fn parse_character_string(
         TagType::VisibleString => |ch: char| ch.is_ascii_graphic() || ch == ' ',
         TagType::IA5String => |ch: char| ch <= '\x7f',
         TagType::GraphicString | TagType::ObjectDescriptor => {
-            |ch: char| ch == ' ' || ch.is_alphanumeric()
+            |ch: char| ch == ' ' || !ch.is_control()
         }
         _ => unreachable!(),
     };

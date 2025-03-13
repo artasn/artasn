@@ -1,0 +1,32 @@
+{
+    "module": "External-X680Test",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "with-syntax",
+            "der": "280A06048B092F0281021337"
+        },
+        {
+            "name": "with-presentation-context-id",
+            "der": "28080202232981021337"
+        },
+        {
+            "name": "with-context-negotiation",
+            "der": "280E06048B092F010202232981021337"
+        },
+        {
+            "name": "with-syntax-and-descriptor",
+            "der": "282606048B092F02071A776974682D73796E7461782D616E642D64657363726970746F7281021337"
+        },
+        {
+            "name": "with-presentation-context-id-and-descriptor",
+            "der": "283502022329072B776974682D70726573656E746174696F6E2D636F6E746578742D69642D616E642D64657363726970746F7281021337"
+        },
+        {
+            "name": "with-context-negotiation-and-descriptor",
+            "der": "283706048B092F01020223290727776974682D636F6E746578742D6E65676F74696174696F6E2D616E642D64657363726970746F7281021337"
+        }
+    ]
+}

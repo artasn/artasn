@@ -3,7 +3,11 @@ use std::io;
 use num::{bigint::Sign, BigInt, BigUint, Signed};
 use widestring::{Utf16String, Utf32String};
 
-use crate::types::TagType;
+use crate::{
+    compiler::{parser::Result, Context},
+    types::{BuiltinType, Class, ResolvedType, Tag, TagKind, TagSource, TagType},
+    values::{BuiltinValue, StructureValueComponent, ValueResolve},
+};
 
 use super::strings;
 
@@ -166,4 +170,122 @@ pub fn der_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut e
     } else {
         panic!("base = {} but must be either 2 or 10", base);
     }
+}
+
+pub fn der_encode_structure(
+    buf: &mut Vec<u8>,
+    context: &Context,
+    components: &[StructureValueComponent],
+    resolved_type: &ResolvedType,
+) -> Result<()> {
+    let ty_components = match &resolved_type.ty {
+        BuiltinType::Structure(structure) => &structure.components,
+        _ => unreachable!(),
+    };
+
+    // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
+    // and that the value provides only components in the SEQUENCE/SET type,
+    // and that the component values are in the same order as in the type definition
+    for component in components.iter().rev() {
+        // default values aren't encoded
+        if component.is_default {
+            continue;
+        }
+        let value = component.value.resolve(context)?;
+        let value_ty = ty_components
+            .iter()
+            .find(|ty_component| ty_component.name.element == component.name.element)
+            .expect("find type component matching value component for SEQUENCE/SET")
+            .component_type
+            .resolve(context)?;
+        value.der_encode(buf, context, &value_ty)?;
+    }
+
+    Ok(())
+}
+
+/// See X.690 clause 8.18 and its subclauses to see what is being encoded here.
+pub fn der_encode_external(
+    buf: &mut Vec<u8>,
+    context: &Context,
+    components: &[StructureValueComponent],
+    resolved_type: &ResolvedType,
+) -> Result<()> {
+    if components
+        .iter()
+        .find(|component| component.name.element.as_str() == "encoding")
+        .is_some()
+    {
+        // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
+        // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
+        der_encode_structure(buf, context, components, resolved_type)?;
+    } else {
+        let data_value = components
+            .iter()
+            .find(|component| component.name.element.as_str() == "data-value")
+            .expect("missing data-value");
+        let data_value = data_value.value.resolve(context)?;
+        data_value.der_encode(
+            buf,
+            context,
+            &ResolvedType {
+                tag: Some(Tag::new(
+                    Class::ContextSpecific,
+                    1,
+                    TagKind::Implicit,
+                    TagSource::KindSpecified,
+                )), // this is the tag for the 'octet-aligned' variant of 'encoding CHOICE { ... }'
+                ty: BuiltinType::OctetString,
+                constraint: None,
+            },
+        )?;
+
+        if let Some(data_value_descriptor) = components
+            .iter()
+            .find(|component| component.name.element.as_str() == "data-value-descriptor")
+        {
+            let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
+            data_value_descriptor.der_encode(
+                buf,
+                context,
+                &ResolvedType::universal(TagType::ObjectDescriptor),
+            )?;
+        }
+
+        let (direct_reference, indirect_reference) = match &components[0].value.resolve(context)? {
+            BuiltinValue::Choice(choice) => {
+                let alternative_value = choice.value.resolve(context)?;
+                match choice.alternative.element.as_str() {
+                    "syntax" => (Some(alternative_value), None),
+                    "presentation-context-id" => (None, Some(alternative_value)),
+                    "context-negotiation" => match alternative_value {
+                        BuiltinValue::Sequence(seq) => {
+                            let presentation_context_id =
+                                seq.components[0].value.resolve(context)?;
+                            let transfer_syntax = seq.components[1].value.resolve(context)?;
+                            (Some(transfer_syntax), Some(presentation_context_id))
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        };
+        if let Some(indirect_reference) = indirect_reference {
+            indirect_reference.der_encode(
+                buf,
+                context,
+                &ResolvedType::universal(TagType::Integer),
+            )?;
+        }
+        if let Some(direct_reference) = direct_reference {
+            direct_reference.der_encode(
+                buf,
+                context,
+                &ResolvedType::universal(TagType::ObjectIdentifier),
+            )?;
+        }
+    }
+    Ok(())
 }

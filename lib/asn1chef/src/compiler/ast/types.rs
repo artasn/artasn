@@ -6,6 +6,10 @@ lazy_static::lazy_static! {
         ModuleIdentifier::with_name(String::from("Real")),
         String::from("Real"),
     );
+    static ref EXTERNAL_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("External")),
+        String::from("External"),
+    );
     static ref EMBEDDED_PDV_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
         ModuleIdentifier::with_name(String::from("EmbeddedPDV")),
         String::from("EmbeddedPDV"),
@@ -175,7 +179,10 @@ fn parse_builtin_type(
         AstBuiltinType::ObjectDescriptor(_) => {
             BuiltinType::CharacterString(TagType::ObjectDescriptor)
         }
-        AstBuiltinType::External(_) => todo!("External"),
+        AstBuiltinType::External(_) => return Ok(UntaggedType::Reference(AstElement::new(
+            EXTERNAL_IDENT.clone(),
+            builtin.loc,
+        ))),
         AstBuiltinType::Real(_) => {
             return Ok(UntaggedType::Reference(AstElement::new(
                 REAL_IDENT.clone(),

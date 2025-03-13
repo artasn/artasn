@@ -1,4 +1,4 @@
-External-X208 DEFINITIONS EXPLICIT TAGS ::= BEGIN
+External DEFINITIONS EXPLICIT TAGS ::= BEGIN
 
 -- This was the original definition of the EXTERNAL type from X.208,
 -- until X.680 (1994) superceded it and replaced it with the EXTERNAL type
