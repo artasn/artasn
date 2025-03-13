@@ -1,4 +1,9 @@
-use crate::values::Oid;
+use super::*;
+use crate::{
+    compiler::{parser::Result, Context},
+    types::ResolvedType,
+    values::{BuiltinValue, Oid},
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BasicEncodingKind {
@@ -36,16 +41,38 @@ pub enum TransferSyntax {
     Octet(OctetEncodingKind),
 }
 
-pub struct TransferSyntaxSupport {
-    /// True if encoding values in the transfer syntax is supported by asn1chef.
-    pub encode: bool,
-    /// True if decoding values in the transfer syntax is supported by asn1chef.
-    pub decode: bool,
+type EncodeFunc = fn(
+    syntax: &TransferSyntax,
+    buf: &mut Vec<u8>,
+    context: &Context,
+    value: &BuiltinValue,
+    value_type: &ResolvedType,
+) -> Result<()>;
+type DecodeFunc = fn(
+    syntax: &TransferSyntax,
+    buf: &[u8],
+    context: &Context,
+    mode: &DecodeMode,
+) -> DecodeResult<Vec<DecodedValue>>;
+
+pub struct TransferSyntaxCodec {
+    pub encoder: Option<EncodeFunc>,
+    pub decoder: Option<DecodeFunc>,
 }
 
-impl TransferSyntaxSupport {
-    pub fn new(encode: bool, decode: bool) -> TransferSyntaxSupport {
-        TransferSyntaxSupport { encode, decode }
+impl TransferSyntaxCodec {
+    pub fn new(encoder: EncodeFunc, decoder: DecodeFunc) -> TransferSyntaxCodec {
+        TransferSyntaxCodec {
+            encoder: Some(encoder),
+            decoder: Some(decoder),
+        }
+    }
+
+    pub fn unsupported() -> TransferSyntaxCodec {
+        TransferSyntaxCodec {
+            encoder: None,
+            decoder: None,
+        }
     }
 }
 
@@ -53,6 +80,7 @@ struct TransferSyntaxData {
     pub syntax: TransferSyntax,
     pub oid: Oid,
     pub name: &'static str,
+    pub codec: TransferSyntaxCodec,
 }
 
 lazy_static::lazy_static! {
@@ -65,6 +93,10 @@ lazy_static::lazy_static! {
                 1, // basic-encoding
             ]),
             name: "BER",
+            codec: TransferSyntaxCodec {
+                encoder: Some(ber::ber_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Basic(BasicEncodingKind::Canonical),
@@ -75,6 +107,10 @@ lazy_static::lazy_static! {
                 0, // canonical-encoding
             ]),
             name: "CER",
+            codec: TransferSyntaxCodec {
+                encoder: Some(ber::ber_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Basic(BasicEncodingKind::Distinguished),
@@ -85,6 +121,7 @@ lazy_static::lazy_static! {
                 1, // distinguished-encoding
             ]),
             name: "DER",
+            codec: TransferSyntaxCodec::new(ber::ber_encode_value, ber::ber_decode_value),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::BasicAligned),
@@ -96,6 +133,7 @@ lazy_static::lazy_static! {
                 0, // aligned
             ]),
             name: "PER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::BasicUnaligned),
@@ -107,6 +145,7 @@ lazy_static::lazy_static! {
                 1, // unaligned
             ]),
             name: "UPER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
@@ -118,6 +157,7 @@ lazy_static::lazy_static! {
                 0, // aligned
             ]),
             name: "CPER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
@@ -129,6 +169,7 @@ lazy_static::lazy_static! {
                 1, // unaligned
             ]),
             name: "CUPER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Xml(XmlEncodingKind::Basic),
@@ -139,6 +180,7 @@ lazy_static::lazy_static! {
                 0, // basic
             ]),
             name: "XER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Xml(XmlEncodingKind::Canonical),
@@ -149,6 +191,7 @@ lazy_static::lazy_static! {
                 1, // canonical
             ]),
             name: "CXER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Xml(XmlEncodingKind::Extended),
@@ -159,6 +202,7 @@ lazy_static::lazy_static! {
                 2, // extended
             ]),
             name: "E-XER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Octet(OctetEncodingKind::Basic),
@@ -169,6 +213,7 @@ lazy_static::lazy_static! {
                 0, // basic
             ]),
             name: "OER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Octet(OctetEncodingKind::Canonical),
@@ -179,8 +224,21 @@ lazy_static::lazy_static! {
                 1, // canonical
             ]),
             name: "COER",
+            codec: TransferSyntaxCodec::unsupported(),
         },
     ];
+}
+
+macro_rules! find_data_field {
+    ( $self:expr, $field:ident ) => {
+        for data in TRANFER_SYNTAXES.iter() {
+            if $self == &data.syntax {
+                return &data.$field;
+            }
+        }
+
+        unreachable!()
+    };
 }
 
 impl TransferSyntax {
@@ -202,33 +260,25 @@ impl TransferSyntax {
         None
     }
 
+    pub fn get_by_name<'a>(name: &str) -> Option<&'a TransferSyntax> {
+        for data in TRANFER_SYNTAXES.iter() {
+            if name == data.name {
+                return Some(&data.syntax);
+            }
+        }
+
+        None
+    }
+
     pub fn get_oid<'a>(&self) -> &'a Oid {
-        for data in TRANFER_SYNTAXES.iter() {
-            if self == &data.syntax {
-                return &data.oid;
-            }
-        }
-
-        unreachable!()
+        find_data_field!(self, oid);
     }
 
-    pub fn name(&self) -> &'static str {
-        for data in TRANFER_SYNTAXES.iter() {
-            if self == &data.syntax {
-                return data.name;
-            }
-        }
-
-        unreachable!()
+    pub fn get_name(&self) -> &'static str {
+        find_data_field!(self, name);
     }
 
-    pub fn get_support(&self) -> TransferSyntaxSupport {
-        match self {
-            Self::Basic(kind) => match kind {
-                BasicEncodingKind::Distinguished => TransferSyntaxSupport::new(true, true),
-                _ => TransferSyntaxSupport::new(true, false),
-            },
-            _ => TransferSyntaxSupport::new(false, false),
-        }
+    pub fn get_codec<'a>(&self) -> &'a TransferSyntaxCodec {
+        find_data_field!(self, codec);
     }
 }

@@ -1,13 +1,16 @@
 use std::{num::ParseIntError, panic};
 
 use asn1chef::{
-    compiler::{options::CompilerConfig, CompileError, Compiler, Context}, encoding::ber, module, types::{BuiltinType, Tag, TaggedType, UntaggedType}, values::{BuiltinValue, Oid, Value, ValueResolve}
+    compiler::{options::CompilerConfig, CompileError, Compiler, Context},
+    module,
+    types::*,
+    values::*,
 };
 use js_sys::{Array, Object, Reflect};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-mod der;
+mod codec;
 
 #[cfg(target_arch = "wasm32")]
 use lol_alloc::{AssumeSingleThreaded, FreeListAllocator};
@@ -96,7 +99,10 @@ impl TryInto<module::QualifiedIdentifier> for QualifiedIdentifier {
     type Error = ParseIntError;
 
     fn try_into(self) -> Result<module::QualifiedIdentifier, Self::Error> {
-        Ok(module::QualifiedIdentifier::new(self.module.try_into()?, self.name))
+        Ok(module::QualifiedIdentifier::new(
+            self.module.try_into()?,
+            self.name,
+        ))
     }
 }
 
@@ -305,7 +311,11 @@ pub unsafe fn libweb_deinit(libweb_ptr: *mut LibWeb) {
 }
 
 #[wasm_bindgen]
-pub unsafe fn compiler_add_source(libweb_ptr: *mut LibWeb, path: String, source: String) -> JsValue {
+pub unsafe fn compiler_add_source(
+    libweb_ptr: *mut LibWeb,
+    path: String,
+    source: String,
+) -> JsValue {
     let mut libweb = Box::from_raw(libweb_ptr);
     let result = libweb.compiler.add_source(path, source);
 
@@ -390,61 +400,4 @@ pub unsafe fn compiler_list_values(libweb_ptr: *mut LibWeb) -> JsValue {
     }
     let _ = Box::into_raw(libweb);
     types.into()
-}
-
-#[wasm_bindgen]
-pub unsafe fn compiler_der_encode(
-    libweb_ptr: *mut LibWeb,
-    module_name: String,
-    oid: Option<String>,
-    value_name: String,
-) -> String {
-    let oid = oid.map(|oid| {
-        Oid(oid
-            .split(".")
-            .map(|node| node.parse::<u64>().expect("parse oid node"))
-            .collect())
-    });
-    let ident = module::QualifiedIdentifier::new(
-        module::ModuleIdentifier {
-            name: module_name,
-            oid,
-        },
-        value_name,
-    );
-    let mut libweb = Box::from_raw(libweb_ptr);
-    if let Some(value_decl) = libweb.context.lookup_value(&ident) {
-        match value_decl.ty.resolve(&libweb.context) {
-            Ok(ty) => match value_decl.value.resolve(&libweb.context) {
-                Ok(value) => {
-                    libweb.buffer.clear();
-                    match ber::der_encode_value(&mut libweb.buffer, value, &libweb.context, &ty) {
-                        Ok(()) => {
-                            let mut reverse = Vec::with_capacity(libweb.buffer.len());
-                            for b in libweb.buffer.iter().rev() {
-                                reverse.push(*b);
-                            }
-                            let _ = Box::into_raw(libweb);
-                            hex::encode_upper(&reverse)
-                        }
-                        Err(err) => {
-                            let _ = Box::into_raw(libweb);
-                            err.kind.to_string()
-                        }
-                    }
-                }
-                Err(err) => {
-                    let _ = Box::into_raw(libweb);
-                    err.kind.to_string()
-                }
-            },
-            Err(err) => {
-                let _ = Box::into_raw(libweb);
-                err.kind.to_string()
-            }
-        }
-    } else {
-        let _ = Box::into_raw(libweb);
-        "no such value".to_string()
-    }
 }

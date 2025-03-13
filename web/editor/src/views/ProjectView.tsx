@@ -3,7 +3,7 @@ import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { getWebFS } from '../webfs';
 import * as compiler from '../compiler';
 import { Box, Card, Checkbox, FormControlLabel } from '@mui/material';
-import { CompileError, CharacterStringType, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource, isCharacterStringType } from '../wasm-definitions';
+import { CompileError, CharacterStringType, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource, isCharacterStringType, TransferSyntax } from '../wasm-definitions';
 import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
@@ -279,7 +279,7 @@ const ProjectView = () => {
             if (parsed.data) {
                 if (parsed.data.kind === 'value') {
                     const ident: QualifiedIdentifier = parsed.data.ident;
-                    setDerValue(await compiler.derEncodeValue(ident));
+                    setDerValue(await compiler.encodeValue(TransferSyntax.DER, ident));
                 }
             } else {
                 setDerValue('');

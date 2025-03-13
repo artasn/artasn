@@ -84,7 +84,9 @@ fn test_encode_value(
         .expect("failed to resolve value");
 
     let mut buf = Vec::with_capacity(expected_der.len());
-    ber::der_encode_value(&mut buf, value, context, &tagged_type)
+    let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
+    let encoder = der_ts.get_codec().encoder.unwrap();
+    encoder(&der_ts, &mut buf, context, value, &tagged_type)
         .unwrap_or_else(|_| panic!("failed to encode value '{}'", ident));
     let buf = buf.into_iter().rev().collect::<Vec<u8>>();
 
@@ -172,6 +174,7 @@ fn compare_decoded_value_to_json_value(
 
 fn test_decode_value(
     context: &Context,
+    ident: &QualifiedIdentifier,
     declared_value: &DeclaredValue,
     der: &[u8],
     json_value: &serde_json::Value,
@@ -187,12 +190,15 @@ fn test_decode_value(
             .resolve(context)
             .expect("failed resolving type"),
     };
-    let reader = ber::DerReader::new(der, 0);
-    let values = reader
-        .into_iter()
-        .map(|tlv| ber::der_decode_value(context, tlv.map_err(DecodeError::Io)?, &mode))
-        .collect::<DecodeResult<Vec<DecodedValue>>>()
+
+    let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
+    let decoder = der_ts
+        .get_codec()
+        .decoder
         .unwrap();
+    let values = decoder(&der_ts, der, context, &mode)
+        .unwrap_or_else(|_| panic!("failed to decode value '{}'", ident));
+
     compare_decoded_values_to_json_values(&values, json_value)
 }
 
@@ -229,7 +235,7 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
         }
         if tests.contains(&TestMode::Decode) {
             let value = entry.value.as_ref().expect("missing 'value' in test JSON");
-            test_decode_value(&context, declared_value, &der, value);
+            test_decode_value(&context, &ident, declared_value, &der, value);
         }
     }
 }
@@ -275,7 +281,11 @@ macro_rules! json_compile_test {
             let data_file = include_str!(concat!($name, ".test.json"));
 
             crate::compiler::test::execute_json_compile_test(
-                Path::new(concat!($name, ".asn")).file_name().unwrap().to_str().unwrap(),
+                Path::new(concat!($name, ".asn"))
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
                 module_file,
                 data_file,
             );

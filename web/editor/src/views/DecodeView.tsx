@@ -3,6 +3,7 @@ import { Button, ButtonGroup, Checkbox, Dialog, DialogActions, DialogContent, Di
 import DecodedValueInfo, { DecodedValueViewMode } from '../components/DecodedValueInfo';
 import { FileUpload } from '@mui/icons-material';
 import { toast, Bounce } from 'react-toastify';
+import { TransferSyntax } from '../wasm-definitions';
 
 enum DataFormat {
     Binary = 'binary',
@@ -150,14 +151,6 @@ function chunkString(str: string, chunkLength: number): string[] {
         chunks.push(str.substring(i, i + chunkLength));
     }
     return chunks;
-}
-
-enum TransferSyntax {
-    BER = 'BER',
-    CER = 'CER',
-    DER = 'DER',
-    JER = 'JER',
-    XER = 'XER',
 }
 
 type InputEncoding = {

@@ -1,5 +1,5 @@
 import init, * as lib from '../wasm/libasn1chef';
-import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TypeDefinition, ValueDefinition } from '../wasm-definitions';
+import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TransferSyntax, TypeDefinition, ValueDefinition } from '../wasm-definitions';
 
 let libweb: number | null = null;
 
@@ -42,14 +42,14 @@ export function listValues(): ValueDefinition[] {
     return lib.compiler_list_values(libweb);
 }
 
-export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string> {
+export async function encodeValue(transfer: TransferSyntax, ident: QualifiedIdentifier): Promise<string> {
     ensureInit(libweb);
-    return lib.compiler_der_encode(libweb, ident.module.name, ident.module.oid, ident.name);
+    return lib.compiler_encode_value(libweb, transfer, ident.module.name, ident.module.oid, ident.name);
 }
 
-export async function derDecodeValue(derHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
+export async function decodeValue(transfer: TransferSyntax, valueHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
     ensureInit(libweb);
-    return lib.compiler_der_decode(libweb, derHex, options);
+    return lib.compiler_decode_value(libweb, transfer, valueHex, options);
 }
 
 export async function ensureLoaded(): Promise<void> {

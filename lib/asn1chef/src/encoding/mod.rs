@@ -12,7 +12,7 @@ pub use transfer::*;
 
 pub(crate) mod strings;
 
-pub mod ber;
+mod ber;
 
 // Encodes a u64 to the least amount of little-endian bytes required to encode its full value.
 fn u64_to_le_bytes(num: u64) -> ([u8; mem::size_of::<u64>()], usize) {

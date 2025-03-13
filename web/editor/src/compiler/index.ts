@@ -1,3 +1,3 @@
 export * from './compiler';
-export { derEncodeValue, derDecodeValue } from './CompileWorkerClient';
+export { encodeValue, decodeValue } from './CompileWorkerClient';
 export { lookupOidDescription } from './oids';

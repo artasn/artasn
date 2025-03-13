@@ -4,6 +4,7 @@ use num::bigint::Sign;
 use num::{BigInt, BigUint};
 use widestring::{Utf16String, Utf32String};
 
+use super::reader::{read_vlq, DerReader};
 use crate::compiler::parser::Result;
 use crate::encoding::*;
 use crate::{
@@ -14,9 +15,6 @@ use crate::{
     types::*,
     values::*,
 };
-
-use super::read_vlq;
-use super::DerReader;
 
 struct ComponentData<'a> {
     pub name: Option<String>,
@@ -309,7 +307,8 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
     })
 }
 
-pub fn der_decode_value(
+fn der_decode_tlv(
+    syntax: &TransferSyntax,
     context: &Context,
     tlv: Tlv<'_>,
     mode: &DecodeMode,
@@ -376,7 +375,7 @@ pub fn der_decode_value(
                         DecodeMode::Contextless
                     }
                 };
-                elements.push(der_decode_value(context, tlv, &mode)?);
+                elements.push(der_decode_tlv(syntax, context, tlv, &mode)?);
             }
             DecodedValueForm::Constructed(elements)
         }
@@ -402,36 +401,52 @@ pub fn der_decode_value(
     })
 }
 
+pub fn ber_decode_value(
+    syntax: &TransferSyntax,
+    buf: &[u8],
+    context: &Context,
+    mode: &DecodeMode,
+) -> DecodeResult<Vec<DecodedValue>> {
+    let reader = DerReader::new(buf, 0);
+    reader
+        .into_iter()
+        .map(|tlv| {
+            Ok(der_decode_tlv(
+                syntax,
+                context,
+                tlv.map_err(DecodeError::Io)?,
+                mode,
+            ))?
+        })
+        .collect::<DecodeResult<Vec<DecodedValue>>>()
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
         compiler::{test::json_test, Context},
-        encoding::{ber::DerReader, *},
+        encoding::{BasicEncodingKind, DecodeMode, TransferSyntax},
     };
 
-    use super::der_decode_value;
+    use super::ber_decode_value;
 
     #[test]
     fn test_der_decode_contextless() {
         // TODO: once the compiler has the functionality to compile the X.509 modules,
         // change DecodeMode from Contextless to SpecificType with the Certificate type
-        let reader = DerReader::new(
-            include_bytes!("../../../test-data/decode/LetsEncryptX3.der"),
-            0,
-        );
+        let der = include_bytes!("../../../test-data/decode/LetsEncryptX3.der");
         let context = Context::new();
-        reader
-            .into_iter()
-            .map(|tlv| {
-                der_decode_value(
-                    &context,
-                    tlv.map_err(DecodeError::Io)?,
-                    &DecodeMode::Contextless,
-                )
-            })
-            .collect::<DecodeResult<Vec<DecodedValue>>>()
-            .unwrap();
+        ber_decode_value(
+            &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+            der,
+            &context,
+            &DecodeMode::Contextless,
+        )
+        .unwrap();
     }
 
-    json_test!(test_der_decode_specific_type, "../../../test-data/decode/DecodeTest");
+    json_test!(
+        test_der_decode_specific_type,
+        "../../../test-data/decode/DecodeTest"
+    );
 }

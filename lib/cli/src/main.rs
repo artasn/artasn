@@ -1,7 +1,10 @@
 use std::{fmt::Display, fs, time::Instant};
 
 use asn1chef::{
-    compiler::{options::CompilerConfig, Compiler, Context}, encoding::ber, module::QualifiedIdentifier, values::ValueResolve
+    compiler::{options::CompilerConfig, Compiler, Context},
+    encoding::TransferSyntax,
+    module::QualifiedIdentifier,
+    values::ValueResolve,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -16,6 +19,9 @@ struct Cli {
     /// ASN.1 module files to compile
     #[arg(long, short = 'f', required = true)]
     files: Vec<String>,
+    /// Prevents information like time elapsed from being printed.
+    #[arg(long, short = 's')]
+    silent: bool,
     #[clap(subcommand)]
     command: Command,
 }
@@ -31,21 +37,54 @@ enum Command {
         value: String,
 
         /// The transfer syntax to encode the value into
-        #[clap(long, short = 't', default_value_t = TransferSyntax::Der)]
-        transfer_syntax: TransferSyntax,
+        #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER)]
+        transfer_syntax: TransferSyntaxName,
     },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-enum TransferSyntax {
-    #[value(name = "der")]
-    Der,
+enum TransferSyntaxName {
+    #[value(name = "BER")]
+    BER,
+    #[value(name = "CER")]
+    CER,
+    #[value(name = "DER")]
+    DER,
+    #[value(name = "PER")]
+    PER,
+    #[value(name = "UPER")]
+    UPER,
+    #[value(name = "CPER")]
+    CPER,
+    #[value(name = "CUPER")]
+    CUPER,
+    #[value(name = "XER")]
+    XER,
+    #[value(name = "CXER")]
+    CXER,
+    #[value(name = "E-CER")]
+    EXER,
+    #[value(name = "OER")]
+    OER,
+    #[value(name = "COER")]
+    COER,
 }
 
-impl Display for TransferSyntax {
+impl Display for TransferSyntaxName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Der => "der",
+            Self::BER => "BER",
+            Self::CER => "CER",
+            Self::DER => "DER",
+            Self::PER => "PER",
+            Self::UPER => "UPER",
+            Self::CPER => "CPER",
+            Self::CUPER => "CUPER",
+            Self::XER => "XER",
+            Self::CXER => "CXER",
+            Self::EXER => "E-XER",
+            Self::OER => "OER",
+            Self::COER => "COER",
         })
     }
 }
@@ -53,6 +92,21 @@ impl Display for TransferSyntax {
 fn exit_with_error(args: std::fmt::Arguments) -> ! {
     eprintln!("{}", args);
     std::process::exit(1);
+}
+
+fn elapsed_to_string(start: &Instant) -> String {
+    let elapsed = start.elapsed();
+    let ms = elapsed.as_millis();
+    if ms == 0 {
+        format!("{}us", elapsed.as_micros())
+    } else {
+        let s = elapsed.as_secs();
+        if s == 0 {
+            format!("{}ms", ms)
+        } else {
+            format!("{}.{:03}s", s, ms % 1000)
+        }
+    }
 }
 
 fn main() {
@@ -110,25 +164,27 @@ fn main() {
         std::process::exit(1);
     }
 
-    let elapsed = {
-        let elapsed = start.elapsed();
-        let ms = elapsed.as_millis();
-        if ms == 0 {
-            format!("{}us", elapsed.as_micros())
-        } else {
-            let s = elapsed.as_secs();
-            if s == 0 {
-                format!("{}ms", ms)
-            } else {
-                format!("{}.{:03}s", s, ms % 1000)
-            }
-        }
-    };
-    println!("finished in {}", elapsed);
+    if !args.silent {
+        println!("compiled in {}", elapsed_to_string(&start));
+    }
+    let start = Instant::now();
 
     match args.command {
         Command::Validate => (),
-        Command::Encode { value, .. } => {
+        Command::Encode {
+            value,
+            transfer_syntax,
+        } => {
+            let ts = TransferSyntax::get_by_name(transfer_syntax.to_string().as_str())
+                .expect("invalid transfer syntax (this should be prevented by clap)");
+            let encoder = match ts.get_codec().encoder {
+                Some(encoder) => encoder,
+                None => exit_with_error(format_args!(
+                    "encoding with the {} transfer syntax is not yet implemented",
+                    transfer_syntax
+                )),
+            };
+
             let dot_count = value.chars().filter(|ch| *ch == '.').count();
             if dot_count == 0 {
                 exit_with_error(format_args!(
@@ -185,7 +241,7 @@ fn main() {
             };
 
             let mut buf = Vec::with_capacity(64 * 1024);
-            match ber::der_encode_value(&mut buf, value, &context, &resolved_type) {
+            match encoder(ts, &mut buf, &context, value, &resolved_type) {
                 Ok(()) => (),
                 Err(err) => exit_with_error(format_args!(
                     "failed to encode value: {}",
@@ -193,6 +249,9 @@ fn main() {
                 )),
             }
             let hex = hex::encode_upper(buf.into_iter().rev().collect::<Vec<u8>>());
+            if !args.silent {
+                println!("encoded in {}\n", elapsed_to_string(&start));
+            }
             println!("{}", hex);
         }
     }

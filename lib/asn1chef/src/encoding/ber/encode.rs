@@ -190,6 +190,7 @@ fn der_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut expon
 }
 
 fn der_encode_structure(
+    syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -215,7 +216,7 @@ fn der_encode_structure(
             .expect("find type component matching value component for SEQUENCE/SET")
             .component_type
             .resolve(context)?;
-        der_encode_value(buf, value, context, &value_ty)?;
+        ber_encode_value(syntax, buf, context, value, &value_ty)?;
     }
 
     Ok(())
@@ -223,6 +224,7 @@ fn der_encode_structure(
 
 /// See X.690 clause 8.18 and its subclauses to see what is being encoded here.
 fn der_encode_external(
+    syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -234,17 +236,18 @@ fn der_encode_external(
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
-        der_encode_structure(buf, context, components, resolved_type)?;
+        der_encode_structure(syntax, buf, context, components, resolved_type)?;
     } else {
         let data_value = components
             .iter()
             .find(|component| component.name.element.as_str() == "data-value")
             .expect("missing data-value");
         let data_value = data_value.value.resolve(context)?;
-        der_encode_value(
+        ber_encode_value(
+            syntax,
             buf,
-            data_value,
             context,
+            data_value,
             &ResolvedType {
                 tag: Some(Tag::new(
                     Class::ContextSpecific,
@@ -262,10 +265,11 @@ fn der_encode_external(
             .find(|component| component.name.element.as_str() == "data-value-descriptor")
         {
             let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
-            der_encode_value(
+            ber_encode_value(
+                syntax,
                 buf,
-                data_value_descriptor,
                 context,
+                data_value_descriptor,
                 &ResolvedType::universal(TagType::ObjectDescriptor),
             )?;
         }
@@ -291,18 +295,20 @@ fn der_encode_external(
             _ => unreachable!(),
         };
         if let Some(indirect_reference) = indirect_reference {
-            der_encode_value(
+            ber_encode_value(
+                syntax,
                 buf,
-                indirect_reference,
                 context,
+                indirect_reference,
                 &ResolvedType::universal(TagType::Integer),
             )?;
         }
         if let Some(direct_reference) = direct_reference {
-            der_encode_value(
+            ber_encode_value(
+                syntax,
                 buf,
-                direct_reference,
                 context,
+                direct_reference,
                 &ResolvedType::universal(TagType::ObjectIdentifier),
             )?;
         }
@@ -337,10 +343,13 @@ fn der_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
 /// Reverse-encodes the value, including its tag.
 /// The resulting bytes are in reverse order.
 /// The bytes of the final output must be reversed to be valid DER.
-pub fn der_encode_value(
+/// Regardless of the TransferSyntax provided, the output will always be valid DER.
+/// Since DER is always valid BER and valid CER, this is always acceptable.
+pub fn ber_encode_value(
+    syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
-    value: &BuiltinValue,
     context: &Context,
+    value: &BuiltinValue,
     resolved_type: &ResolvedType,
 ) -> Result<()> {
     let start_len = buf.len();
@@ -481,10 +490,16 @@ pub fn der_encode_value(
                     }
                 }
                 (Class::Universal, Ok(TagType::External)) => {
-                    der_encode_external(buf, context, &structure.components, resolved_type)?
+                    der_encode_external(syntax, buf, context, &structure.components, resolved_type)?
                 }
                 _ => {
-                    der_encode_structure(buf, context, &structure.components, resolved_type)?;
+                    der_encode_structure(
+                        syntax,
+                        buf,
+                        context,
+                        &structure.components,
+                        resolved_type,
+                    )?;
                 }
             }
         }
@@ -496,12 +511,12 @@ pub fn der_encode_value(
             let component_type = component_type.resolve(context)?;
             for element in structure.iter().rev() {
                 let resolved = element.resolve(context)?;
-                der_encode_value(buf, resolved, context, &component_type)?;
+                ber_encode_value(syntax, buf, context, resolved, &component_type)?;
             }
         }
         BuiltinValue::Choice(choice) => {
             let value = choice.value.resolve(context)?;
-            der_encode_value(buf, value, context, &choice.alternative_type)?;
+            ber_encode_value(syntax, buf, context, value, &choice.alternative_type)?;
         }
         BuiltinValue::CharacterString(tag_type, str) => {
             der_encode_character_string(buf, *tag_type, str);
@@ -541,7 +556,7 @@ pub fn der_encode_value(
                 .expect("CONTAINING value for type without contents constraint");
             let contained_type = constraint.ty.resolve(context)?;
 
-            let encoding = match &constraint.encoded_by {
+            let encoder = match &constraint.encoded_by {
                 Some(encoded_by) => {
                     let resolved = encoded_by.resolve(context)?;
                     match resolved {
@@ -549,15 +564,15 @@ pub fn der_encode_value(
                             let oid = oid.resolve_oid(context)?;
                             match TransferSyntax::get_by_oid(&oid) {
                                     Some(ts) => {
-                                        if ts.get_support().encode {
-                                            ts
+                                        if let Some(encoder) = ts.get_codec().encoder {
+                                            encoder
                                         } else {
                                             return Err(Error {
-                                                kind: ErrorKind::Ast(format!("encoding with the {} transfer syntax is not yet implemented", ts.name())),
+                                                kind: ErrorKind::Ast(format!("encoding with the {} transfer syntax is not yet implemented", ts.get_name())),
                                                 loc: encoded_by.loc,
                                             })
                                         }
-                                    }
+                                    },
                                     None => {
                                         return Err(Error {
                                             kind: ErrorKind::Ast(format!("the provided OBJECT IDENTIFIER ({}) does not represent a registered transfer syntax", oid)),
@@ -577,17 +592,11 @@ pub fn der_encode_value(
                         }
                     }
                 }
-                // TODO: DER is the only supported transfer syntax currently,
-                // but this should default to the current transfer syntax in the future
-                None => &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+                None => ber_encode_value,
             };
 
-            if encoding != &TransferSyntax::Basic(BasicEncodingKind::Distinguished) {
-                todo!();
-            }
-
             let contained_value = containing.value.resolve(context)?;
-            der_encode_value(buf, contained_value, context, &contained_type)?;
+            encoder(syntax, buf, context, contained_value, &contained_type)?;
 
             match &resolved_type.ty {
                 // write the bit string unused bits count

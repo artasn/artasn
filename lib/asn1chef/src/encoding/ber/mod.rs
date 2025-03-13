@@ -2,7 +2,6 @@ mod encode;
 pub use encode::*;
 
 mod reader;
-pub use reader::*;
 
 mod decode;
 pub use decode::*;

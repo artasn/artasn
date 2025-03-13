@@ -1,4 +1,4 @@
-import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TypeDefinition, ValueDefinition } from '../wasm-definitions';
+import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TransferSyntax, TypeDefinition, ValueDefinition } from '../wasm-definitions';
 
 type WorkerCallback = (res: any) => void;
 
@@ -53,10 +53,10 @@ export async function listValues(): Promise<ValueDefinition[]> {
     return await callWorker('listValues');
 }
 
-export async function derEncodeValue(ident: QualifiedIdentifier): Promise<string> {
-    return await callWorker('derEncodeValue', ident);
+export async function encodeValue(transfer: TransferSyntax, ident: QualifiedIdentifier): Promise<string> {
+    return await callWorker('encodeValue', { transfer, ident });
 }
 
-export async function derDecodeValue(derHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
-    return await callWorker('derDecodeValue', { der: derHex, options });
+export async function decodeValue(transfer: TransferSyntax, valueHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
+    return await callWorker('decodeValue', { transfer, valueHex, options });
 }

@@ -1,3 +1,18 @@
+export enum TransferSyntax {
+    BER = 'BER',
+    CER = 'CER',
+    DER = 'DER',
+    PER = 'PER',
+    UPER = 'UPER',
+    CPER = 'CPER',
+    CUPER = 'CUPER',
+    XER = 'XER',
+    CXER = 'CXER',
+    EXER = 'E-XER',
+    OER = 'OER',
+    COER = 'COER',
+}
+
 export interface CompileError {
     message: string;
     path: string;

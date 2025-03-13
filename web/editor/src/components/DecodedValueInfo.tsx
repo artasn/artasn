@@ -1,6 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
-import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, TagClass, TlvPos, TlvTag } from '../wasm-definitions';
+import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, TagClass, TlvPos, TlvTag, TransferSyntax } from '../wasm-definitions';
 import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
 import { ChevronRight } from '@mui/icons-material';
@@ -33,7 +33,7 @@ const DecodedValueInfo = ({ encodedValue, viewMode }: DecodedValueInfoProps) => 
                 name: 'FileHeader',
             }
         };
-        compiler.derDecodeValue(encodedValue, options).then(res => {
+        compiler.decodeValue(TransferSyntax.DER, encodedValue, options).then(res => {
             if (typeof res === 'string') {
                 setValues({
                     error: res,

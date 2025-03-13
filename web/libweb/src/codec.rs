@@ -1,4 +1,4 @@
-use asn1chef::{encoding::{ber::DerReader, *}, values::*};
+use asn1chef::{encoding::*, module, values::*};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
@@ -110,12 +110,7 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
         ),
         DecodedValueKind::DateTime(date_time) => {
             let obj = Object::new();
-            Reflect::set(
-                &obj,
-                &"date".into(),
-                &serialize_date(&date_time.date),
-            )
-            .unwrap();
+            Reflect::set(&obj, &"date".into(), &serialize_date(&date_time.date)).unwrap();
             Reflect::set(
                 &obj,
                 &"time".into(),
@@ -192,16 +187,29 @@ fn serialize_decoded_value(value: DecodedValue) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsValue) -> JsValue {
-    let der = match hex::decode(der_hex) {
-        Ok(der) => der,
+pub fn compiler_decode_value(
+    libweb_ptr: *mut LibWeb,
+    transfer_syntax: &str,
+    value_hex: &str,
+    options: &JsValue,
+) -> JsValue {
+    let value_binary = match hex::decode(value_hex) {
+        Ok(value_binary) => value_binary,
         Err(err) => return err.to_string().into(),
     };
 
-    let mut reader = DerReader::new(&der, 0);
-    let tlvs = match reader.read_all() {
-        Ok(tlvs) => tlvs,
-        Err(err) => return err.to_string().into(),
+    let (ts, decoder) = match TransferSyntax::get_by_name(transfer_syntax) {
+        Some(syntax) => match syntax.get_codec().decoder {
+            Some(decoder) => (syntax, decoder),
+            None => {
+                return format!(
+                    "decoding with the {} transfer syntax is not yet supported",
+                    transfer_syntax
+                )
+                .into()
+            }
+        },
+        None => return format!("transfer syntax '{}' is not registered", transfer_syntax).into(),
     };
 
     let decode_mode_kind = Reflect::get(options, &"mode".into())
@@ -243,11 +251,7 @@ pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsV
     };
 
     let libweb = unsafe { Box::from_raw(libweb_ptr) };
-    let values = match tlvs
-        .into_iter()
-        .map(|tlv| ber::der_decode_value(&libweb.context, tlv, &mode))
-        .collect::<DecodeResult<Vec<DecodedValue>>>()
-    {
+    let values = match decoder(ts, &value_binary, &libweb.context, &mode) {
         Ok(values) => values,
         Err(err) => {
             let _ = Box::into_raw(libweb);
@@ -261,4 +265,75 @@ pub fn compiler_der_decode(libweb_ptr: *mut LibWeb, der_hex: &str, options: &JsV
         arr.push(&serialize_decoded_value(value));
     }
     arr.into()
+}
+
+#[wasm_bindgen]
+pub unsafe fn compiler_encode_value(
+    libweb_ptr: *mut LibWeb,
+    transfer_syntax: &str,
+    module_name: String,
+    oid: Option<String>,
+    value_name: String,
+) -> String {
+    let (ts, encoder) = match TransferSyntax::get_by_name(transfer_syntax) {
+        Some(syntax) => match syntax.get_codec().encoder {
+            Some(encoder) => (syntax, encoder),
+            None => {
+                return format!(
+                    "encoding with the {} transfer syntax is not yet supported",
+                    transfer_syntax
+                )
+            }
+        },
+        None => return format!("transfer syntax '{}' is not registered", transfer_syntax),
+    };
+
+    let oid = oid.map(|oid| {
+        Oid(oid
+            .split(".")
+            .map(|node| node.parse::<u64>().expect("parse oid node"))
+            .collect())
+    });
+    let ident = module::QualifiedIdentifier::new(
+        module::ModuleIdentifier {
+            name: module_name,
+            oid,
+        },
+        value_name,
+    );
+    let mut libweb = Box::from_raw(libweb_ptr);
+    if let Some(value_decl) = libweb.context.lookup_value(&ident) {
+        match value_decl.ty.resolve(&libweb.context) {
+            Ok(ty) => match value_decl.value.resolve(&libweb.context) {
+                Ok(value) => {
+                    libweb.buffer.clear();
+                    match encoder(ts, &mut libweb.buffer, &libweb.context, value, &ty) {
+                        Ok(()) => {
+                            let mut reverse = Vec::with_capacity(libweb.buffer.len());
+                            for b in libweb.buffer.iter().rev() {
+                                reverse.push(*b);
+                            }
+                            let _ = Box::into_raw(libweb);
+                            hex::encode_upper(&reverse)
+                        }
+                        Err(err) => {
+                            let _ = Box::into_raw(libweb);
+                            err.kind.to_string()
+                        }
+                    }
+                }
+                Err(err) => {
+                    let _ = Box::into_raw(libweb);
+                    err.kind.to_string()
+                }
+            },
+            Err(err) => {
+                let _ = Box::into_raw(libweb);
+                err.kind.to_string()
+            }
+        }
+    } else {
+        let _ = Box::into_raw(libweb);
+        "no such value".to_string()
+    }
 }

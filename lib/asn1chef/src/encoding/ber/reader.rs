@@ -28,7 +28,7 @@ pub(crate) fn read_vlq(buf: &[u8]) -> io::Result<(u64, usize)> {
     ))
 }
 
-pub(crate) fn read_tlv_len(buf: &[u8]) -> io::Result<(u64, usize)> {
+fn read_tlv_len(buf: &[u8]) -> io::Result<(u64, usize)> {
     if buf[0] < 0x80 {
         Ok((buf[0] as u64, 1))
     } else {
@@ -69,14 +69,6 @@ impl<'a> DerReader<'a> {
             source_start,
             offset: 0,
         }
-    }
-
-    pub fn read_all(&mut self) -> io::Result<Vec<Tlv<'a>>> {
-        let mut tags = Vec::new();
-        while let Some(tag) = self.read_next()? {
-            tags.push(tag);
-        }
-        Ok(tags)
     }
 
     pub fn read_next(&mut self) -> io::Result<Option<Tlv<'a>>> {
