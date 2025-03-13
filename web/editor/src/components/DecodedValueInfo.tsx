@@ -264,6 +264,21 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
             const date = new Date(Date.UTC(year, month, day, hour, minute, second));
             // TODO: tz
             return date.toUTCString();
+        case 'TIME':
+            // TODO
+            return 'TIME';
+        case 'DATE':
+            // TODO
+            return 'DATE';
+        case 'TIME-OF-DAY':
+            // TODO
+            return 'TIME-OF-DAY';    
+        case 'DATE-TIME':
+            // TODO
+            return 'DATE-TIME';
+        case 'DURATION':
+            // TODO
+            return 'DURATION';
         default:
             if (isCharacterStringType(kind.type)) {
                 return (
@@ -274,7 +289,7 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
                                 &nbsp;
                             </>
                         )}
-                        <span style={{ color: LITERAL_COLOR }}>"{kind.data}"</span>
+                        <span style={{ color: LITERAL_COLOR }}>"{kind.data as string}"</span>
                     </>
                 );
             }

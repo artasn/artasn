@@ -64,7 +64,7 @@ export enum CharacterStringType {
     BMPString = 'BMPString',
 };
 
-export function isCharacterStringType(type: string): type is CharacterStringType {
+export function isCharacterStringType(type: string): boolean {
     return Object.values(CharacterStringType).includes(type as CharacterStringType);
 }
 
