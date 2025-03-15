@@ -331,19 +331,21 @@ rule Constraint {
 rule SubtypeConstraint {
     captures {
         element_sets = repeated: SubtypeElementSet
+        extensible = bool
     }
     element_sets = SubtypeElementSet
     optional repeated {
         operator ,
         operator ...
+        extensible = true
         operator ,
         element_sets = SubtypeElementSet
     }
     optional {
         operator ,
         operator ...
+        extensible = true
     }
-    return element_sets
 }
 
 rule SubtypeElementSet {

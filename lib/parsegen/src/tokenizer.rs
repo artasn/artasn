@@ -796,7 +796,7 @@ impl Tokenizer {
     }
 
     fn starts_with_str(&self, s: &str) -> bool {
-        if self.cursor + s.len() >= self.source.len() {
+        if self.cursor + s.len() > self.source.len() {
             return false;
         }
         for (i, ch) in s.chars().enumerate() {

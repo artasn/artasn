@@ -1,0 +1,39 @@
+AutomaticTaggingTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+AMT ::= INTEGER
+amv AMT ::= 10
+
+AMT-TD ::= [APPLICATION 10] INTEGER
+amv-td AMT-TD ::= 11
+
+AMT-IT ::= [APPLICATION 11] IMPLICIT INTEGER
+amv-it AMT-IT ::= 12
+
+AMT-XT ::= [APPLICATION 12] EXPLICIT INTEGER
+amv-xt AMT-XT ::= 13
+
+DefaultAutomaticSequence ::= SEQUENCE {
+	component1 INTEGER,
+	component2 PrintableString
+}
+
+das DefaultAutomaticSequence ::= {
+	component1 9001,
+	component2 "string"
+}
+
+AutomaticSequence ::= SEQUENCE {
+    component1 INTEGER,
+    component2 [5] OCTET STRING,
+    component3 [6] IMPLICIT PrintableString,
+    component4 [7] EXPLICIT BOOLEAN
+}
+
+as AutomaticSequence ::= {
+    component1 1337,
+    component2 'DEADBEEF'H,
+    component3 "Hello World",
+    component4 TRUE
+}
+
+END

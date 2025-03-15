@@ -37,6 +37,10 @@ impl TokenStream {
         self.tokenizer.cursor()
     }
 
+    pub fn into_tokenizer(self) -> Tokenizer {
+        self.tokenizer
+    }
+
     pub fn as_tokens(&mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         loop {

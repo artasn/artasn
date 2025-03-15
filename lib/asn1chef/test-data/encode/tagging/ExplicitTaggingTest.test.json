@@ -1,0 +1,32 @@
+{
+    "module": "ExplicitTaggingTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "xmv",
+            "der": "02010A"
+        },
+        {
+            "name": "xmv-td",
+            "der": "6A0302010B"
+        },
+        {
+            "name": "xmv-it",
+            "der": "4B010C"
+        },
+        {
+            "name": "xmv-xt",
+            "der": "6C0302010D"
+        },
+        {
+            "name": "dxs",
+            "der": "300C020223291306737472696E67"
+        },
+        {
+            "name": "xs",
+            "der": "301E02020539A5060404DEADBEEF860B48656C6C6F20576F726C64A7030101FF"
+        }
+    ]
+}

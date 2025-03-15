@@ -1,0 +1,6 @@
+ModuleWithoutOID DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    
+WithoutType ::= OCTET STRING
+withoutValue WithoutType ::= '1337'H
+
+END

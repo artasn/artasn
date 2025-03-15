@@ -1,6 +1,7 @@
 use std::{fmt::Display, marker::PhantomData};
 
 use crate::{
+    compiler::Context,
     types::TaggedType,
     values::{BuiltinValue, Oid},
 };
@@ -55,7 +56,12 @@ impl ModuleIdentifier {
 
 impl Display for ModuleIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.name)
+        f.write_str(&self.name)?;
+        if let Some(id) = &self.oid {
+            f.write_fmt(format_args!(" ({})", id))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -112,15 +118,23 @@ pub struct ModuleHeader {
 }
 
 impl ModuleHeader {
-    pub fn resolve_symbol(&self, symbol: &str) -> QualifiedIdentifier {
-        self.resolve_import(symbol)
+    pub fn resolve_symbol(&self, context: &Context, symbol: &str) -> QualifiedIdentifier {
+        self.resolve_import(context, symbol)
             .unwrap_or_else(|| QualifiedIdentifier::new(self.ident.clone(), symbol.to_string()))
     }
 
-    pub fn resolve_import(&self, symbol: &str) -> Option<QualifiedIdentifier> {
+    pub fn resolve_import(&self, context: &Context, symbol: &str) -> Option<QualifiedIdentifier> {
         for import in &self.imports {
             if import.name == symbol {
-                return Some(import.clone());
+                return Some(match import.module.oid {
+                    Some(_) => import.clone(),
+                    None => match context.lookup_module_by_name(&import.module.name) {
+                        Some(module) => {
+                            QualifiedIdentifier::new(module.ident.clone(), import.name.clone())
+                        }
+                        None => return None,
+                    },
+                });
             }
         }
 

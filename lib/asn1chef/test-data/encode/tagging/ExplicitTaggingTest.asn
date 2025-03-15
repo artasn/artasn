@@ -1,0 +1,39 @@
+ExplicitTaggingTest DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+XMT ::= INTEGER
+xmv XMT ::= 10
+
+XMT-TD ::= [APPLICATION 10] INTEGER
+xmv-td XMT-TD ::= 11
+
+XMT-IT ::= [APPLICATION 11] IMPLICIT INTEGER
+xmv-it XMT-IT ::= 12
+
+XMT-XT ::= [APPLICATION 12] EXPLICIT INTEGER
+xmv-xt XMT-XT ::= 13
+
+DefaultExplicitSequence ::= SEQUENCE {
+	component1 INTEGER,
+	component2 PrintableString
+}
+
+dxs DefaultExplicitSequence ::= {
+	component1 9001,
+	component2 "string"
+}
+
+ExplicitSequence ::= SEQUENCE {
+    component1 INTEGER,
+    component2 [5] OCTET STRING,
+    component3 [6] IMPLICIT PrintableString,
+    component4 [7] EXPLICIT BOOLEAN
+}
+
+xs ExplicitSequence ::= {
+    component1 1337,
+    component2 'DEADBEEF'H,
+    component3 "Hello World",
+    component4 TRUE
+}
+
+END

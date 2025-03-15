@@ -1,0 +1,16 @@
+OmittedOIDImportTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    
+IMPORTS
+    WithType, withValue FROM ModuleWithOID
+    WithoutType, withoutValue FROM ModuleWithoutOID;
+
+S ::= SEQUENCE {
+    with WithType,
+    without WithoutType
+}
+s S ::= {
+    with withValue,
+    without withoutValue
+}
+
+END

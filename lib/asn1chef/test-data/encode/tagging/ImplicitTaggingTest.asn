@@ -1,0 +1,39 @@
+ImplicitTaggingTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+IMT ::= INTEGER
+imv IMT ::= 10
+
+IMT-TD ::= [APPLICATION 10] INTEGER
+imv-td IMT-TD ::= 11
+
+IMT-IT ::= [APPLICATION 11] IMPLICIT INTEGER
+imv-it IMT-IT ::= 12
+
+IMT-XT ::= [APPLICATION 12] EXPLICIT INTEGER
+imv-xt IMT-XT ::= 13
+
+DefaultImplicitSequence ::= SEQUENCE {
+	component1 INTEGER,
+	component2 PrintableString
+}
+
+dis DefaultImplicitSequence ::= {
+	component1 9001,
+	component2 "string"
+}
+
+ImplicitSequence ::= SEQUENCE {
+    component1 INTEGER,
+    component2 [5] OCTET STRING,
+    component3 [6] IMPLICIT PrintableString,
+    component4 [7] EXPLICIT BOOLEAN
+}
+
+is ImplicitSequence ::= {
+    component1 1337,
+    component2 'DEADBEEF'H,
+    component3 "Hello World",
+    component4 TRUE
+}
+
+END

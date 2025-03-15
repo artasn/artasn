@@ -36,7 +36,7 @@ pub fn parse_valuereference(
                 .context
                 .lookup_module(&parser.module)
                 .expect("lookup_module")
-                .resolve_symbol(&valref.0),
+                .resolve_symbol(parser.context, &valref.0),
         )
     })
 }
@@ -65,7 +65,7 @@ pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<BuiltinV
     let ufraction = dec.element.fraction.element.0.clone();
     let fraction_len = ufraction.to_str_radix(10).len() as u32;
     let fraction = BigInt::from_biguint(sign, ufraction);
-    let mantissa = whole * BigInt::from(10u64.pow(fraction_len)) + fraction;
+    let mantissa = whole * BigInt::from(10u64).pow(fraction_len) + fraction;
 
     Ok(BuiltinValue::RealLiteral(RealLiteral {
         mantissa,

@@ -13,11 +13,11 @@ enum ConstraintContext {
 
 fn parse_constraint(
     parser: &AstParser<'_>,
-    constraint: &AstElement<AstConstraint>,
+    ast_constraint: &AstElement<AstConstraint>,
     constrained_type: &ResolvedType,
     ctx: ConstraintContext,
 ) -> Result<Constraint> {
-    let element_sets = &constraint.element.0.element.0;
+    let element_sets = &ast_constraint.element.0.element.element_sets;
     let mut constraint = Vec::with_capacity(element_sets.len());
     for element_set in element_sets {
         let element_set = &element_set.element.0;
@@ -31,7 +31,10 @@ fn parse_constraint(
         constraint.push(elements);
     }
 
-    Ok(Constraint(constraint))
+    Ok(Constraint {
+        elements: constraint,
+        extensible: ast_constraint.element.0.element.extensible,
+    })
 }
 
 fn parse_subtype_element(
@@ -102,10 +105,7 @@ fn parse_contents_constraint(
         BuiltinType::BitString(_) | BuiltinType::OctetString => (),
         other => {
             return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "contents constraint is invalid for {}",
-                    other,
-                )),
+                kind: ErrorKind::Ast(format!("contents constraint is invalid for {}", other,)),
                 loc: contents.loc,
             })
         }
@@ -238,13 +238,16 @@ fn parse_type_with_constraint(
                 let loc = size_constraint.loc;
                 AstElement::new(
                     AstConstraint(AstElement::new(
-                        AstSubtypeConstraint(vec![AstElement::new(
-                            AstSubtypeElementSet(vec![AstElement::new(
-                                AstSubtypeElement::SizeConstraint(size_constraint.clone()),
+                        AstSubtypeConstraint {
+                            element_sets: vec![AstElement::new(
+                                AstSubtypeElementSet(vec![AstElement::new(
+                                    AstSubtypeElement::SizeConstraint(size_constraint.clone()),
+                                    loc,
+                                )]),
                                 loc,
-                            )]),
-                            loc,
-                        )]),
+                            )],
+                            extensible: false,
+                        },
                         loc,
                     )),
                     loc,

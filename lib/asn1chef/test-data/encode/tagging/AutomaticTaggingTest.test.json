@@ -1,0 +1,32 @@
+{
+    "module": "AutomaticTaggingTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "amv",
+            "der": "02010A"
+        },
+        {
+            "name": "amv-td",
+            "der": "4A010B"
+        },
+        {
+            "name": "amv-it",
+            "der": "4B010C"
+        },
+        {
+            "name": "amv-xt",
+            "der": "6C0302010D"
+        },
+        {
+            "name": "das",
+            "der": "300C800223298106737472696E67"
+        },
+        {
+            "name": "as",
+            "der": "301C020205398504DEADBEEF860B48656C6C6F20576F726C64A7030101FF"
+        }
+    ]
+}

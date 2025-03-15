@@ -5,14 +5,14 @@ use crate::{
     values::{BuiltinValue, Oid},
 };
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BasicEncodingKind {
     Basic,
     Canonical,
     Distinguished,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PackedEncodingKind {
     BasicAligned,
     BasicUnaligned,
@@ -20,14 +20,14 @@ pub enum PackedEncodingKind {
     CanonicalUnaligned,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum XmlEncodingKind {
     Basic,
     Canonical,
     Extended,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum OctetEncodingKind {
     Basic,
     Canonical,
@@ -94,7 +94,7 @@ lazy_static::lazy_static! {
             ]),
             name: "BER",
             codec: TransferSyntaxCodec {
-                encoder: Some(ber::ber_encode_value),
+                encoder: Some(ber_encode_value),
                 decoder: None,
             },
         },
@@ -108,7 +108,7 @@ lazy_static::lazy_static! {
             ]),
             name: "CER",
             codec: TransferSyntaxCodec {
-                encoder: Some(ber::ber_encode_value),
+                encoder: Some(ber_encode_value),
                 decoder: None,
             },
         },
@@ -121,7 +121,7 @@ lazy_static::lazy_static! {
                 1, // distinguished-encoding
             ]),
             name: "DER",
-            codec: TransferSyntaxCodec::new(ber::ber_encode_value, ber::ber_decode_value),
+            codec: TransferSyntaxCodec::new(ber_encode_value, ber_decode_value),
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::BasicAligned),
@@ -281,4 +281,31 @@ impl TransferSyntax {
     pub fn get_codec<'a>(&self) -> &'a TransferSyntaxCodec {
         find_data_field!(self, codec);
     }
+}
+
+fn ber_encode_value(
+    syntax: &TransferSyntax,
+    buf: &mut Vec<u8>,
+    context: &Context,
+    value: &BuiltinValue,
+    value_type: &ResolvedType,
+) -> Result<()> {
+    match syntax {
+        TransferSyntax::Basic(_) => (),
+        other => panic!("illegal TransferSyntax (expecting Basic): {:?}", other),
+    };
+    ber::ber_encode_value(buf, context, value, value_type)
+}
+
+fn ber_decode_value(
+    syntax: &TransferSyntax,
+    buf: &[u8],
+    context: &Context,
+    mode: &DecodeMode,
+) -> DecodeResult<Vec<DecodedValue>> {
+    let kind = match syntax {
+        TransferSyntax::Basic(kind) => *kind,
+        other => panic!("illegal TransferSyntax (expecting Basic): {:?}", other),
+    };
+    ber::ber_decode_value(kind, buf, context, mode)
 }

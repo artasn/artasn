@@ -179,10 +179,12 @@ fn parse_builtin_type(
         AstBuiltinType::ObjectDescriptor(_) => {
             BuiltinType::CharacterString(TagType::ObjectDescriptor)
         }
-        AstBuiltinType::External(_) => return Ok(UntaggedType::Reference(AstElement::new(
-            EXTERNAL_IDENT.clone(),
-            builtin.loc,
-        ))),
+        AstBuiltinType::External(_) => {
+            return Ok(UntaggedType::Reference(AstElement::new(
+                EXTERNAL_IDENT.clone(),
+                builtin.loc,
+            )))
+        }
         AstBuiltinType::Real(_) => {
             return Ok(UntaggedType::Reference(AstElement::new(
                 REAL_IDENT.clone(),
@@ -241,7 +243,7 @@ fn parse_untagged_type(
                 .context
                 .lookup_module(&parser.module)
                 .expect("lookup_module")
-                .resolve_symbol(&typeref.element.0),
+                .resolve_symbol(parser.context, &typeref.element.0),
             typeref.loc,
         )),
     })

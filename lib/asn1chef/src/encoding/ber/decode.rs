@@ -97,7 +97,7 @@ pub fn type_eq_tlv(
     Ok(None)
 }
 
-fn der_decode_integer(value: &[u8]) -> io::Result<BigInt> {
+fn ber_decode_integer(value: &[u8]) -> io::Result<BigInt> {
     const SIGN_MASK: u8 = 0b1000_0000;
 
     if value.is_empty() {
@@ -116,7 +116,11 @@ fn der_decode_integer(value: &[u8]) -> io::Result<BigInt> {
     Ok(BigInt::from_bytes_be(sign, value))
 }
 
-fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedValueKind> {
+fn ber_decode_universal(
+    syntax: BasicEncodingKind,
+    tlv: &Tlv<'_>,
+    tag_type: TagType,
+) -> io::Result<DecodedValueKind> {
     let value = tlv.value.element;
     Ok(match tag_type {
         TagType::Any => DecodedValueKind::Raw(value.to_vec()),
@@ -129,13 +133,25 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             } else if value.len() > 1 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "BOOLEAN is not in canonical format",
+                    "BOOLEAN is too large",
                 ));
             }
 
-            DecodedValueKind::Boolean(value[0] != 0)
+            DecodedValueKind::Boolean(match syntax {
+                BasicEncodingKind::Basic => value[0] != 0x00,
+                _ => match value[0] {
+                    0x00 => false,
+                    0xff => true,
+                    _ => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "BOOLEAN is not in canonical format",
+                        ))
+                    }
+                },
+            })
         }
-        TagType::Integer => DecodedValueKind::Integer(der_decode_integer(value)?),
+        TagType::Integer => DecodedValueKind::Integer(ber_decode_integer(value)?),
         TagType::BitString => {
             if value.len() < 2 {
                 return Err(io::Error::new(
@@ -184,7 +200,7 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
             DecodedValueKind::ObjectIdentifier(Oid(nodes))
         }
         TagType::Enumerated => {
-            let int = der_decode_integer(value)?;
+            let int = ber_decode_integer(value)?;
             let int: i64 = int.try_into().map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -307,8 +323,8 @@ fn der_decode_universal(tlv: &Tlv<'_>, tag_type: TagType) -> io::Result<DecodedV
     })
 }
 
-fn der_decode_tlv(
-    syntax: &TransferSyntax,
+fn ber_decode_tlv(
+    syntax: BasicEncodingKind,
     context: &Context,
     tlv: Tlv<'_>,
     mode: &DecodeMode,
@@ -318,7 +334,7 @@ fn der_decode_tlv(
             let kind = match tlv.tag.element.class {
                 Class::Universal => match TagType::try_from(tlv.tag.element.num) {
                     Ok(tag_type) => {
-                        der_decode_universal(&tlv, tag_type).map_err(DecodeError::Io)?
+                        ber_decode_universal(syntax, &tlv, tag_type).map_err(DecodeError::Io)?
                     }
                     Err(_) => DecodedValueKind::Raw(tlv.value.element.to_vec()),
                 },
@@ -329,7 +345,7 @@ fn der_decode_tlv(
                             .map_err(DecodeError::Parser)?
                         {
                             // we use ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
-                            der_decode_universal(&tlv, ty.tag_type().expect("tag_type"))
+                            ber_decode_universal(syntax, &tlv, ty.tag_type().expect("tag_type"))
                                 .map_err(DecodeError::Io)?
                         } else {
                             let tag_str = resolved
@@ -375,7 +391,7 @@ fn der_decode_tlv(
                         DecodeMode::Contextless
                     }
                 };
-                elements.push(der_decode_tlv(syntax, context, tlv, &mode)?);
+                elements.push(ber_decode_tlv(syntax, context, tlv, &mode)?);
             }
             DecodedValueForm::Constructed(elements)
         }
@@ -402,7 +418,7 @@ fn der_decode_tlv(
 }
 
 pub fn ber_decode_value(
-    syntax: &TransferSyntax,
+    syntax: BasicEncodingKind,
     buf: &[u8],
     context: &Context,
     mode: &DecodeMode,
@@ -411,7 +427,7 @@ pub fn ber_decode_value(
     reader
         .into_iter()
         .map(|tlv| {
-            Ok(der_decode_tlv(
+            Ok(ber_decode_tlv(
                 syntax,
                 context,
                 tlv.map_err(DecodeError::Io)?,
@@ -425,19 +441,19 @@ pub fn ber_decode_value(
 mod test {
     use crate::{
         compiler::{test::json_test, Context},
-        encoding::{BasicEncodingKind, DecodeMode, TransferSyntax},
+        encoding::{BasicEncodingKind, DecodeMode},
     };
 
     use super::ber_decode_value;
 
     #[test]
-    fn test_der_decode_contextless() {
+    fn test_ber_decode_contextless() {
         // TODO: once the compiler has the functionality to compile the X.509 modules,
         // change DecodeMode from Contextless to SpecificType with the Certificate type
         let der = include_bytes!("../../../test-data/decode/LetsEncryptX3.der");
         let context = Context::new();
         ber_decode_value(
-            &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+            BasicEncodingKind::Distinguished,
             der,
             &context,
             &DecodeMode::Contextless,
@@ -446,7 +462,7 @@ mod test {
     }
 
     json_test!(
-        test_der_decode_specific_type,
+        test_ber_decode_specific_type,
         "../../../test-data/decode/DecodeTest"
     );
 }

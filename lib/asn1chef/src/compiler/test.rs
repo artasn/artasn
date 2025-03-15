@@ -11,10 +11,9 @@ use crate::{
 
 use super::{context::DeclaredValue, options::CompilerConfig, CompileError, Compiler, Context};
 
-pub fn compile_module_fallible(
+pub fn compile_modules_fallible(
     context: &mut Context,
-    path: &str,
-    source: &str,
+    modules: &[(&str, &str)],
 ) -> Vec<CompileError> {
     context.clear();
 
@@ -27,18 +26,20 @@ pub fn compile_module_fallible(
         }
     }
 
-    match compiler.add_source(path.to_string(), source.to_string()) {
-        Ok(()) => (),
-        Err(err) => {
-            eprintln!("{}", err);
-            panic!("parse module '{}' failed", path);
+    for (path, source) in modules {
+        match compiler.add_source(path.to_string(), source.to_string()) {
+            Ok(()) => (),
+            Err(err) => {
+                eprintln!("{}", err);
+                panic!("parse module '{}' failed", path);
+            }
         }
     }
     compiler.compile(context)
 }
 
 pub fn compile_module(context: &mut Context, path: &str, source: &str) {
-    let errors = compile_module_fallible(context, path, source);
+    let errors = compile_modules_fallible(context, &[(path, source)]);
     if !errors.is_empty() {
         for error in errors {
             eprintln!("{}", error);
@@ -192,10 +193,7 @@ fn test_decode_value(
     };
 
     let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
-    let decoder = der_ts
-        .get_codec()
-        .decoder
-        .unwrap();
+    let decoder = der_ts.get_codec().decoder.unwrap();
     let values = decoder(&der_ts, der, context, &mode)
         .unwrap_or_else(|_| panic!("failed to decode value '{}'", ident));
 
@@ -240,13 +238,22 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
     }
 }
 
-fn execute_json_compile_test(module_name: &str, module_file: &str, data_file: &str) {
+fn execute_json_compile_test(data_file: &str, modules: &[(&str, &str)]) {
     let mut context = Context::new();
-    let errors = compile_module_fallible(&mut context, module_name, module_file);
+    let errors = compile_modules_fallible(&mut context, modules);
 
     let entries: Vec<String> = serde_json::from_str(data_file).expect("malformed data file");
 
-    assert_eq!(errors.len(), entries.len());
+    assert_eq!(
+        errors.len(),
+        entries.len(),
+        "\nerrors = {}",
+        errors
+            .into_iter()
+            .map(|err| err.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    );
 
     for i in 0..errors.len() {
         let error = &errors[i].to_string();
@@ -274,20 +281,53 @@ macro_rules! json_test {
 pub(crate) use json_test;
 
 macro_rules! json_compile_test {
-    ( $test:ident, $name:literal ) => {
+    ( $test:ident, $main:literal ) => {
         #[test]
         pub fn $test() {
-            let module_file = include_str!(concat!($name, ".asn"));
-            let data_file = include_str!(concat!($name, ".test.json"));
+            let data_file = include_str!(concat!($main, ".test.json"));
+
+            let mut modules = Vec::new();
+            let main_path = Path::new(concat!($main, ".asn"))
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap();
+            let main_module = include_str!(concat!($main, ".asn"));
+            modules.push((main_path, main_module));
 
             crate::compiler::test::execute_json_compile_test(
-                Path::new(concat!($name, ".asn"))
+                data_file,
+                &modules,
+            );
+        }
+    };
+    ( $test:ident, $root:literal, $main:literal, $($extra:literal),* ) => {
+        #[test]
+        pub fn $test() {
+            let data_file = include_str!(concat!($root, $main, ".test.json"));
+
+            let mut modules = Vec::new();
+            let main_path = Path::new(concat!($root, $main, ".asn"))
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap();
+            let main_module = include_str!(concat!($root, $main, ".asn"));
+            modules.push((main_path, main_module));
+
+            $(
+                let extra_path = Path::new(concat!($root, $extra, ".asn"))
                     .file_name()
                     .unwrap()
                     .to_str()
-                    .unwrap(),
-                module_file,
+                    .unwrap();
+                let extra_module = include_str!(concat!($root, $extra, ".asn"));
+                modules.push((extra_path, extra_module));
+            )+
+
+            crate::compiler::test::execute_json_compile_test(
                 data_file,
+                &modules,
             );
         }
     };
@@ -306,4 +346,25 @@ json_compile_test!(
 json_compile_test!(
     test_constraint_verifier,
     "../../test-data/compile/ConstraintTest"
+);
+json_compile_test!(
+    test_matching_imports,
+    "../../test-data/compile/import/",
+    "MatchingImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
+);
+json_compile_test!(
+    test_omitted_oid_import,
+    "../../test-data/compile/import/",
+    "OmittedOIDImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
+);
+json_compile_test!(
+    test_misplaced_oid_import,
+    "../../test-data/compile/import/",
+    "MisplacedOIDImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
 );

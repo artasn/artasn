@@ -167,4 +167,16 @@ mod test {
         test_encode_contents_constraint,
         "../../test-data/encode/ContentsConstraintTest"
     );
+    json_test!(
+        test_encode_automatic_tagging,
+        "../../test-data/encode/tagging/AutomaticTaggingTest"
+    );
+    json_test!(
+        test_encode_explicit_tagging,
+        "../../test-data/encode/tagging/ExplicitTaggingTest"
+    );
+    json_test!(
+        test_encode_implicit_tagging,
+        "../../test-data/encode/tagging/ImplicitTaggingTest"
+    );
 }

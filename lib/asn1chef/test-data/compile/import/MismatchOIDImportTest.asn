@@ -1,0 +1,16 @@
+MismatchOIDImportTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    
+IMPORTS
+    WithType, withValue FROM ModuleWithOID { joint-iso-itu-t asn1chef(1337) test(47) module(4) wrong-oid(100) }
+    WithoutType, withoutValue FROM ModuleWithoutOID;
+
+S ::= SEQUENCE {
+    with WithType,
+    without WithoutType
+}
+s S ::= {
+    with withValue,
+    without withoutValue
+}
+
+END

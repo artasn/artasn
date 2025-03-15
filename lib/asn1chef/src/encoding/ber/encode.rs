@@ -47,7 +47,7 @@ pub(crate) fn write_tlv_len(len: u64, buf: &mut Vec<u8>) {
     }
 }
 
-fn der_encode_integer(buf: &mut Vec<u8>, num: &BigInt) {
+fn ber_encode_integer(buf: &mut Vec<u8>, num: &BigInt) {
     const SIGN_MASK: u8 = 0b1000_0000;
 
     if num == &BigInt::ZERO {
@@ -73,7 +73,7 @@ fn der_encode_integer(buf: &mut Vec<u8>, num: &BigInt) {
     }
 }
 
-fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &str) {
+fn ber_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &str) {
     match tag_type {
         TagType::NumericString
         | TagType::PrintableString
@@ -123,7 +123,7 @@ fn der_encode_character_string(buf: &mut Vec<u8>, tag_type: TagType, str: &str) 
     }
 }
 
-fn der_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut exponent: BigInt) {
+fn ber_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut exponent: BigInt) {
     if mantissa == BigInt::ZERO {
         return;
     }
@@ -135,10 +135,10 @@ fn der_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut expon
             exponent += 1;
         }
 
-        der_encode_integer(buf, &mantissa.abs());
+        ber_encode_integer(buf, &mantissa.abs());
 
         let exp_len = buf.len();
-        der_encode_integer(buf, &exponent);
+        ber_encode_integer(buf, &exponent);
         let exp_len = buf.len() - exp_len;
 
         let mut bitflags = 0x00;
@@ -189,8 +189,7 @@ fn der_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut expon
     }
 }
 
-fn der_encode_structure(
-    syntax: &TransferSyntax,
+fn ber_encode_structure(
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -216,15 +215,14 @@ fn der_encode_structure(
             .expect("find type component matching value component for SEQUENCE/SET")
             .component_type
             .resolve(context)?;
-        ber_encode_value(syntax, buf, context, value, &value_ty)?;
+        ber_encode_value(buf, context, value, &value_ty)?;
     }
 
     Ok(())
 }
 
 /// See X.690 clause 8.18 and its subclauses to see what is being encoded here.
-fn der_encode_external(
-    syntax: &TransferSyntax,
+fn ber_encode_external(
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -236,7 +234,7 @@ fn der_encode_external(
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
-        der_encode_structure(syntax, buf, context, components, resolved_type)?;
+        ber_encode_structure(buf, context, components, resolved_type)?;
     } else {
         let data_value = components
             .iter()
@@ -244,7 +242,6 @@ fn der_encode_external(
             .expect("missing data-value");
         let data_value = data_value.value.resolve(context)?;
         ber_encode_value(
-            syntax,
             buf,
             context,
             data_value,
@@ -266,7 +263,6 @@ fn der_encode_external(
         {
             let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
             ber_encode_value(
-                syntax,
                 buf,
                 context,
                 data_value_descriptor,
@@ -296,7 +292,6 @@ fn der_encode_external(
         };
         if let Some(indirect_reference) = indirect_reference {
             ber_encode_value(
-                syntax,
                 buf,
                 context,
                 indirect_reference,
@@ -305,7 +300,6 @@ fn der_encode_external(
         }
         if let Some(direct_reference) = direct_reference {
             ber_encode_value(
-                syntax,
                 buf,
                 context,
                 direct_reference,
@@ -316,7 +310,7 @@ fn der_encode_external(
     Ok(())
 }
 
-fn der_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
+fn ber_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
     let class = match tag.class {
         Class::Universal => 0b00,
         Class::Application => 0b01,
@@ -346,7 +340,6 @@ fn der_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
 /// Regardless of the TransferSyntax provided, the output will always be valid DER.
 /// Since DER is always valid BER and valid CER, this is always acceptable.
 pub fn ber_encode_value(
-    syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
     context: &Context,
     value: &BuiltinValue,
@@ -365,12 +358,12 @@ pub fn ber_encode_value(
             if let Some(tag) = &resolved_type.tag {
                 match (tag.class, TagType::try_from(tag.num)) {
                     (Class::Universal, Ok(TagType::Real)) => {
-                        der_encode_real(buf, num.clone(), 10, BigInt::ZERO)
+                        ber_encode_real(buf, num.clone(), 10, BigInt::ZERO)
                     }
-                    _ => der_encode_integer(buf, num),
+                    _ => ber_encode_integer(buf, num),
                 }
             } else {
-                der_encode_integer(buf, num);
+                ber_encode_integer(buf, num);
             }
         }
         BuiltinValue::BitString(bit_string) => {
@@ -409,7 +402,7 @@ pub fn ber_encode_value(
             }
         }
         BuiltinValue::RealLiteral(lit) => {
-            der_encode_real(buf, lit.mantissa.clone(), 10, lit.exponent.clone());
+            ber_encode_real(buf, lit.mantissa.clone(), 10, lit.exponent.clone());
         }
         BuiltinValue::Enumerated(enumerated) => {
             let resolved = enumerated.resolve(context)?;
@@ -425,7 +418,7 @@ pub fn ber_encode_value(
                     })
                 }
             };
-            der_encode_integer(buf, &num);
+            ber_encode_integer(buf, &num);
         }
         BuiltinValue::Time(time) => {
             buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
@@ -481,7 +474,7 @@ pub fn ber_encode_value(
                         let base = to_int!(structure.components[1]);
                         let exponent = to_int!(structure.components[2]);
 
-                        der_encode_real(
+                        ber_encode_real(
                             buf,
                             mantissa,
                             base.try_into().expect("base is out of bounds"),
@@ -490,16 +483,10 @@ pub fn ber_encode_value(
                     }
                 }
                 (Class::Universal, Ok(TagType::External)) => {
-                    der_encode_external(syntax, buf, context, &structure.components, resolved_type)?
+                    ber_encode_external(buf, context, &structure.components, resolved_type)?
                 }
                 _ => {
-                    der_encode_structure(
-                        syntax,
-                        buf,
-                        context,
-                        &structure.components,
-                        resolved_type,
-                    )?;
+                    ber_encode_structure(buf, context, &structure.components, resolved_type)?;
                 }
             }
         }
@@ -511,15 +498,15 @@ pub fn ber_encode_value(
             let component_type = component_type.resolve(context)?;
             for element in structure.iter().rev() {
                 let resolved = element.resolve(context)?;
-                ber_encode_value(syntax, buf, context, resolved, &component_type)?;
+                ber_encode_value(buf, context, resolved, &component_type)?;
             }
         }
         BuiltinValue::Choice(choice) => {
             let value = choice.value.resolve(context)?;
-            ber_encode_value(syntax, buf, context, value, &choice.alternative_type)?;
+            ber_encode_value(buf, context, value, &choice.alternative_type)?;
         }
         BuiltinValue::CharacterString(tag_type, str) => {
-            der_encode_character_string(buf, *tag_type, str);
+            ber_encode_character_string(buf, *tag_type, str);
         }
         BuiltinValue::UTCTime(utc) => {
             buf.extend(utc.to_ber_string().into_bytes().into_iter().rev());
@@ -556,7 +543,7 @@ pub fn ber_encode_value(
                 .expect("CONTAINING value for type without contents constraint");
             let contained_type = constraint.ty.resolve(context)?;
 
-            let encoder = match &constraint.encoded_by {
+            let ts = match &constraint.encoded_by {
                 Some(encoded_by) => {
                     let resolved = encoded_by.resolve(context)?;
                     match resolved {
@@ -564,8 +551,8 @@ pub fn ber_encode_value(
                             let oid = oid.resolve_oid(context)?;
                             match TransferSyntax::get_by_oid(&oid) {
                                     Some(ts) => {
-                                        if let Some(encoder) = ts.get_codec().encoder {
-                                            encoder
+                                        if ts.get_codec().encoder.is_some() {
+                                            ts
                                         } else {
                                             return Err(Error {
                                                 kind: ErrorKind::Ast(format!("encoding with the {} transfer syntax is not yet implemented", ts.get_name())),
@@ -584,7 +571,7 @@ pub fn ber_encode_value(
                         other => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(
-                                    "expecting OBJECT IDENTIFIER for the transfer syntax, found {}",
+                                    "expecting OBJECT IDENTIFIER for the transfer  found {}",
                                     other.tag_type(context)?
                                 )),
                                 loc: encoded_by.loc,
@@ -592,11 +579,12 @@ pub fn ber_encode_value(
                         }
                     }
                 }
-                None => ber_encode_value,
+                None => &TransferSyntax::Basic(BasicEncodingKind::Distinguished),
             };
 
             let contained_value = containing.value.resolve(context)?;
-            encoder(syntax, buf, context, contained_value, &contained_type)?;
+            let encoder = ts.get_codec().encoder.unwrap();
+            encoder(ts, buf, context, contained_value, &contained_type)?;
 
             match &resolved_type.ty {
                 // write the bit string unused bits count
@@ -613,7 +601,7 @@ pub fn ber_encode_value(
         if tag.kind == TagKind::Explicit {
             if let Some(tag_type) = resolved_type.ty.tag_type() {
                 write_tlv_len((end_len - start_len) as u64, buf);
-                der_encode_tag(
+                ber_encode_tag(
                     buf,
                     &Tag::universal(tag_type),
                     TagContext {
@@ -626,7 +614,7 @@ pub fn ber_encode_value(
 
         let end_len = buf.len();
         write_tlv_len((end_len - start_len) as u64, buf);
-        der_encode_tag(
+        ber_encode_tag(
             buf,
             tag,
             TagContext {
@@ -637,7 +625,7 @@ pub fn ber_encode_value(
     } else {
         assert!(
             matches!(resolved_type.ty, BuiltinType::Choice(_)),
-            "der_encode: resolved_type tag is None but type is not CHOICE"
+            "ber_encode: resolved_type tag is None but type is not CHOICE"
         );
     }
 

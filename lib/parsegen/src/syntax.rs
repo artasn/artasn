@@ -49,6 +49,9 @@ impl SyntaxParser {
     }
 
     fn make_ok(&self, inner: &str) -> String {
+        if inner == "true" {
+            return inner.to_string();
+        }
         match self.block_stack.last().unwrap() {
             BlockType::Repeated => format!("repeated_ok!({})", inner),
             BlockType::Optional => format!("optional_ok!({}, 'optional_block)", inner),
@@ -58,7 +61,7 @@ impl SyntaxParser {
                     true => format!("persistent_ok!({}, context)", inner),
                     false => format!("ok!({})", inner),
                 },
-            }
+            },
         }
     }
 
@@ -67,7 +70,10 @@ impl SyntaxParser {
             Rule::def_statement => {
                 let ident = pair.into_inner().next().unwrap().as_str();
                 Expr {
-                    code: format!("Ast{}::parse(ParseContext::new(context.tokens))", ident),
+                    code: match ident {
+                        "true" => String::from("true"),
+                        _ => format!("Ast{}::parse(ParseContext::new(context.tokens))", ident),
+                    },
                     optional: false,
                 }
             }
@@ -97,7 +103,10 @@ impl SyntaxParser {
                 } else {
                     let inner_expr = self.build_expression(inner_pair);
                     Expr {
-                        code: format!("optional!({}, ParseContext::new(context.tokens))", inner_expr.code),
+                        code: format!(
+                            "optional!({}, ParseContext::new(context.tokens))",
+                            inner_expr.code
+                        ),
                         optional: true,
                     }
                 };
@@ -232,7 +241,9 @@ impl SyntaxParser {
                             _ => unreachable!(),
                         }
                     };
-                    type_name = format!("AstElement<Ast{}>", type_name);
+                    if type_name != "bool" {
+                        type_name = format!("AstElement<Ast{}>", type_name);
+                    }
                     if boxed {
                         type_name = format!("Box<{}>", type_name);
                     }
@@ -257,7 +268,9 @@ impl SyntaxParser {
                             (type_name, None, false, false)
                         };
 
-                    let statement = if let Some(default_value) = default_value {
+                    let statement = if full_type == "bool" {
+                        format!("let mut {}: bool = true;\n", var_name)
+                    } else if let Some(default_value) = default_value {
                         format!("let mut {}: {} = {};\n", var_name, full_type, default_value)
                     } else {
                         format!("let mut {}: {};\n", var_name, full_type)
