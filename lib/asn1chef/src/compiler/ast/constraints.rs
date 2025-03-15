@@ -370,7 +370,7 @@ pub fn parse_type_assignment_constraint(
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
 
     let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
-    let constrained_type = constrained_type.resolve(parser.context)?;
+    let constrained_type = constrained_type.ty.resolve(parser.context)?;
 
     let pending = parse_type_constraint(parser, &type_assignment.element.ty, &constrained_type)?;
     Ok((ident, pending))

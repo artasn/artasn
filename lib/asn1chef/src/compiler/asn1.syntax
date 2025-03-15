@@ -306,12 +306,31 @@ variant Reference = TypeReference | ValueReference;
 
 variant Assignment = TypeAssignment | ValueAssignment;
 
+rule ParameterList {
+    captures {
+        parameters = repeated: TypeReference
+    }
+    operator {
+    persist
+    parameters = TypeReference
+    optional repeated {
+        operator ,
+        parameters = TypeReference
+    }
+    operator }
+    return parameters
+}
+
 rule TypeAssignment {
     captures {
         name = TypeReference
+        parameters = optional: ParameterList
         ty = Type
     }
     name = TypeReference
+    optional {
+        parameters = ParameterList
+    }
     operator ::=
     persist
     ty = Type

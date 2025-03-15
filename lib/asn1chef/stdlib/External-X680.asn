@@ -3,6 +3,7 @@ External DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 -- This is the current implementation of the EXTERNAL type.
 -- It is the same as EMBEDDED PDV but has different components selected.
 
+-- EXTERNAL
 External ::= [UNIVERSAL 8] SEQUENCE {
     identification CHOICE {
         syntaxes SEQUENCE {

@@ -1,5 +1,9 @@
 use super::{values, AstParser};
-use crate::{compiler::parser::*, module::*, types::*};
+use crate::{
+    compiler::{context::DeclaredType, parser::*},
+    module::*,
+    types::*,
+};
 
 lazy_static::lazy_static! {
     static ref REAL_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
@@ -401,13 +405,29 @@ pub fn parse_type(
 pub fn parse_type_assignment(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
-) -> Result<(QualifiedIdentifier, TaggedType)> {
+) -> Result<(QualifiedIdentifier, DeclaredType)> {
     let name = type_assignment.element.name.element.0.clone();
+    let parameters = type_assignment
+        .element
+        .parameters
+        .as_ref()
+        .map(|params| {
+            params
+                .element
+                .0
+                .iter()
+                .map(|param| param.element.0.clone())
+                .collect()
+        })
+        .unwrap_or_else(|| Vec::new());
     let ty = parse_type(
         parser,
         &type_assignment.element.ty,
         TypeContext::Contextless,
     )?;
 
-    Ok((QualifiedIdentifier::new(parser.module.clone(), name), ty))
+    Ok((
+        QualifiedIdentifier::new(parser.module.clone(), name),
+        DeclaredType { parameters, ty },
+    ))
 }

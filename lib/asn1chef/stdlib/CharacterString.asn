@@ -1,5 +1,6 @@
 CharacterString DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 
+-- CHARACTER STRING
 CharacterString ::= [UNIVERSAL 29] SEQUENCE {
     identification CHOICE {
         syntaxes SEQUENCE {

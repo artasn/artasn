@@ -1,0 +1,26 @@
+Classes DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+-- TYPE-IDENTIFIER
+TypeIdentifier ::= CLASS {
+    &id OBJECT IDENTIFIER UNIQUE,
+    &Type
+} WITH SYNTAX {
+    &Type IDENTIFIED BY &id
+}
+
+-- ABSTRACT-SYNTAX
+AbstractSyntax ::= CLASS {
+   &id OBJECT IDENTIFIER UNIQUE,
+   &Type,
+   &property BIT STRING { handles-invalid-encodings(0) } DEFAULT {}
+} WITH SYNTAX {
+   &Type IDENTIFIED BY &id [HAS PROPERTY &property]
+}
+
+-- INSTANCE OF
+InstanceOf{DefinedObjectClass} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
+    type-id DefinedObjectClass.&id,
+    value [0] DefinedObjectClass.&Type
+}
+
+END

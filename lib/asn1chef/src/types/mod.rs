@@ -225,13 +225,16 @@ impl TaggedType {
                     });
                 }
                 UntaggedType::Reference(ident) => {
-                    tagged_ty = context.lookup_type(&ident.element).ok_or_else(|| Error {
-                        kind: ErrorKind::Ast(format!(
-                            "undefined reference to type '{}'",
-                            ident.element
-                        )),
-                        loc: ident.loc,
-                    })?;
+                    tagged_ty = &context
+                        .lookup_type(&ident.element)
+                        .ok_or_else(|| Error {
+                            kind: ErrorKind::Ast(format!(
+                                "undefined reference to type '{}'",
+                                ident.element
+                            )),
+                            loc: ident.loc,
+                        })?
+                        .ty;
                     tag = tag.or(tagged_ty.tag.as_ref());
                 }
             }

@@ -1,0 +1,10 @@
+{
+    "module": "ParameterizedTypeTest",
+    "tests": ["Encode"],
+    "values": [
+        {
+            "name": "cert",
+            "der": "3019300D020103040213370C04636572740408300602010D020125"
+        }
+    ]
+}

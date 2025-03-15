@@ -227,8 +227,8 @@ pub fn register_all_types(
         results
     }) {
         Ok(types) => {
-            for (ident, ty) in types {
-                context.register_type(ident, ty);
+            for (ident, decl) in types {
+                context.register_type(ident, decl);
             }
             Vec::new()
         }
@@ -256,8 +256,8 @@ pub fn register_all_constraints(
     }) {
         Ok(pending_constraints) => {
             for (ident, pending) in pending_constraints {
-                let ty = context.lookup_type_mut(&ident).expect("lookup_type");
-                constraints::apply_pending_constraint(ty, pending);
+                let decl = context.lookup_type_mut(&ident).expect("lookup_type");
+                constraints::apply_pending_constraint(&mut decl.ty, pending);
             }
             Vec::new()
         }
@@ -298,12 +298,12 @@ pub fn verify_all_types(
 ) -> Vec<Error> {
     run_verifier(context, config, program, |verifier| {
         let mut errors: Vec<Error> = Vec::new();
-        for (ident, declared_value) in verifier.context.list_types() {
+        for (ident, declared_type) in verifier.context.list_types() {
             if ident.module != verifier.module {
                 continue;
             }
 
-            if let Err(err) = verify::verify_type(verifier.context, declared_value) {
+            if let Err(err) = verify::verify_type(verifier.context, &declared_type.ty) {
                 errors.push(err);
             }
         }

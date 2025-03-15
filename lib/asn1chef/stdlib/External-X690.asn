@@ -8,6 +8,8 @@ External-X690 DEFINITIONS EXPLICIT TAGS ::= BEGIN
 
 -- This module is not actually loaded as part of the the standard library,
 -- but instead serves as reference material for the `der_encode_external` function in src/encoding/values.rs.
+
+-- EXTERNAL
 External ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
     direct-reference      OBJECT IDENTIFIER OPTIONAL,
     indirect-reference    INTEGER           OPTIONAL,

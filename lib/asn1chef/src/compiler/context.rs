@@ -14,9 +14,15 @@ pub struct DeclaredValue {
 }
 
 #[derive(Debug)]
+pub struct DeclaredType {
+    pub parameters: Vec<String>,
+    pub ty: TaggedType,
+}
+
+#[derive(Debug)]
 pub struct Context {
     modules: IndexMap<ModuleIdentifier, ModuleHeader>,
-    types: IndexMap<QualifiedIdentifier, TaggedType>,
+    types: IndexMap<QualifiedIdentifier, DeclaredType>,
     values: IndexMap<QualifiedIdentifier, DeclaredValue>,
 }
 
@@ -45,10 +51,10 @@ impl Context {
         self.modules.values().collect()
     }
 
-    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, &TaggedType)> {
+    pub fn list_types(&self) -> Vec<(QualifiedIdentifier, &DeclaredType)> {
         self.types
             .iter()
-            .map(|(ident, typeref)| (ident.clone(), typeref))
+            .map(|(ident, decl)| (ident.clone(), decl))
             .collect()
     }
 
@@ -63,8 +69,8 @@ impl Context {
         self.modules.insert(module.ident.clone(), module);
     }
 
-    pub fn register_type(&mut self, ident: QualifiedIdentifier, typeref: TaggedType) {
-        self.types.insert(ident, typeref);
+    pub fn register_type(&mut self, ident: QualifiedIdentifier, ty: DeclaredType) {
+        self.types.insert(ident, ty);
     }
 
     pub fn register_value(&mut self, ident: QualifiedIdentifier, val: DeclaredValue) {
@@ -81,14 +87,14 @@ impl Context {
         self.modules.get(ident)
     }
 
-    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a TaggedType> {
+    pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredType> {
         self.types.get(ident)
     }
 
     pub fn lookup_type_mut<'a>(
         &'a mut self,
         ident: &QualifiedIdentifier,
-    ) -> Option<&'a mut TaggedType> {
+    ) -> Option<&'a mut DeclaredType> {
         self.types.get_mut(ident)
     }
 
@@ -96,9 +102,10 @@ impl Context {
         self.values.get(ident)
     }
 
-    pub fn lookup_type_by_tag(&self, class: Class, num: u16) -> Option<&TaggedType> {
-        self.types.values().find(|ty| {
-            ty.tag
+    pub fn lookup_type_by_tag(&self, class: Class, num: u16) -> Option<&DeclaredType> {
+        self.types.values().find(|decl| {
+            decl.ty
+                .tag
                 .as_ref()
                 .map(|tag| tag.class == class && tag.num == num)
                 .unwrap_or(false)

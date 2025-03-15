@@ -6,6 +6,7 @@ SpecialReal ::= ENUMERATED {
     not-a-number (2)
 }
 
+-- REAL
 Real ::= [UNIVERSAL 9] SEQUENCE {
     mantissa INTEGER,
     base INTEGER (2 | 10),

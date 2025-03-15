@@ -1,0 +1,25 @@
+ParameterizedTypeTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Signature ::= SEQUENCE {
+	a INTEGER,
+	b INTEGER
+}
+
+Signed{TBS} ::= SEQUENCE {
+    tbs TBS,
+    signature OCTET STRING (CONTAINING Signature)
+}
+
+TBSCertificate ::= SEQUENCE {
+	version INTEGER,
+	serial OCTET STRING,
+	name UTF8String
+}
+
+Certificate ::= Signed{TBSCertificate}
+cert Certificate ::= {
+	tbs { version 3, serial '1337'H, name "cert" },
+	signature CONTAINING { a 13, b 37 }
+}
+
+END

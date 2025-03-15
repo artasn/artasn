@@ -4,6 +4,7 @@ External DEFINITIONS EXPLICIT TAGS ::= BEGIN
 -- until X.680 (1994) superceded it and replaced it with the EXTERNAL type
 -- which is declared in ./External-X680.asn
 
+-- EXTERNAL
 External ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
     direct-reference      OBJECT IDENTIFIER OPTIONAL,
     indirect-reference    INTEGER           OPTIONAL,

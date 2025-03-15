@@ -179,4 +179,8 @@ mod test {
         test_encode_implicit_tagging,
         "../../test-data/encode/tagging/ImplicitTaggingTest"
     );
+    // json_test!(
+    //     test_encode_parameterized_type,
+    //     "../../test-data/encode/ParameterizedTypeTest"
+    // );
 }

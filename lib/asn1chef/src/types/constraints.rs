@@ -441,10 +441,10 @@ mod test {
                     pending
                 };
 
-                let tagged_type = context.lookup_type_mut(&ident).unwrap();
-                ast::constraints::apply_pending_constraint(tagged_type, pending);
+                let decl = context.lookup_type_mut(&ident).unwrap();
+                ast::constraints::apply_pending_constraint(&mut decl.ty, pending);
 
-                tagged_type.constraint.as_ref().unwrap().clone()
+                decl.ty.constraint.as_ref().unwrap().clone()
             }
             _ => panic!(),
         }
