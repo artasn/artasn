@@ -492,6 +492,7 @@ pub fn parse_value_assignment(
     let ty = types::parse_type(
         parser,
         &value_assignment.element.ty,
+        &[],
         types::TypeContext::Contextless,
     )?;
     let resolved_ty = ty.resolve(parser.context)?;

@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 
-use super::parser::AstElement;
+use super::parser::{AstElement, AstTypeAssignment};
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
     types::{Class, TaggedType},
@@ -15,13 +15,13 @@ pub struct DeclaredValue {
 
 #[derive(Debug)]
 pub struct DeclaredType {
-    pub parameters: Vec<String>,
     pub ty: TaggedType,
 }
 
 #[derive(Debug)]
 pub struct Context {
     modules: IndexMap<ModuleIdentifier, ModuleHeader>,
+    parameterized_types: IndexMap<QualifiedIdentifier, AstElement<AstTypeAssignment>>,
     types: IndexMap<QualifiedIdentifier, DeclaredType>,
     values: IndexMap<QualifiedIdentifier, DeclaredValue>,
 }
@@ -36,6 +36,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             modules: IndexMap::new(),
+            parameterized_types: IndexMap::new(),
             types: IndexMap::new(),
             values: IndexMap::new(),
         }
@@ -43,8 +44,13 @@ impl Context {
 
     pub fn clear(&mut self) {
         self.modules.clear();
+        self.parameterized_types.clear();
         self.types.clear();
         self.values.clear();
+    }
+
+    pub fn clear_parameterized_types(&mut self) {
+        self.parameterized_types.clear();
     }
 
     pub fn list_modules(&self) -> Vec<&ModuleHeader> {
@@ -69,8 +75,16 @@ impl Context {
         self.modules.insert(module.ident.clone(), module);
     }
 
-    pub fn register_type(&mut self, ident: QualifiedIdentifier, ty: DeclaredType) {
-        self.types.insert(ident, ty);
+    pub fn register_type(&mut self, ident: QualifiedIdentifier, decl: DeclaredType) {
+        self.types.insert(ident, decl);
+    }
+
+    pub fn register_parameterized_type(
+        &mut self,
+        ident: QualifiedIdentifier,
+        decl: AstElement<AstTypeAssignment>,
+    ) {
+        self.parameterized_types.insert(ident, decl);
     }
 
     pub fn register_value(&mut self, ident: QualifiedIdentifier, val: DeclaredValue) {
@@ -85,6 +99,13 @@ impl Context {
 
     pub fn lookup_module<'a>(&'a self, ident: &ModuleIdentifier) -> Option<&'a ModuleHeader> {
         self.modules.get(ident)
+    }
+
+    pub fn lookup_parameterized_type<'a>(
+        &'a self,
+        ident: &QualifiedIdentifier,
+    ) -> Option<&'a AstElement<AstTypeAssignment>> {
+        self.parameterized_types.get(ident)
     }
 
     pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredType> {

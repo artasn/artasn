@@ -143,7 +143,7 @@ impl Display for UntaggedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::BuiltinType(builtin) => builtin.fmt(f),
-            Self::Reference(ident) => ident.element.fmt(f),
+            Self::Reference(typeref) => typeref.element.fmt(f),
         }
     }
 }
@@ -219,22 +219,21 @@ impl TaggedType {
                         // TODO: implement constraint intersection
                         // for example, in the ASN.1 declaration:
                         //   I1 ::= INTEGER (0..10)
-                        //   I2 ::= I1 (8..MAX)
-                        // the only valid values for I2 are 8, 9, and 10
+                        //   I2 ::= I1 (8..<MAX)
+                        // the only valid values for I2 are 8 and 9
                         constraint: tagged_ty.constraint.clone(),
                     });
                 }
-                UntaggedType::Reference(ident) => {
-                    tagged_ty = &context
-                        .lookup_type(&ident.element)
-                        .ok_or_else(|| Error {
-                            kind: ErrorKind::Ast(format!(
-                                "undefined reference to type '{}'",
-                                ident.element
-                            )),
-                            loc: ident.loc,
-                        })?
-                        .ty;
+                UntaggedType::Reference(name) => {
+                    let decl = &context.lookup_type(&name.element).ok_or_else(|| Error {
+                        kind: ErrorKind::Ast(format!(
+                            "undefined reference to type '{}'",
+                            name.element
+                        )),
+                        loc: name.loc,
+                    })?;
+
+                    tagged_ty = &decl.ty;
                     tag = tag.or(tagged_ty.tag.as_ref());
                 }
             }

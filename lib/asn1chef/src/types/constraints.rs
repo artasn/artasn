@@ -198,14 +198,18 @@ impl Constraint {
                         Some((lower_bound, upper_bound)) => {
                             if lower_value.is_none() {
                                 *lower_bound = None;
-                            } else if let (Some(lower_value), Some(lower_bound)) = (lower_value, lower_bound) {
+                            } else if let (Some(lower_value), Some(lower_bound)) =
+                                (lower_value, lower_bound)
+                            {
                                 if &lower_value < lower_bound {
                                     *lower_bound = lower_value;
                                 }
                             }
                             if upper_value.is_none() {
                                 *upper_bound = None;
-                            } else if let (Some(upper_value), Some(upper_bound)) = (upper_value, upper_bound) {
+                            } else if let (Some(upper_value), Some(upper_bound)) =
+                                (upper_value, upper_bound)
+                            {
                                 if &upper_value > upper_bound {
                                     *upper_bound = upper_value.clone();
                                 }
@@ -235,14 +239,18 @@ impl Constraint {
                         Some((lower_bound, upper_bound)) => {
                             if lower_size.is_none() {
                                 *lower_bound = None;
-                            } else if let (Some(lower_size), Some(lower_bound)) = (lower_size, lower_bound) {
+                            } else if let (Some(lower_size), Some(lower_bound)) =
+                                (lower_size, lower_bound)
+                            {
                                 if &lower_size < lower_bound {
                                     *lower_bound = lower_size;
                                 }
                             }
                             if upper_size.is_none() {
                                 *upper_bound = None;
-                            } else if let (Some(upper_size), Some(upper_bound)) = (upper_size, upper_bound) {
+                            } else if let (Some(upper_size), Some(upper_bound)) =
+                                (upper_size, upper_bound)
+                            {
                                 if &upper_size > upper_bound {
                                     *upper_bound = upper_size.clone();
                                 }
@@ -379,7 +387,7 @@ impl Constraint {
 mod test {
     use crate::{
         compiler::{
-            ast::{self, AstParser},
+            ast::{self, types::TypeAssignmentParseMode, AstParser},
             options::CompilerConfig,
             parser::*,
             Context,
@@ -427,8 +435,13 @@ mod test {
         match &ast_module.element.body.element.0[0].element {
             AstAssignment::TypeAssignment(type_assignment) => {
                 let ident = {
-                    let (ident, tagged_type) =
-                        ast::types::parse_type_assignment(make_parser!(), type_assignment).unwrap();
+                    let (ident, tagged_type) = ast::types::parse_type_assignment(
+                        make_parser!(),
+                        type_assignment,
+                        &TypeAssignmentParseMode::Normal,
+                    )
+                    .unwrap()
+                    .unwrap();
                     context.register_type(ident.clone(), tagged_type);
                     ident
                 };
@@ -437,6 +450,7 @@ mod test {
                         make_parser!(),
                         type_assignment,
                     )
+                    .unwrap()
                     .unwrap();
                     pending
                 };

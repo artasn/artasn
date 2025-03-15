@@ -854,7 +854,31 @@ variant ConstrainedType = Suffixed {
     return ty
 };
 
-variant UntaggedType = BuiltinType | TypeReference;
+rule TypeParameterList {
+    captures {
+        types = repeated: Type
+    }
+    operator {
+    persist
+    types = Type
+    optional repeated {
+        operator ,
+        types = Type
+    }
+    operator }
+    return types
+}
+
+rule ParameterizedTypeReference {
+    captures {
+        name = TypeReference
+        parameters = TypeParameterList
+    }
+    name = TypeReference
+    parameters = TypeParameterList
+}
+
+variant UntaggedType = BuiltinType | ParameterizedTypeReference | TypeReference;
 
 variant Type = TaggedType | ConstrainedType;
 

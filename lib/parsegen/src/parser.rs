@@ -14,14 +14,14 @@ impl TokenStream {
         }
     }
 
-    pub fn try_parse(&mut self, kind: TokenKind) -> Result<Token> {
+    pub fn try_parse(&mut self, kind: TokenKind, data: Option<TokenData>) -> Result<Token> {
         let token = self.tokenizer.tokenize_next()?;
         if token.kind == kind {
             Ok(token)
         } else {
             Err(Error {
                 kind: ErrorKind::ExpectingOther {
-                    expecting: vec![kind],
+                    expecting: vec![(kind, data)],
                     found: token.clone(),
                 },
                 loc: token.loc,
@@ -61,7 +61,7 @@ impl Parseable for Soi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Soi)
+            .try_parse(TokenKind::Soi, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: Soi,
@@ -79,7 +79,7 @@ impl Parseable for Eoi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Eoi)
+            .try_parse(TokenKind::Eoi, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: Eoi,
@@ -97,7 +97,7 @@ impl Parseable for AstTypeReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::TypeReference)
+            .try_parse(TokenKind::TypeReference, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstTypeReference(match token.data.unwrap() {
@@ -118,7 +118,7 @@ impl Parseable for AstEncodingReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::TypeReference)
+            .try_parse(TokenKind::TypeReference, None)
             .map(|token| {
                 let name = match token.data.as_ref().unwrap() {
                     TokenData::Named(name) => name,
@@ -129,7 +129,10 @@ impl Parseable for AstEncodingReference {
                         return ParseResult::Fail(Error {
                             loc: token.loc,
                             kind: ErrorKind::ExpectingOther {
-                                expecting: vec![TokenKind::EncodingReference],
+                                expecting: vec![(
+                                    TokenKind::EncodingReference,
+                                    Some(TokenData::Named(name.clone())),
+                                )],
                                 found: token,
                             },
                         });
@@ -154,7 +157,7 @@ impl Parseable for AstValueReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::ValueReference)
+            .try_parse(TokenKind::ValueReference, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstValueReference(match token.data.unwrap() {
@@ -178,7 +181,7 @@ impl Parseable for AstStringLiteral {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::String)
+            .try_parse(TokenKind::String, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
@@ -199,7 +202,7 @@ impl Parseable for AstNumber {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Number)
+            .try_parse(TokenKind::Number, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstNumber(match token.data.unwrap() {
@@ -213,9 +216,27 @@ impl Parseable for AstNumber {
     }
 }
 
+impl ParseableEnum for Keyword {
+    fn parse(context: ParseContext, data: Option<TokenData>) -> ParseResult<Self> {
+        context
+            .tokens
+            .try_parse(TokenKind::Keyword, data)
+            .map(|token| {
+                ParseResult::Ok(AstElement {
+                    element: match token.data.unwrap() {
+                        TokenData::Keyword(num) => num,
+                        _ => unreachable!(),
+                    },
+                    loc: token.loc,
+                })
+            })
+            .unwrap_or_else(ParseResult::Fail)
+    }
+}
+
 impl Keyword {
     pub fn match_keyword(keyword: Keyword, context: ParseContext) -> ParseResult<Keyword> {
-        let parse = Self::parse(context);
+        let parse = Self::parse(context, Some(TokenData::Keyword(keyword.clone())));
         match parse {
             ParseResult::Ok(ast) => {
                 if ast.element == keyword {
@@ -235,29 +256,11 @@ impl Keyword {
     }
 }
 
-impl Parseable for Keyword {
-    fn parse(context: ParseContext) -> ParseResult<Self> {
+impl ParseableEnum for Operator {
+    fn parse(context: ParseContext, data: Option<TokenData>) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Keyword)
-            .map(|token| {
-                ParseResult::Ok(AstElement {
-                    element: match token.data.unwrap() {
-                        TokenData::Keyword(num) => num,
-                        _ => unreachable!(),
-                    },
-                    loc: token.loc,
-                })
-            })
-            .unwrap_or_else(ParseResult::Fail)
-    }
-}
-
-impl Parseable for Operator {
-    fn parse(context: ParseContext) -> ParseResult<Self> {
-        context
-            .tokens
-            .try_parse(TokenKind::Operator)
+            .try_parse(TokenKind::Operator, data)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
@@ -273,7 +276,7 @@ impl Parseable for Operator {
 
 impl Operator {
     pub fn match_operator(operator: Operator, context: ParseContext) -> ParseResult<Operator> {
-        let parse = Self::parse(context);
+        let parse = Self::parse(context, Some(TokenData::Operator(operator.clone())));
         match parse {
             ParseResult::Ok(ast) => {
                 if ast.element == operator {
@@ -480,4 +483,11 @@ where
     Self: Sized,
 {
     fn parse(context: ParseContext<'_>) -> ParseResult<Self>;
+}
+
+pub trait ParseableEnum
+where
+    Self: Sized,
+{
+    fn parse(context: ParseContext<'_>, data: Option<TokenData>) -> ParseResult<Self>;
 }

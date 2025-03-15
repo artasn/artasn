@@ -118,8 +118,14 @@ impl Compiler {
         }
 
         let (external_name, external_source) = match self.config.edition {
-            Asn1Edition::X208 => ("External-X208.asn", include_str!("../../stdlib/External-X208.asn")),
-            Asn1Edition::X680 => ("External-X680.asn", include_str!("../../stdlib/External-X680.asn")),
+            Asn1Edition::X208 => (
+                "External-X208.asn",
+                include_str!("../../stdlib/External-X208.asn"),
+            ),
+            Asn1Edition::X680 => (
+                "External-X680.asn",
+                include_str!("../../stdlib/External-X680.asn"),
+            ),
         };
         self.add_source(external_name.to_string(), external_source.to_string())?;
 
@@ -204,6 +210,7 @@ impl Compiler {
         }
 
         stage!(register_all_modules);
+        stage!(register_all_parameterized_types);
         stage!(register_all_types);
         stage!(register_all_constraints);
         stage!(register_all_values);

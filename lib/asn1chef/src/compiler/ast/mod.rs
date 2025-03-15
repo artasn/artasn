@@ -4,6 +4,8 @@ pub mod types;
 pub mod values;
 pub mod verify;
 
+use types::TypeAssignmentParseMode;
+
 use super::options::CompilerConfig;
 use super::{parser::*, Context};
 use crate::compiler::options::EmptyExportBehavior;
@@ -134,7 +136,7 @@ fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
         .collect()
 }
 
-/// First stage: register all module headers.
+/// Stage 1: register all module headers.
 pub fn register_all_modules(
     context: &mut Context,
     config: &CompilerConfig,
@@ -211,7 +213,37 @@ pub fn register_all_modules(
     }
 }
 
-/// Second stage: register all declared types.
+// Stage 2: register all parameterized types.
+// This stores their ASTs in the Context so that they can be parsed with the substituted types later.
+pub fn register_all_parameterized_types(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
+                match types::parse_parameterized_type_assignment(&parser, type_assignment) {
+                    Ok(Some(decl)) => results.push(Ok(decl)),
+                    Err(decl) => results.push(Err(decl)),
+                    _ => (),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(types) => {
+            for (ident, decl) in types {
+                context.register_parameterized_type(ident, decl);
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+/// Stage 3: register all declared types.
 pub fn register_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -221,7 +253,15 @@ pub fn register_all_types(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                results.push(types::parse_type_assignment(&parser, type_assignment));
+                match types::parse_type_assignment(
+                    &parser,
+                    type_assignment,
+                    &TypeAssignmentParseMode::Normal,
+                ) {
+                    Ok(Some(decl)) => results.push(Ok(decl)),
+                    Err(decl) => results.push(Err(decl)),
+                    _ => (),
+                }
             }
         }
         results
@@ -236,7 +276,7 @@ pub fn register_all_types(
     }
 }
 
-/// Third stage: register the constraints for all types.
+/// Stage 4: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
     config: &CompilerConfig,
@@ -246,10 +286,14 @@ pub fn register_all_constraints(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                results.push(constraints::parse_type_assignment_constraint(
+                match constraints::parse_type_assignment_constraint(
                     &parser,
                     type_assignment,
-                ));
+                ) {
+                    Ok(Some(decl)) => results.push(Ok(decl)),
+                    Err(decl) => results.push(Err(decl)),
+                    _ => (),
+                }
             }
         }
         results
@@ -265,7 +309,7 @@ pub fn register_all_constraints(
     }
 }
 
-/// Fourth stage: register all declared values.
+/// Stage 5: register all declared values.
 pub fn register_all_values(
     context: &mut Context,
     config: &CompilerConfig,
@@ -290,12 +334,15 @@ pub fn register_all_values(
     }
 }
 
-/// Fifth stage: verify all types.
+/// Stage 6: verify all types.
 pub fn verify_all_types(
-    context: &Context,
+    context: &mut Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
+    // free up some memory by clearing the ASTs for parameterized types
+    context.clear_parameterized_types();
+
     run_verifier(context, config, program, |verifier| {
         let mut errors: Vec<Error> = Vec::new();
         for (ident, declared_type) in verifier.context.list_types() {
@@ -311,7 +358,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Sixth stage: verify all declared values.
+/// Stage 7: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     config: &CompilerConfig,

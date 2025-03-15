@@ -15,6 +15,7 @@ fn parse_constraint(
     parser: &AstParser<'_>,
     ast_constraint: &AstElement<AstConstraint>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
     ctx: ConstraintContext,
 ) -> Result<Constraint> {
     let element_sets = &ast_constraint.element.0.element.element_sets;
@@ -24,7 +25,7 @@ fn parse_constraint(
         let mut elements = Vec::with_capacity(element_set.len());
         for element in element_set {
             elements.push(AstElement::new(
-                parse_subtype_element(parser, element, constrained_type, ctx)?,
+                parse_subtype_element(parser, element, constrained_type, parameters, ctx)?,
                 element.loc,
             ));
         }
@@ -41,6 +42,7 @@ fn parse_subtype_element(
     parser: &AstParser<'_>,
     ast_subtype_element: &AstElement<AstSubtypeElement>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
     ctx: ConstraintContext,
 ) -> Result<SubtypeElement> {
     Ok(match &ast_subtype_element.element {
@@ -84,14 +86,15 @@ fn parse_subtype_element(
                 parser,
                 &size_constraint.element.0,
                 constrained_type,
+                parameters,
                 ConstraintContext::WithinSize,
             )?)
         }
-        AstSubtypeElement::InnerTypeConstraints(itc) => {
-            SubtypeElement::InnerType(parse_inner_type_constraints(parser, itc, constrained_type)?)
-        }
+        AstSubtypeElement::InnerTypeConstraints(itc) => SubtypeElement::InnerType(
+            parse_inner_type_constraints(parser, itc, constrained_type, parameters)?,
+        ),
         AstSubtypeElement::ContentsConstraint(contents) => SubtypeElement::Contents(
-            parse_contents_constraint(parser, contents, constrained_type)?,
+            parse_contents_constraint(parser, contents, constrained_type, parameters)?,
         ),
     })
 }
@@ -100,6 +103,7 @@ fn parse_contents_constraint(
     parser: &AstParser<'_>,
     contents: &AstElement<AstContentsConstraint>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<ContentsConstraint> {
     match &constrained_type.ty {
         BuiltinType::BitString(_) | BuiltinType::OctetString => (),
@@ -115,7 +119,7 @@ fn parse_contents_constraint(
         AstContentsConstraint::Containing(containing) => (&containing.element.0, None),
         AstContentsConstraint::EncodedBy(eb) => (&eb.element.ty, Some(&eb.element.value)),
     };
-    let ty = types::parse_type(parser, ty, TypeContext::Contextless)?;
+    let ty = types::parse_type(parser, ty, parameters, TypeContext::Contextless)?;
     let encoded_by = match encoded_by {
         Some(encoded_by) => Some(values::parse_value(
             parser,
@@ -131,6 +135,7 @@ fn parse_inner_type_constraints(
     parser: &AstParser<'_>,
     itc: &AstElement<AstInnerTypeConstraints>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<InnerTypeConstraints> {
     let components: Vec<(&AstElement<String>, &Box<TaggedType>)> = match &constrained_type.ty {
         BuiltinType::Structure(structure) => structure
@@ -192,6 +197,7 @@ fn parse_inner_type_constraints(
                                 parser,
                                 constraint,
                                 &component_type,
+                                parameters,
                                 ConstraintContext::Contextless,
                             )?),
                             None,
@@ -204,6 +210,7 @@ fn parse_inner_type_constraints(
                                 parser,
                                 &valued_presence.element.value,
                                 &component_type,
+                                parameters,
                                 ConstraintContext::Contextless,
                             )?),
                             Some(parse_presence(&valued_presence.element.presence)),
@@ -260,6 +267,7 @@ fn parse_constrained_type(
     parser: &AstParser<'_>,
     ast_constrained_type: &AstElement<AstConstrainedType>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<PendingConstraint> {
     let ast_constraint = match &ast_constrained_type.element {
         AstConstrainedType::Suffixed(suffixed) => suffixed.element.constraint.clone(),
@@ -270,6 +278,7 @@ fn parse_constrained_type(
             parser,
             &ast_constraint,
             constrained_type,
+            parameters,
             ConstraintContext::Contextless,
         )?),
         None => None,
@@ -296,7 +305,12 @@ fn parse_constrained_type(
                             resolved_component.component_type.resolve(parser.context)?;
                         component_constraints.push((
                             resolved_component.name.element.clone(),
-                            parse_type_constraint(parser, &component.element.ty, &component_type)?,
+                            parse_type_constraint(
+                                parser,
+                                &component.element.ty,
+                                &component_type,
+                                parameters,
+                            )?,
                         ));
                     }
                     component_constraints
@@ -325,6 +339,7 @@ fn parse_constrained_type(
                                 parser,
                                 &alternative.element.ty,
                                 &component_type,
+                                parameters,
                             )?,
                         ));
                     }
@@ -346,14 +361,79 @@ fn parse_type_constraint(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
     constrained_type: &ResolvedType,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<PendingConstraint> {
     Ok(match &ty.element {
-        AstType::TaggedType(tagged_type) => {
-            parse_constrained_type(parser, &tagged_type.element.ty, constrained_type)?
-        }
+        AstType::TaggedType(tagged_type) => parse_constrained_type(
+            parser,
+            &tagged_type.element.ty,
+            constrained_type,
+            parameters,
+        )?,
         AstType::ConstrainedType(constrained) => {
-            parse_constrained_type(parser, constrained, constrained_type)?
+            parse_constrained_type(parser, constrained, constrained_type, parameters)?
         }
+    })
+}
+
+fn resolve_type_assignment<'a>(
+    parser: &'a AstParser<'_>,
+    type_assignment: &'a AstElement<AstTypeAssignment>,
+    parameters: Vec<(&String, &TaggedType)>,
+) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<(String, TaggedType)>)> {
+    let constrained = match &type_assignment.element.ty.element {
+        AstType::TaggedType(tagged_type) => &tagged_type.element.ty,
+        AstType::ConstrainedType(constrained) => constrained,
+    };
+    Ok(match &constrained.element {
+        AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
+            AstUntaggedType::ParameterizedTypeReference(typeref) => {
+                let (ast, parameters) =
+                    types::resolve_parameterized_type_reference(parser, typeref, &parameters)?;
+                // recursively resolve the AST until we reach the root type
+                // e.g:
+                //
+                // ```
+                // A{K, V} ::= SEQUENCE { k K, v V }
+                // B{K} ::= A{K, INTEGER}
+                // C ::= B{UTF8String}
+                // ```
+                //
+                // resolve_type_assignment(C) -> (
+                //   A{K, V} ::= SEQUENCE { k K, v V },
+                //   [("K", UTF8String), ("V", INTEGER)]
+                // )
+                let names = ast
+                    .element
+                    .parameters
+                    .as_ref()
+                    .expect("resolved a non-parameterized type assignment AST")
+                    .element
+                    .0
+                    .iter()
+                    .map(|parameter| parameter.element.0.clone())
+                    .collect::<Vec<String>>();
+                let named_parameters = names
+                    .iter()
+                    .zip(&parameters)
+                    .collect::<Vec<(&String, &TaggedType)>>();
+                resolve_type_assignment(parser, ast, named_parameters)?
+            }
+            _ => (
+                type_assignment,
+                parameters
+                    .iter()
+                    .map(|(name, ty)| ((*name).clone(), (*ty).clone()))
+                    .collect(),
+            ),
+        },
+        _ => (
+            type_assignment,
+            parameters
+                .iter()
+                .map(|(name, ty)| ((*name).clone(), (*ty).clone()))
+                .collect(),
+        ),
     })
 }
 
@@ -365,15 +445,34 @@ pub struct PendingConstraint {
 pub fn parse_type_assignment_constraint(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
-) -> Result<(QualifiedIdentifier, PendingConstraint)> {
+) -> Result<Option<(QualifiedIdentifier, PendingConstraint)>> {
     let name = type_assignment.element.name.element.0.clone();
-    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+    let parameter_names = types::parse_type_assignment_parameters(type_assignment);
+    if parameter_names
+        .map(|parameters| parameters.len())
+        .unwrap_or(0)
+        > 0
+    {
+        Ok(None)
+    } else {
+        let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+        let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
+        let constrained_type = constrained_type.ty.resolve(parser.context)?;
 
-    let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
-    let constrained_type = constrained_type.ty.resolve(parser.context)?;
+        let (type_assignment, params) =
+            resolve_type_assignment(parser, type_assignment, Vec::new())?;
 
-    let pending = parse_type_constraint(parser, &type_assignment.element.ty, &constrained_type)?;
-    Ok((ident, pending))
+        let pending = parse_type_constraint(
+            parser,
+            &type_assignment.element.ty,
+            &constrained_type,
+            &params
+                .iter()
+                .map(|(name, ty)| (name, ty))
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(Some((ident, pending)))
+    }
 }
 
 pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingConstraint) {

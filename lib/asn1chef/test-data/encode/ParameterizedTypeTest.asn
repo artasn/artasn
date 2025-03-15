@@ -5,9 +5,50 @@ Signature ::= SEQUENCE {
 	b INTEGER
 }
 
+SimpleSigned{TBS} ::= SEQUENCE {
+	tbs TBS,
+	signature Signature
+}
+
+SimpleSignedInteger ::= SimpleSigned{INTEGER}
+simple-signed-integer SimpleSignedInteger ::= {
+	tbs 1337,
+	signature { a 1, b 2 }
+}
+
+DoubleSimpleSignedInteger1 ::= SimpleSigned{SimpleSignedInteger}
+double-simple-signed-integer-1 DoubleSimpleSignedInteger1 ::= {
+	tbs {
+		tbs 1337,
+		signature { a 1, b 2 }
+	},
+	signature { a 100, b 200 }
+}
+
+DoubleSimpleSignedInteger2 ::= SimpleSigned{SimpleSigned{INTEGER}}
+double-simple-signed-integer-2 DoubleSimpleSignedInteger2 ::= {
+	tbs {
+		tbs 1337,
+		signature { a 1, b 2 }
+	},
+	signature { a 100, b 200 }
+}
+
 Signed{TBS} ::= SEQUENCE {
     tbs TBS,
     signature OCTET STRING (CONTAINING Signature)
+}
+
+SignedInteger ::= Signed{INTEGER}
+signed-integer SignedInteger ::= {
+	tbs 1337,
+	signature CONTAINING { a 1, b 2 }
+}
+
+TaggedSignedInteger ::= [APPLICATION 9] Signed{INTEGER}
+tagged-signed-integer TaggedSignedInteger ::= {
+	tbs 1337,
+	signature CONTAINING { a 1, b 2 }
 }
 
 TBSCertificate ::= SEQUENCE {
@@ -17,9 +58,92 @@ TBSCertificate ::= SEQUENCE {
 }
 
 Certificate ::= Signed{TBSCertificate}
-cert Certificate ::= {
+certificate Certificate ::= {
 	tbs { version 3, serial '1337'H, name "cert" },
 	signature CONTAINING { a 13, b 37 }
+}
+
+SignedTaggedBoolean ::= Signed{[APPLICATION 10] EXPLICIT BOOLEAN}
+signed-tagged-boolean SignedTaggedBoolean ::= {
+	tbs TRUE,
+	signature CONTAINING { a 3, b 4 }
+}
+
+SignedConstrainedInteger ::= Signed{INTEGER (0..10)}
+signed-constrained-integer SignedConstrainedInteger ::= {
+	tbs 10,
+	signature CONTAINING { a 1, b 2 }
+}
+
+SignedProxy{TBS} ::= Signed{TBS}
+SignedProxyInteger ::= SignedProxy{INTEGER}
+signed-proxy-integer SignedProxyInteger ::= {
+	tbs 1337,
+	signature CONTAINING { a 1, b 2 }
+}
+
+DoubleSignedInteger1 ::= Signed{SignedInteger}
+double-signed-integer-1 DoubleSignedInteger1 ::= {
+	tbs {
+		tbs 1337,
+		signature CONTAINING { a 1, b 2 }
+	},
+	signature CONTAINING { a 100, b 200 }
+}
+
+-- TODO: fix 'CONTAINING value can not be applied to a type that does not have a contents constraint' here
+-- DoubleSignedInteger2 ::= Signed{Signed{INTEGER}}
+-- double-signed-integer-2 DoubleSignedInteger2 ::= {
+-- 	tbs {
+-- 		tbs 1337,
+-- 		signature CONTAINING { a 1, b 2 }
+-- 	},
+-- 	signature CONTAINING { a 100, b 200 }
+-- }
+
+CustomSignatureContainerSigned{TBS, SignatureContainer} ::= SEQUENCE {
+    tbs TBS,
+    signature SignatureContainer (CONTAINING Signature)
+}
+
+BitStringCertificate ::= CustomSignatureContainerSigned{TBSCertificate, BIT STRING}
+bit-string-certificate BitStringCertificate ::= {
+	tbs { version 3, serial '1337'H, name "cert" },
+	signature CONTAINING { a 13, b 37 }
+}
+
+OctetStringCertificate ::= CustomSignatureContainerSigned{TBSCertificate, OCTET STRING}
+octet-string-certificate OctetStringCertificate ::= {
+	tbs { version 3, serial '1337'H, name "cert" },
+	signature CONTAINING { a 13, b 37 }
+}
+
+TaggedOctetStringCertificate ::= [PRIVATE 1] CustomSignatureContainerSigned{[PRIVATE 2] TBSCertificate, [PRIVATE 3] OCTET STRING}
+tagged-octet-string-certificate TaggedOctetStringCertificate ::= {
+	tbs { version 3, serial '1337'H, name "cert" },
+	signature CONTAINING { a 13, b 37 }
+}
+
+CustomSignatureContainerSignedPartialProxy{TBS} ::= CustomSignatureContainerSigned{TBS, OCTET STRING}
+CustomSignatureContainerSignedPartialProxyInteger ::= CustomSignatureContainerSignedPartialProxy{INTEGER}
+custom-signature-container-signed-partial-proxy-integer CustomSignatureContainerSignedPartialProxyInteger ::= {
+	tbs 1337,
+	signature CONTAINING { a 1, b 2 }
+}
+
+CustomSignatureSigned{TBS, SignatureType} ::= SEQUENCE {
+	tbs TBS,
+	signature OCTET STRING (CONTAINING SignatureType)
+}
+
+SpecialSignature ::= SEQUENCE {
+	foo OCTET STRING,
+	bar OCTET STRING
+}
+SpecialSignatureSignedInteger ::= CustomSignatureSigned{INTEGER, SpecialSignature}
+special-signature-signed-integer SpecialSignatureSignedInteger ::= {
+	tbs 1337,
+	signature CONTAINING { foo 'DEAD'H, bar 'BEEF'H }
 }
 
 END

@@ -376,8 +376,8 @@ fn ber_decode_tlv(
                         index = data.index + 1;
                         DecodeMode::SpecificType {
                             source_ident: match &data.tagged_type.ty {
-                                UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
                                 UntaggedType::BuiltinType(_) => None,
+                                UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
                             },
                             component_name: data.name,
                             resolved: data

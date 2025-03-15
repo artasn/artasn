@@ -304,7 +304,7 @@ pub enum ErrorKind {
     UnexpectedToken(char),
     ExpectingEoi,
     ExpectingOther {
-        expecting: Vec<TokenKind>,
+        expecting: Vec<(TokenKind, Option<TokenData>)>,
         found: Token,
     },
     ExpectingKeyword {
@@ -356,11 +356,23 @@ impl ErrorKind {
             ErrorKind::ExpectingEoi => String::from("expecting end of input"),
             ErrorKind::ExpectingOther { expecting, found } => {
                 let expecting_str = if expecting.len() == 1 {
-                    expecting[0].to_string()
+                    let (kind, data) = &expecting[0];
+                    if let Some(data) = data {
+                        data.to_string(kind)
+                    } else {
+                        kind.to_string()
+                    }
                 } else {
                     let mut option_strs = expecting
                         .iter()
-                        .map(|option| option.to_string())
+                        .map(|option| {
+                            let (kind, data) = option;
+                            if let Some(data) = data {
+                                data.to_string(kind)
+                            } else {
+                                kind.to_string()
+                            }
+                        })
                         .collect::<Vec<String>>();
                     let last_idx = option_strs.len() - 1;
                     let last = &option_strs[last_idx];
@@ -374,21 +386,13 @@ impl ErrorKind {
                         found_data.to_string(&found.kind)
                     )
                 } else {
-                    format!(
-                        "expecting {}, found {}",
-                        expecting_str,
-                        found.kind
-                    )
+                    format!("expecting {}, found {}", expecting_str, found.kind)
                 }
             }
             ErrorKind::IllegalStringCharacter {
                 string_kind,
                 character,
-            } => format!(
-                "illegal {} character '{}'",
-                string_kind,
-                character
-            ),
+            } => format!("illegal {} character '{}'", string_kind, character),
             ErrorKind::InvalidStringIndicator(indicator) => format!(
                 "illegal string indicator suffix '{}' (expecting 'B', 'H', or a cstring)",
                 indicator

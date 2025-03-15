@@ -182,8 +182,10 @@ fn test_decode_value(
 ) {
     let mode = DecodeMode::SpecificType {
         source_ident: match &declared_value.ty.ty {
+            UntaggedType::BuiltinType(_) => {
+                panic!("value type is not a typereference")
+            }
             UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
-            UntaggedType::BuiltinType(_) => panic!("value type is not a typereference"),
         },
         component_name: None,
         resolved: declared_value

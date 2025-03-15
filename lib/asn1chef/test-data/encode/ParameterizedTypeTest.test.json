@@ -3,8 +3,64 @@
     "tests": ["Encode"],
     "values": [
         {
-            "name": "cert",
+            "name": "simple-signed-integer",
+            "der": "300C020205393006020101020102"
+        },
+        {
+            "name": "double-simple-signed-integer-1",
+            "der": "3017300C0202053930060201010201023007020164020200C8"
+        },
+        {
+            "name": "double-simple-signed-integer-2",
+            "der": "3017300C0202053930060201010201023007020164020200C8"
+        },
+        {
+            "name": "signed-integer",
+            "der": "300E0202053904083006020101020102"
+        },
+        {
+            "name": "tagged-signed-integer",
+            "der": "690E0202053904083006020101020102"
+        },
+        {
+            "name": "certificate",
             "der": "3019300D020103040213370C04636572740408300602010D020125"
+        },
+        {
+            "name": "signed-tagged-boolean",
+            "der": "300F6A030101FF04083006020103020104"
+        },
+        {
+            "name": "signed-constrained-integer",
+            "der": "300D02010A04083006020101020102"
+        },
+        {
+            "name": "signed-proxy-integer",
+            "der": "300E0202053904083006020101020102"
+        },
+        {
+            "name": "double-signed-integer-1",
+            "der": "301B300E020205390408300602010102010204093007020164020200C8"
+        },
+        {
+            "name": "bit-string-certificate",
+            "der": "301A300D020103040213370C0463657274030900300602010D020125"
+        },
+        {
+            "name": "octet-string-certificate",
+            "der": "3019300D020103040213370C04636572740408300602010D020125"
+        },
+        {
+            "name": "tagged-octet-string-certificate",
+            "der": "E119E20D020103040213370C0463657274C308300602010D020125"
+        },
+        {
+            "name": "custom-signature-container-signed-partial-proxy-integer",
+            "der": "300E0202053904083006020101020102"
+        },
+        {
+            "name": "special-signature-signed-integer",
+            "der": "301002020539040A30080402DEAD0402BEEF"
         }
     ]
 }

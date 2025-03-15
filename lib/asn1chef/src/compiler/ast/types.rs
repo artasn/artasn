@@ -27,6 +27,7 @@ lazy_static::lazy_static! {
 fn parse_structure_components(
     parser: &AstParser<'_>,
     components: &[AstElement<AstStructureComponent>],
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<Vec<StructureComponent>> {
     let has_tags = components
         .iter()
@@ -41,10 +42,11 @@ fn parse_structure_components(
             let ty = parse_type(
                 parser,
                 &component.element.ty,
-                TypeContext::StructureComponent {
+                parameters,
+                TypeContext::StructureComponent(StructureComponentContext {
                     index: i as u16,
                     has_tags,
-                },
+                }),
             )?;
 
             Ok(StructureComponent {
@@ -72,19 +74,21 @@ fn parse_structure_components(
 fn parse_structure_type(
     parser: &AstParser<'_>,
     structure: &AstElement<AstStructure>,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<BuiltinType> {
     Ok(BuiltinType::Structure(Structure {
         ty: match structure.element.kind.element {
             AstStructureKind::Sequence(_) => TagType::Sequence,
             AstStructureKind::Set(_) => TagType::Set,
         },
-        components: parse_structure_components(parser, &structure.element.components)?,
+        components: parse_structure_components(parser, &structure.element.components, parameters)?,
     }))
 }
 
 fn parse_structure_of_type(
     parser: &AstParser<'_>,
     of: &AstElement<AstStructureOf>,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<UntaggedType> {
     Ok(UntaggedType::BuiltinType(BuiltinType::StructureOf(
         StructureOf {
@@ -95,6 +99,7 @@ fn parse_structure_of_type(
             component_type: Box::new(parse_type(
                 parser,
                 &of.element.ty,
+                parameters,
                 TypeContext::Contextless,
             )?),
         },
@@ -104,6 +109,7 @@ fn parse_structure_of_type(
 fn parse_choice_type(
     parser: &AstParser<'_>,
     alternatives: &[AstElement<AstChoiceAlternative>],
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<BuiltinType> {
     let has_tags = alternatives
         .iter()
@@ -119,10 +125,11 @@ fn parse_choice_type(
                 let ty = parse_type(
                     parser,
                     &alternative.element.ty,
-                    TypeContext::StructureComponent {
+                    parameters,
+                    TypeContext::StructureComponent(StructureComponentContext {
                         index: i as u16,
                         has_tags,
-                    },
+                    }),
                 )?;
 
                 Ok(ChoiceAlternative {
@@ -168,6 +175,7 @@ fn parse_enumerated_type(
 fn parse_builtin_type(
     parser: &AstParser<'_>,
     builtin: &AstElement<AstBuiltinType>,
+    parameters: &[(&String, &TaggedType)],
 ) -> Result<UntaggedType> {
     Ok(UntaggedType::BuiltinType(match &builtin.element {
         AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
@@ -205,8 +213,8 @@ fn parse_builtin_type(
         AstBuiltinType::UTF8String(_) => BuiltinType::CharacterString(TagType::UTF8String),
         AstBuiltinType::RelativeOid(_) => BuiltinType::RelativeOid,
         AstBuiltinType::Time(_) => BuiltinType::Time,
-        AstBuiltinType::Structure(sequence) => parse_structure_type(parser, sequence)?,
-        AstBuiltinType::Choice(choice) => parse_choice_type(parser, &choice.element.0)?,
+        AstBuiltinType::Structure(sequence) => parse_structure_type(parser, sequence, parameters)?,
+        AstBuiltinType::Choice(choice) => parse_choice_type(parser, &choice.element.0, parameters)?,
         AstBuiltinType::NumericString(_) => BuiltinType::CharacterString(TagType::NumericString),
         AstBuiltinType::PrintableString(_) => {
             BuiltinType::CharacterString(TagType::PrintableString)
@@ -236,40 +244,117 @@ fn parse_builtin_type(
     }))
 }
 
+fn resolve_typereference(
+    parser: &AstParser<'_>,
+    typeref: &AstElement<AstTypeReference>,
+) -> AstElement<QualifiedIdentifier> {
+    AstElement::new(
+        parser
+            .context
+            .lookup_module(&parser.module)
+            .expect("lookup_module")
+            .resolve_symbol(parser.context, &typeref.element.0),
+        typeref.loc,
+    )
+}
+
+pub(crate) fn resolve_parameterized_type_reference<'a>(
+    parser: &'a AstParser<'_>,
+    typeref: &AstElement<AstParameterizedTypeReference>,
+    parameters: &[(&String, &TaggedType)],
+) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<TaggedType>)> {
+    let name = resolve_typereference(parser, &typeref.element.name);
+    let parameters = typeref
+        .element
+        .parameters
+        .element
+        .0
+        .iter()
+        .map(|parameter| parse_type(parser, parameter, parameters, TypeContext::Contextless))
+        .collect::<Result<Vec<TaggedType>>>()?;
+
+    let parameterized_ast = match parser.context.lookup_parameterized_type(&name.element) {
+        Some(ast) => ast,
+        None => {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "undefined reference to parameterized type '{}'",
+                    name.element
+                )),
+                loc: name.loc,
+            })
+        }
+    };
+
+    Ok((parameterized_ast, parameters))
+}
+
 fn parse_untagged_type(
     parser: &AstParser<'_>,
     ty: &AstElement<AstUntaggedType>,
-) -> Result<UntaggedType> {
-    Ok(match ty.element {
-        AstUntaggedType::BuiltinType(ref builtin) => parse_builtin_type(parser, builtin)?,
-        AstUntaggedType::TypeReference(ref typeref) => UntaggedType::Reference(AstElement::new(
-            parser
-                .context
-                .lookup_module(&parser.module)
-                .expect("lookup_module")
-                .resolve_symbol(parser.context, &typeref.element.0),
-            typeref.loc,
-        )),
+    parameters: &[(&String, &TaggedType)],
+) -> Result<TaggedType> {
+    let untagged = match &ty.element {
+        AstUntaggedType::BuiltinType(builtin) => parse_builtin_type(parser, builtin, parameters)?,
+        AstUntaggedType::ParameterizedTypeReference(typeref) => {
+            let (parameterized_ast, parameters) =
+                resolve_parameterized_type_reference(parser, typeref, parameters)?;
+            let (_, decl) = parse_type_assignment(
+                parser,
+                parameterized_ast,
+                &TypeAssignmentParseMode::Parameterized { parameters },
+            )?
+            .expect("parse_type_assignment for parameterized type returned None");
+            let resolved = decl.ty.resolve(parser.context)?;
+
+            UntaggedType::BuiltinType(resolved.ty)
+        }
+        AstUntaggedType::TypeReference(typeref) => {
+            if let Some(parameter) = parameters.iter().find_map(|(name, tagged_type)| {
+                if *name == &typeref.element.0 {
+                    Some(*tagged_type)
+                } else {
+                    None
+                }
+            }) {
+                return Ok(parameter.clone());
+            } else {
+                UntaggedType::Reference(resolve_typereference(parser, typeref))
+            }
+        }
+    };
+    Ok(TaggedType {
+        tag: None,
+        ty: untagged,
+        constraint: None,
     })
 }
 
 fn parse_constrained_type(
     parser: &AstParser<'_>,
     constrained_type: &AstElement<AstConstrainedType>,
-) -> Result<UntaggedType> {
+    parameters: &[(&String, &TaggedType)],
+) -> Result<TaggedType> {
     Ok(match &constrained_type.element {
         AstConstrainedType::Suffixed(suffixed) => {
-            parse_untagged_type(parser, &suffixed.element.ty)?
+            parse_untagged_type(parser, &suffixed.element.ty, parameters)?
         }
-        AstConstrainedType::TypeWithConstraint(twc) => {
-            parse_structure_of_type(parser, &twc.element.0)?
-        }
+        AstConstrainedType::TypeWithConstraint(twc) => TaggedType {
+            tag: None,
+            ty: parse_structure_of_type(parser, &twc.element.0, parameters)?,
+            constraint: None,
+        },
     })
+}
+
+pub struct StructureComponentContext {
+    pub index: u16,
+    pub has_tags: bool,
 }
 
 pub enum TypeContext {
     Contextless,
-    StructureComponent { index: u16, has_tags: bool },
+    StructureComponent(StructureComponentContext),
 }
 
 // ASN.1 Tagging Rules
@@ -286,6 +371,7 @@ pub enum TypeContext {
 pub fn parse_type(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
+    parameters: &[(&String, &TaggedType)],
     type_context: TypeContext,
 ) -> Result<TaggedType> {
     let tag_default = parser
@@ -294,9 +380,10 @@ pub fn parse_type(
         .expect("lookup_module")
         .tag_default;
     Ok(match &ty.element {
-        AstType::TaggedType(tagged_type) => {
-            let ty = parse_constrained_type(parser, &tagged_type.element.ty)?;
-            let tag = &tagged_type.element.tag;
+        AstType::TaggedType(ast_tagged_type) => {
+            let tagged_type =
+                parse_constrained_type(parser, &ast_tagged_type.element.ty, parameters)?;
+            let tag = &ast_tagged_type.element.tag;
             let class = match tag.element.class {
                 Some(ref class) => match class.element {
                     AstClass::Universal(_) => Class::Universal,
@@ -318,7 +405,7 @@ pub fn parse_type(
                 .clone()
                 .try_into()
                 .expect("tag is out of bounds");
-            let (mut kind, source) = match &tagged_type.element.kind {
+            let (mut kind, source) = match &ast_tagged_type.element.kind {
                 Some(kind) => (
                     match kind.element {
                         AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
@@ -337,20 +424,22 @@ pub fn parse_type(
                 ),
             };
 
-            if let UntaggedType::BuiltinType(BuiltinType::Choice(_)) = ty {
-                if kind == TagKind::Implicit {
-                    match source {
-                        TagSource::KindSpecified => {
-                            return Err(Error {
-                                kind: ErrorKind::Ast(
-                                    "CHOICE is not permitted to have IMPLICIT tagging".to_string(),
-                                ),
-                                loc: tagged_type.element.kind.as_ref().unwrap().loc,
-                            })
-                        }
-                        _ => {
-                            kind = TagKind::Explicit;
-                        }
+            // TODO: should this be type-resolved so that references to CHOICE types are checked?
+            if matches!(
+                &tagged_type.ty,
+                UntaggedType::BuiltinType(BuiltinType::Choice(_))
+            ) && kind == TagKind::Implicit {
+                match source {
+                    TagSource::KindSpecified => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(
+                                "CHOICE is not permitted to have IMPLICIT tagging".to_string(),
+                            ),
+                            loc: ast_tagged_type.element.kind.as_ref().unwrap().loc,
+                        })
+                    }
+                    _ => {
+                        kind = TagKind::Explicit;
                     }
                 }
             }
@@ -358,18 +447,20 @@ pub fn parse_type(
             let tag = Tag::new(class, tag_number, kind, source);
             TaggedType {
                 tag: Some(tag),
-                ty,
-                constraint: None,
+                ty: tagged_type.ty,
+                constraint: tagged_type.constraint, // TODO: should constraints from parameterized types be applied here?
             }
         }
         AstType::ConstrainedType(constrained) => {
-            let ty = parse_constrained_type(parser, constrained)?;
+            let tagged_type = parse_constrained_type(parser, constrained, parameters)?;
 
             let index = match type_context {
-                TypeContext::StructureComponent { index, has_tags } => match has_tags {
-                    true => None,
-                    false => Some(index),
-                },
+                TypeContext::StructureComponent(context) => {
+                    match context.has_tags || tagged_type.tag.is_some() {
+                        true => None,
+                        false => Some(context.index),
+                    }
+                }
                 TypeContext::Contextless => None,
             };
             let mut tag = match (tag_default, index) {
@@ -383,51 +474,122 @@ pub fn parse_type(
                         TagSource::TagImplied,
                     ))
                 }
-                _ => match &ty {
+                _ => tagged_type.tag.or(match &tagged_type.ty {
                     UntaggedType::BuiltinType(builtin) => builtin.tag_type().map(Tag::universal),
                     UntaggedType::Reference(_) => None,
-                },
+                }),
             };
             if let Some(tag) = &mut tag {
-                if let UntaggedType::BuiltinType(BuiltinType::Choice(_)) = ty {
+                if matches!(
+                    &tagged_type.ty,
+                    UntaggedType::BuiltinType(BuiltinType::Choice(_))
+                ) {
                     tag.kind = TagKind::Explicit;
                 }
             }
             TaggedType {
                 tag,
-                ty,
-                constraint: None,
+                ty: tagged_type.ty,
+                constraint: tagged_type.constraint, // TODO: should constraints from parameterized types be applied here?
             }
         }
     })
 }
 
+pub(crate) fn parse_type_assignment_parameters(
+    type_assignment: &AstElement<AstTypeAssignment>,
+) -> Option<Vec<String>> {
+    type_assignment.element.parameters.as_ref().map(|params| {
+        params
+            .element
+            .0
+            .iter()
+            .map(|param| param.element.0.clone())
+            .collect()
+    })
+}
+
+pub fn parse_parameterized_type_assignment(
+    parser: &AstParser<'_>,
+    type_assignment: &AstElement<AstTypeAssignment>,
+) -> Result<Option<(QualifiedIdentifier, AstElement<AstTypeAssignment>)>> {
+    let name = type_assignment.element.name.element.0.clone();
+    let parameters = parse_type_assignment_parameters(type_assignment);
+    if parameters.map(|parameters| parameters.len()).unwrap_or(0) > 0 {
+        Ok(Some((
+            QualifiedIdentifier::new(parser.module.clone(), name),
+            type_assignment.clone(),
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+pub enum TypeAssignmentParseMode {
+    Normal,
+    Parameterized { parameters: Vec<TaggedType> },
+}
+
 pub fn parse_type_assignment(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
-) -> Result<(QualifiedIdentifier, DeclaredType)> {
-    let name = type_assignment.element.name.element.0.clone();
-    let parameters = type_assignment
-        .element
-        .parameters
-        .as_ref()
-        .map(|params| {
-            params
-                .element
-                .0
-                .iter()
-                .map(|param| param.element.0.clone())
-                .collect()
-        })
-        .unwrap_or_else(|| Vec::new());
-    let ty = parse_type(
-        parser,
-        &type_assignment.element.ty,
-        TypeContext::Contextless,
-    )?;
+    mode: &TypeAssignmentParseMode,
+) -> Result<Option<(QualifiedIdentifier, DeclaredType)>> {
+    let ast_name = &type_assignment.element.name;
+    let name = ast_name.element.0.clone();
+    let parameter_names = parse_type_assignment_parameters(type_assignment);
 
-    Ok((
-        QualifiedIdentifier::new(parser.module.clone(), name),
-        DeclaredType { parameters, ty },
-    ))
+    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+    match mode {
+        TypeAssignmentParseMode::Normal => {
+            if parameter_names
+                .map(|parameters| parameters.len())
+                .unwrap_or(0)
+                > 0
+            {
+                Ok(None)
+            } else {
+                let ty = parse_type(
+                    parser,
+                    &type_assignment.element.ty,
+                    &[],
+                    TypeContext::Contextless,
+                )?;
+
+                Ok(Some((ident, DeclaredType { ty })))
+            }
+        }
+        TypeAssignmentParseMode::Parameterized { parameters } => match parameter_names {
+            Some(names) => {
+                if names.len() != parameters.len() {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "type '{}' expects {} parameters, but found {}",
+                            ident,
+                            names.len(),
+                            parameters.len(),
+                        )),
+                        loc: ast_name.loc,
+                    });
+                }
+
+                let named_parameters = names
+                    .iter()
+                    .zip(parameters)
+                    .collect::<Vec<(&String, &TaggedType)>>();
+                let ty = parse_type(
+                    parser,
+                    &type_assignment.element.ty,
+                    &named_parameters,
+                    TypeContext::Contextless,
+                )?;
+
+                Ok(Some((ident, DeclaredType { ty })))
+            }
+            None => panic!(
+                "type '{}' is not parameterized, but the parse mode is Parameterized",
+                ident,
+            ),
+        },
+    }
 }
