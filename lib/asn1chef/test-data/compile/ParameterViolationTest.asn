@@ -1,0 +1,26 @@
+ParameterViolationTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Message{Data} ::= SEQUENCE {
+    num INTEGER,
+    data Data
+}
+
+ConstrainedIntegerMessage ::= Message{INTEGER (0..10)}
+constrained-integer-message-compliant-1 ConstrainedIntegerMessage ::= {
+    num 1,
+    data 0
+}
+constrained-integer-message-compliant-2 ConstrainedIntegerMessage ::= {
+    num 1,
+    data 10
+}
+constrained-integer-message-noncompliant-1 ConstrainedIntegerMessage ::= {
+    num 1,
+    data -1
+}
+constrained-integer-message-noncompliant-2 ConstrainedIntegerMessage ::= {
+    num 2,
+    data 11
+}
+
+END

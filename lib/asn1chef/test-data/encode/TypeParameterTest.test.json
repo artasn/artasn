@@ -1,5 +1,5 @@
 {
-    "module": "ParameterizedTypeTest",
+    "module": "TypeParameterTest",
     "tests": ["Encode"],
     "values": [
         {

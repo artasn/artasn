@@ -262,7 +262,10 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
     parser: &'a AstParser<'_>,
     typeref: &AstElement<AstParameterizedTypeReference>,
     parameters: &[(&String, &TaggedType)],
-) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<TaggedType>)> {
+) -> Result<(
+    &'a AstElement<AstTypeAssignment>,
+    Vec<(AstElement<AstType>, TaggedType)>,
+)> {
     let name = resolve_typereference(parser, &typeref.element.name);
     let parameters = typeref
         .element
@@ -270,8 +273,13 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
         .element
         .0
         .iter()
-        .map(|parameter| parse_type(parser, parameter, parameters, TypeContext::Contextless))
-        .collect::<Result<Vec<TaggedType>>>()?;
+        .map(|parameter| {
+            Ok((
+                parameter.clone(),
+                parse_type(parser, parameter, parameters, TypeContext::Contextless)?,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let parameterized_ast = match parser.context.lookup_parameterized_type(&name.element) {
         Some(ast) => ast,
@@ -302,7 +310,12 @@ fn parse_untagged_type(
             let (_, decl) = parse_type_assignment(
                 parser,
                 parameterized_ast,
-                &TypeAssignmentParseMode::Parameterized { parameters },
+                &TypeAssignmentParseMode::Parameterized {
+                    parameters: parameters
+                        .into_iter()
+                        .map(|(_, param_type)| param_type)
+                        .collect(),
+                },
             )?
             .expect("parse_type_assignment for parameterized type returned None");
             let resolved = decl.ty.resolve(parser.context)?;
@@ -428,7 +441,8 @@ pub fn parse_type(
             if matches!(
                 &tagged_type.ty,
                 UntaggedType::BuiltinType(BuiltinType::Choice(_))
-            ) && kind == TagKind::Implicit {
+            ) && kind == TagKind::Implicit
+            {
                 match source {
                     TagSource::KindSpecified => {
                         return Err(Error {

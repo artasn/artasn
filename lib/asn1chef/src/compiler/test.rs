@@ -370,3 +370,7 @@ json_compile_test!(
     "ModuleWithOID",
     "ModuleWithoutOID"
 );
+json_compile_test!(
+    test_parameter_violation,
+    "../../test-data/compile/ParameterViolationTest"
+);

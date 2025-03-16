@@ -1,4 +1,4 @@
-ParameterizedTypeTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+TypeParameterTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
 Signature ::= SEQUENCE {
 	a INTEGER,

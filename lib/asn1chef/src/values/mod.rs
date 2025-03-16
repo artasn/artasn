@@ -180,7 +180,11 @@ mod test {
         "../../test-data/encode/tagging/ImplicitTaggingTest"
     );
     json_test!(
-        test_encode_parameterized_type,
-        "../../test-data/encode/ParameterizedTypeTest"
+        test_encode_type_parameter,
+        "../../test-data/encode/TypeParameterTest"
     );
+    // json_test!(
+    //     test_encode_value_parameter,
+    //     "../../test-data/encode/ValueParameterTest"
+    // );
 }

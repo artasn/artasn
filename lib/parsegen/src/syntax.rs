@@ -269,7 +269,7 @@ impl SyntaxParser {
                         };
 
                     let statement = if full_type == "bool" {
-                        format!("let mut {}: bool = true;\n", var_name)
+                        format!("let mut {}: bool = false;\n", var_name)
                     } else if let Some(default_value) = default_value {
                         format!("let mut {}: {} = {};\n", var_name, full_type, default_value)
                     } else {
