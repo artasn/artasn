@@ -149,8 +149,14 @@ impl ValueResolve for AstElement<Value> {
 mod test {
     use crate::compiler::test::json_test;
 
-    json_test!(test_encode_universal_types, "../../test-data/encode/UniversalTypeTest");
-    json_test!(test_encode_enumerated, "../../test-data/encode/EnumeratedTest");
+    json_test!(
+        test_encode_universal_types,
+        "../../test-data/encode/UniversalTypeTest"
+    );
+    json_test!(
+        test_encode_enumerated,
+        "../../test-data/encode/EnumeratedTest"
+    );
     json_test!(
         test_encode_choice_implicit_tagging,
         "../../test-data/encode/ChoiceTestImplicitTagging"
@@ -159,9 +165,18 @@ mod test {
         test_encode_choice_automatic_tagging,
         "../../test-data/encode/ChoiceTestAutomaticTagging"
     );
-    json_test!(test_encode_external_x680, "../../test-data/encode/External-X680Test");
-    json_test!(test_encode_embedded_pdv, "../../test-data/encode/EmbeddedPDVTest");
-    json_test!(test_encode_character_string, "../../test-data/encode/CharacterStringTest");
+    json_test!(
+        test_encode_external_x680,
+        "../../test-data/encode/External-X680Test"
+    );
+    json_test!(
+        test_encode_embedded_pdv,
+        "../../test-data/encode/EmbeddedPDVTest"
+    );
+    json_test!(
+        test_encode_character_string,
+        "../../test-data/encode/CharacterStringTest"
+    );
     json_test!(test_encode_real, "../../test-data/encode/RealTest");
     json_test!(
         test_encode_contents_constraint,
@@ -183,8 +198,8 @@ mod test {
         test_encode_type_parameter,
         "../../test-data/encode/TypeParameterTest"
     );
-    // json_test!(
-    //     test_encode_value_parameter,
-    //     "../../test-data/encode/ValueParameterTest"
-    // );
+    json_test!(
+        test_encode_value_parameter,
+        "../../test-data/encode/ValueParameterTest"
+    );
 }

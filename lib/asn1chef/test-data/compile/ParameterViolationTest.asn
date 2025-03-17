@@ -23,4 +23,29 @@ constrained-integer-message-noncompliant-2 ConstrainedIntegerMessage ::= {
     data 11
 }
 
+-- ContrainedValueMessage{INTEGER (0..10):default} ::= SEQUENCE {
+--     int INTEGER DEFAULT default,
+--     data OCTET STRING
+-- }
+-- ContrainedValueMessage-Compliant1 ::= ContrainedValueMessage{0}
+-- ContrainedValueMessage-Noncompliant1 ::= ContrainedValueMessage{11}
+
+-- contrained-value-message-compliant-1 ContrainedValueMessage-Compliant1 ::= {
+--     data '1337'H
+-- }
+-- TODO: this should NOT be allowed! we should check that default values match the constraints of the type
+-- WITHOUT needing a value of that type using the invalid default to trigger the error!
+-- contrained-value-message-TODO-SHOULD-BE-NONCOMPLIANT-FIXME ContrainedValueMessage-Noncompliant1 ::= {
+--     int 0,
+--     data '1337'H
+-- }
+-- TODO: the TYPE itself should have an error omitted, not just a value OF the type
+-- contrained-value-message-noncompliant-1 ContrainedValueMessage-Noncompliant1 ::= {
+--     data '1337'H
+-- }
+-- contrained-value-message-noncompliant-2 ContrainedValueMessage-Compliant1 ::= {
+--     int 11,
+--     data '1337'H
+-- }
+
 END

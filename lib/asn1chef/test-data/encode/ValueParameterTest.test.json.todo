@@ -1,0 +1,32 @@
+{
+    "module": "ValueParameterTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "integer-message",
+            "der": "300404021337"
+        },
+        {
+            "name": "integer-message-override",
+            "der": "300702010204021337"
+        },
+        {
+            "name": "priority-message",
+            "der": "300404021337"
+        },
+        {
+            "name": "priority-message-override",
+            "der": "30070A010204021337"
+        },
+        {
+            "name": "data-message",
+            "der": "300606048B092F00"
+        },
+        {
+            "name": "data-message-override",
+            "der": "300A06048B092F0004027331"
+        }
+    ]
+}

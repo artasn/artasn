@@ -3,6 +3,7 @@ use crate::{
     compiler::{context::DeclaredType, parser::*},
     module::*,
     types::*,
+    values::Value,
 };
 
 lazy_static::lazy_static! {
@@ -27,7 +28,7 @@ lazy_static::lazy_static! {
 fn parse_structure_components(
     parser: &AstParser<'_>,
     components: &[AstElement<AstStructureComponent>],
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<Vec<StructureComponent>> {
     let has_tags = components
         .iter()
@@ -52,7 +53,26 @@ fn parse_structure_components(
             Ok(StructureComponent {
                 name: component.element.name.as_ref().map(|name| name.0.clone()),
                 default_value: match component.element.default.as_ref().map(|default| {
-                    // TODO: deferred execution of resolve() until after stage 2 finishes
+                    if let AstValue::ValueReference(valref) = &default.element {
+                        let val_param =
+                            parameters
+                                .iter()
+                                .find_map(|(name, parameter)| match parameter {
+                                    Parameter::Value { value_type, value } => {
+                                        if *name == &valref.element.0 {
+                                            Some((value_type, value))
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    _ => None,
+                                });
+                        if let Some((_, value)) = val_param {
+                            return Ok(Box::new(value.clone()));
+                        }
+                    }
+
+                    // TODO: deferred execution of resolve() until after register_all_types finishes
                     let resolved_ty = ty.resolve(parser.context)?;
 
                     Ok(Box::new(values::parse_value(
@@ -74,7 +94,7 @@ fn parse_structure_components(
 fn parse_structure_type(
     parser: &AstParser<'_>,
     structure: &AstElement<AstStructure>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<BuiltinType> {
     Ok(BuiltinType::Structure(Structure {
         ty: match structure.element.kind.element {
@@ -88,7 +108,7 @@ fn parse_structure_type(
 fn parse_structure_of_type(
     parser: &AstParser<'_>,
     of: &AstElement<AstStructureOf>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<UntaggedType> {
     Ok(UntaggedType::BuiltinType(BuiltinType::StructureOf(
         StructureOf {
@@ -109,7 +129,7 @@ fn parse_structure_of_type(
 fn parse_choice_type(
     parser: &AstParser<'_>,
     alternatives: &[AstElement<AstChoiceAlternative>],
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<BuiltinType> {
     let has_tags = alternatives
         .iter()
@@ -175,7 +195,7 @@ fn parse_enumerated_type(
 fn parse_builtin_type(
     parser: &AstParser<'_>,
     builtin: &AstElement<AstBuiltinType>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<UntaggedType> {
     Ok(UntaggedType::BuiltinType(match &builtin.element {
         AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
@@ -258,29 +278,24 @@ fn resolve_typereference(
     )
 }
 
+#[derive(Debug, Clone)]
+pub enum Parameter {
+    Type {
+        ast: AstElement<AstType>,
+        tagged_type: TaggedType,
+    },
+    Value {
+        value_type: TaggedType,
+        value: AstElement<Value>,
+    },
+}
+
 pub(crate) fn resolve_parameterized_type_reference<'a>(
     parser: &'a AstParser<'_>,
     typeref: &AstElement<AstParameterizedTypeReference>,
-    parameters: &[(&String, &TaggedType)],
-) -> Result<(
-    &'a AstElement<AstTypeAssignment>,
-    Vec<(AstElement<AstType>, TaggedType)>,
-)> {
+    parameters: &[(&String, &Parameter)],
+) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<Parameter>)> {
     let name = resolve_typereference(parser, &typeref.element.name);
-    let parameters = typeref
-        .element
-        .parameters
-        .element
-        .0
-        .iter()
-        .map(|parameter| {
-            Ok((
-                parameter.clone(),
-                parse_type(parser, parameter, parameters, TypeContext::Contextless)?,
-            ))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
     let parameterized_ast = match parser.context.lookup_parameterized_type(&name.element) {
         Some(ast) => ast,
         None => {
@@ -293,6 +308,65 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
             })
         }
     };
+    let decl_list = &parameterized_ast
+        .element
+        .parameters
+        .as_ref()
+        .expect("lookup_parameterized_type returned non-parameterized type")
+        .element
+        .0;
+
+    let parameters = typeref
+        .element
+        .parameters
+        .element
+        .0
+        .iter()
+        .zip(decl_list)
+        .map(|(parameter, decl)| {
+            Ok(match (&parameter.element, &decl.element) {
+                (AstParameter::TypeParameter(ast), AstParameterDecl::TypeParameterDecl(_)) => {
+                    Parameter::Type {
+                        ast: ast.element.0.clone(),
+                        tagged_type: parse_type(
+                            parser,
+                            &ast.element.0,
+                            parameters,
+                            TypeContext::Contextless,
+                        )?,
+                    }
+                }
+                (AstParameter::ValueParameter(ast), AstParameterDecl::ValueParameterDecl(decl)) => {
+                    // TODO: somehow move this to be after we parse all the non-parameterized types?
+                    let value_type = parse_type(
+                        parser,
+                        &decl.element.ty,
+                        parameters,
+                        TypeContext::Contextless,
+                    )?;
+                    let resolved_type = value_type.resolve(parser.context)?;
+                    let value = values::parse_value(parser, &ast.element.0, &resolved_type)?;
+                    Parameter::Value { value_type, value }
+                }
+                (param, decl) => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "expecting {} parameter but found {} parameter",
+                            match decl {
+                                AstParameterDecl::TypeParameterDecl(_) => "type",
+                                AstParameterDecl::ValueParameterDecl(_) => "value",
+                            },
+                            match param {
+                                AstParameter::TypeParameter(_) => "type",
+                                AstParameter::ValueParameter(_) => "value",
+                            },
+                        )),
+                        loc: parameter.loc,
+                    })
+                }
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     Ok((parameterized_ast, parameters))
 }
@@ -300,7 +374,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
 fn parse_untagged_type(
     parser: &AstParser<'_>,
     ty: &AstElement<AstUntaggedType>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<TaggedType> {
     let untagged = match &ty.element {
         AstUntaggedType::BuiltinType(builtin) => parse_builtin_type(parser, builtin, parameters)?,
@@ -310,12 +384,7 @@ fn parse_untagged_type(
             let (_, decl) = parse_type_assignment(
                 parser,
                 parameterized_ast,
-                &TypeAssignmentParseMode::Parameterized {
-                    parameters: parameters
-                        .into_iter()
-                        .map(|(_, param_type)| param_type)
-                        .collect(),
-                },
+                &TypeAssignmentParseMode::Parameterized { parameters },
             )?
             .expect("parse_type_assignment for parameterized type returned None");
             let resolved = decl.ty.resolve(parser.context)?;
@@ -323,12 +392,15 @@ fn parse_untagged_type(
             UntaggedType::BuiltinType(resolved.ty)
         }
         AstUntaggedType::TypeReference(typeref) => {
-            if let Some(parameter) = parameters.iter().find_map(|(name, tagged_type)| {
-                if *name == &typeref.element.0 {
-                    Some(*tagged_type)
-                } else {
-                    None
+            if let Some(parameter) = parameters.iter().find_map(|(name, param)| match param {
+                Parameter::Type { tagged_type, .. } => {
+                    if *name == &typeref.element.0 {
+                        Some(tagged_type)
+                    } else {
+                        None
+                    }
                 }
+                _ => None,
             }) {
                 return Ok(parameter.clone());
             } else {
@@ -346,7 +418,7 @@ fn parse_untagged_type(
 fn parse_constrained_type(
     parser: &AstParser<'_>,
     constrained_type: &AstElement<AstConstrainedType>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
 ) -> Result<TaggedType> {
     Ok(match &constrained_type.element {
         AstConstrainedType::Suffixed(suffixed) => {
@@ -384,7 +456,7 @@ pub enum TypeContext {
 pub fn parse_type(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
-    parameters: &[(&String, &TaggedType)],
+    parameters: &[(&String, &Parameter)],
     type_context: TypeContext,
 ) -> Result<TaggedType> {
     let tag_default = parser
@@ -510,17 +582,48 @@ pub fn parse_type(
     })
 }
 
+pub(crate) enum ParameterDecl {
+    Type {
+        name: String,
+    },
+    Value {
+        // value_type: TaggedType,
+        name: String,
+    },
+}
+
 pub(crate) fn parse_type_assignment_parameters(
+    _parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
-) -> Option<Vec<String>> {
-    type_assignment.element.parameters.as_ref().map(|params| {
-        params
-            .element
-            .0
-            .iter()
-            .map(|param| param.element.0.clone())
-            .collect()
-    })
+) -> Result<Option<Vec<ParameterDecl>>> {
+    Ok(
+        match type_assignment.element.parameters.as_ref().map(|params| {
+            params
+                .element
+                .0
+                .iter()
+                .map(|param| {
+                    Ok(match &param.element {
+                        AstParameterDecl::TypeParameterDecl(decl) => ParameterDecl::Type {
+                            name: decl.element.0.element.0.clone(),
+                        },
+                        AstParameterDecl::ValueParameterDecl(decl) => ParameterDecl::Value {
+                            // value_type: parse_type(
+                            //     parser,
+                            //     &decl.element.ty,
+                            //     &[],
+                            //     TypeContext::Contextless,
+                            // )?,
+                            name: decl.element.name.element.0.clone(),
+                        },
+                    })
+                })
+                .collect::<Result<_>>()
+        }) {
+            Some(res) => Some(res?),
+            None => None,
+        },
+    )
 }
 
 pub fn parse_parameterized_type_assignment(
@@ -528,7 +631,7 @@ pub fn parse_parameterized_type_assignment(
     type_assignment: &AstElement<AstTypeAssignment>,
 ) -> Result<Option<(QualifiedIdentifier, AstElement<AstTypeAssignment>)>> {
     let name = type_assignment.element.name.element.0.clone();
-    let parameters = parse_type_assignment_parameters(type_assignment);
+    let parameters = parse_type_assignment_parameters(parser, type_assignment)?;
     if parameters.map(|parameters| parameters.len()).unwrap_or(0) > 0 {
         Ok(Some((
             QualifiedIdentifier::new(parser.module.clone(), name),
@@ -541,7 +644,7 @@ pub fn parse_parameterized_type_assignment(
 
 pub enum TypeAssignmentParseMode {
     Normal,
-    Parameterized { parameters: Vec<TaggedType> },
+    Parameterized { parameters: Vec<Parameter> },
 }
 
 pub fn parse_type_assignment(
@@ -551,7 +654,7 @@ pub fn parse_type_assignment(
 ) -> Result<Option<(QualifiedIdentifier, DeclaredType)>> {
     let ast_name = &type_assignment.element.name;
     let name = ast_name.element.0.clone();
-    let parameter_names = parse_type_assignment_parameters(type_assignment);
+    let parameter_names = parse_type_assignment_parameters(parser, type_assignment)?;
 
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
     match mode {
@@ -589,8 +692,12 @@ pub fn parse_type_assignment(
 
                 let named_parameters = names
                     .iter()
+                    .map(|param| match param {
+                        ParameterDecl::Type { name } => name,
+                        ParameterDecl::Value { name, .. } => name,
+                    })
                     .zip(parameters)
-                    .collect::<Vec<(&String, &TaggedType)>>();
+                    .collect::<Vec<(&String, &Parameter)>>();
                 let ty = parse_type(
                     parser,
                     &type_assignment.element.ty,

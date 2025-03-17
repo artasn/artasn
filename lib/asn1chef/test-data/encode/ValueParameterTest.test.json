@@ -1,7 +1,16 @@
 {
     "module": "ValueParameterTest",
-    "tests": ["Encode"],
-    "values": {
-        
-    }
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "integer-message",
+            "der": "300404021337"
+        },
+        {
+            "name": "integer-message-override",
+            "der": "300702010204021337"
+        }
+    ]
 }

@@ -306,30 +306,47 @@ variant Reference = TypeReference | ValueReference;
 
 variant Assignment = TypeAssignment | ValueAssignment;
 
-rule ParameterList {
+rule ParameterDeclList {
     captures {
-        parameters = repeated: TypeReference
+        parameters = repeated: ParameterDecl
     }
     operator {
     persist
-    parameters = TypeReference
+    parameters = ParameterDecl
     optional repeated {
         operator ,
-        parameters = TypeReference
+        parameters = ParameterDecl
     }
     operator }
     return parameters
 }
 
+variant ParameterDecl = ValueParameterDecl {
+    captures {
+        ty = Type
+        name = ValueReference
+    }
+    ty = Type
+    operator :
+    persist
+    name = ValueReference
+} | TypeParameterDecl {
+    captures {
+        name = TypeReference
+    }
+    name = TypeReference
+    return name
+};
+
 rule TypeAssignment {
     captures {
         name = TypeReference
-        parameters = optional: ParameterList
+        parameters = optional: ParameterDeclList
         ty = Type
     }
     name = TypeReference
     optional {
-        parameters = ParameterList
+        parameters = ParameterDeclList
     }
     operator ::=
     persist
@@ -854,29 +871,43 @@ variant ConstrainedType = Suffixed {
     return ty
 };
 
-rule TypeParameterList {
-    captures {
-        types = repeated: Type
-    }
-    operator {
-    persist
-    types = Type
-    optional repeated {
-        operator ,
-        types = Type
-    }
-    operator }
-    return types
-}
-
 rule ParameterizedTypeReference {
     captures {
         name = TypeReference
-        parameters = TypeParameterList
+        parameters = ParameterList
     }
     name = TypeReference
-    parameters = TypeParameterList
+    parameters = ParameterList
 }
+
+rule ParameterList {
+    captures {
+        parameters = repeated: Parameter
+    }
+    operator {
+    persist
+    parameters = Parameter
+    optional repeated {
+        operator ,
+        parameters = Parameter
+    }
+    operator }
+    return parameters
+}
+
+variant Parameter = TypeParameter {
+    captures {
+        ty = Type
+    }
+    ty = Type
+    return ty
+} | ValueParameter {
+    captures {
+        value = Value
+    }
+    value = Value
+    return value
+};
 
 variant UntaggedType = BuiltinType | ParameterizedTypeReference | TypeReference;
 
