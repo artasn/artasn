@@ -1,4 +1,4 @@
-use num::{BigInt, BigUint};
+use num::BigInt;
 
 mod simple;
 pub use simple::*;
@@ -23,7 +23,7 @@ pub enum BuiltinValue {
     // simple built-in values
     Boolean(bool),
     Integer(BigInt),
-    BitString(BigUint),
+    BitString(BitStringValue),
     OctetString(Vec<u8>),
     Null,
     ObjectIdentifier(ObjectIdentifier),
@@ -201,5 +201,13 @@ mod test {
     json_test!(
         test_encode_value_parameter,
         "../../test-data/encode/ValueParameterTest"
+    );
+    json_test!(
+        test_encode_bit_string,
+        "../../test-data/encode/BitStringTest"
+    );
+    json_test!(
+        test_encode_octet_string,
+        "../../test-data/encode/OctetStringTest"
     );
 }

@@ -1,0 +1,44 @@
+{
+    "module": "BitStringTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "empty-list",
+            "der": "3006030100030100"
+        },
+        {
+            "name": "partial-bstring-list-1",
+            "der": "301C03020780030206C0030205E0030204F0030203F8030202FC030201FE"
+        },
+        {
+            "name": "partial-bstring-list-2",
+            "der": "301C03020700030206000302050003020400030203000302020003020100"
+        },
+        {
+            "name": "partial-hstring-list-1",
+            "der": "3004030204F0"
+        },
+        {
+            "name": "partial-hstring-list-2",
+            "der": "300403020400"
+        },
+        {
+            "name": "whole-bstring-list",
+            "der": "3009030200AA030300AAAA"
+        },
+        {
+            "name": "whole-hstring-list",
+            "der": "3009030200AA030300AAAA"
+        },
+        {
+            "name": "mixed-bstring-list",
+            "der": "300A030304F0F00303040F00"
+        },
+        {
+            "name": "mixed-hstring-list",
+            "der": "300A030304F0F00303040F00"
+        }
+    ]
+}

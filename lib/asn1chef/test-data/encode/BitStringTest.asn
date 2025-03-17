@@ -1,0 +1,49 @@
+BitStringTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+BitStringList ::= SEQUENCE OF BIT STRING
+
+empty-bstring BIT STRING ::= ''B
+empty-hstring BIT STRING ::= ''H
+empty-list BitStringList ::= { empty-bstring, empty-hstring }
+
+partial-bstring-1 BIT STRING ::= '1'B
+partial-bstring-2 BIT STRING ::= '11'B
+partial-bstring-3 BIT STRING ::= '111'B
+partial-bstring-4 BIT STRING ::= '1111'B
+partial-bstring-5 BIT STRING ::= '11111'B
+partial-bstring-6 BIT STRING ::= '111111'B
+partial-bstring-7 BIT STRING ::= '1111111'B
+partial-bstring-list-1 BitStringList ::= { partial-bstring-1, partial-bstring-2, partial-bstring-3, partial-bstring-4, partial-bstring-5, partial-bstring-6, partial-bstring-7 }
+
+partial-bstring-8 BIT STRING ::= '0'B
+partial-bstring-9 BIT STRING ::= '00'B
+partial-bstring-10 BIT STRING ::= '000'B
+partial-bstring-11 BIT STRING ::= '0000'B
+partial-bstring-12 BIT STRING ::= '00000'B
+partial-bstring-13 BIT STRING ::= '000000'B
+partial-bstring-14 BIT STRING ::= '0000000'B
+partial-bstring-list-2 BitStringList ::= { partial-bstring-8, partial-bstring-9, partial-bstring-10, partial-bstring-11, partial-bstring-12, partial-bstring-13, partial-bstring-14 }
+
+partial-hstring-1 BIT STRING ::= 'F'H
+partial-hstring-list-1 BitStringList ::= { partial-hstring-1 }
+
+partial-hstring-2 BIT STRING ::= '0'H
+partial-hstring-list-2 BitStringList ::= { partial-hstring-2 }
+
+whole-bstring-1 BIT STRING ::= '10101010'B
+whole-bstring-2 BIT STRING ::= '1010101010101010'B
+whole-bstring-list BitStringList ::= { whole-bstring-1, whole-bstring-2 }
+
+whole-hstring-1 BIT STRING ::= 'AA'H
+whole-hstring-2 BIT STRING ::= 'AAAA'H
+whole-hstring-list BitStringList ::= { whole-hstring-1, whole-hstring-2 }
+
+mixed-bstring-1 BIT STRING ::= '111100001111'B
+mixed-bstring-2 BIT STRING ::= '000011110000'B
+mixed-bstring-list BitStringList ::= { mixed-bstring-1, mixed-bstring-2 }
+
+mixed-hstring-1 BIT STRING ::= 'F0F'H
+mixed-hstring-2 BIT STRING ::= '0F0'H
+mixed-hstring-list BitStringList ::= { mixed-hstring-1, mixed-hstring-2 }
+
+END

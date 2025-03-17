@@ -449,7 +449,7 @@ impl BuiltinType {
                 BuiltinValue::BitString(value) => constraint.includes_integer(
                     context,
                     ConstraintCheckMode::Size,
-                    &BigInt::from(value.bits() as i64),
+                    &BigInt::from((value.data.len() * 8) as i64 - (value.unused_bits as i64)),
                 )?,
                 BuiltinValue::OctetString(value) => constraint.includes_integer(
                     context,

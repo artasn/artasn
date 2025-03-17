@@ -1,0 +1,49 @@
+OctetStringTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+OctetStringList ::= SEQUENCE OF OCTET STRING
+
+empty-bstring OCTET STRING ::= ''B
+empty-hstring OCTET STRING ::= ''H
+empty-list OctetStringList ::= { empty-bstring, empty-hstring }
+
+partial-bstring-1 OCTET STRING ::= '1'B
+partial-bstring-2 OCTET STRING ::= '11'B
+partial-bstring-3 OCTET STRING ::= '111'B
+partial-bstring-4 OCTET STRING ::= '1111'B
+partial-bstring-5 OCTET STRING ::= '11111'B
+partial-bstring-6 OCTET STRING ::= '111111'B
+partial-bstring-7 OCTET STRING ::= '1111111'B
+partial-bstring-list-1 OctetStringList ::= { partial-bstring-1, partial-bstring-2, partial-bstring-3, partial-bstring-4, partial-bstring-5, partial-bstring-6, partial-bstring-7 }
+
+partial-bstring-8 OCTET STRING ::= '0'B
+partial-bstring-9 OCTET STRING ::= '00'B
+partial-bstring-10 OCTET STRING ::= '000'B
+partial-bstring-11 OCTET STRING ::= '0000'B
+partial-bstring-12 OCTET STRING ::= '00000'B
+partial-bstring-13 OCTET STRING ::= '000000'B
+partial-bstring-14 OCTET STRING ::= '0000000'B
+partial-bstring-list-2 OctetStringList ::= { partial-bstring-8, partial-bstring-9, partial-bstring-10, partial-bstring-11, partial-bstring-12, partial-bstring-13, partial-bstring-14 }
+
+partial-hstring-1 OCTET STRING ::= 'F'H
+partial-hstring-list-1 OctetStringList ::= { partial-hstring-1 }
+
+partial-hstring-2 OCTET STRING ::= '0'H
+partial-hstring-list-2 OctetStringList ::= { partial-hstring-2 }
+
+whole-bstring-1 OCTET STRING ::= '10101010'B
+whole-bstring-2 OCTET STRING ::= '1010101010101010'B
+whole-bstring-list OctetStringList ::= { whole-bstring-1, whole-bstring-2 }
+
+whole-hstring-1 OCTET STRING ::= 'AA'H
+whole-hstring-2 OCTET STRING ::= 'AAAA'H
+whole-hstring-list OctetStringList ::= { whole-hstring-1, whole-hstring-2 }
+
+mixed-bstring-1 OCTET STRING ::= '111100001111'B
+mixed-bstring-2 OCTET STRING ::= '000011110000'B
+mixed-bstring-list OctetStringList ::= { mixed-bstring-1, mixed-bstring-2 }
+
+mixed-hstring-1 OCTET STRING ::= 'F0F'H
+mixed-hstring-2 OCTET STRING ::= '0F0'H
+mixed-hstring-list OctetStringList ::= { mixed-hstring-1, mixed-hstring-2 }
+
+END

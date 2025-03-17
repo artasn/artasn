@@ -12,6 +12,12 @@ use crate::{
 
 use super::{BuiltinValue, Value, ValueResolve};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BitStringValue {
+    pub data: Vec<u8>,
+    pub unused_bits: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct StructureValueComponent {
     pub name: AstElement<String>,

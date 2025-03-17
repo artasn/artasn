@@ -1,0 +1,44 @@
+{
+    "module": "OctetStringTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "empty-list",
+            "der": "300404000400"
+        },
+        {
+            "name": "partial-bstring-list-1",
+            "der": "30150401800401C00401E00401F00401F80401FC0401FE"
+        },
+        {
+            "name": "partial-bstring-list-2",
+            "der": "3015040100040100040100040100040100040100040100"
+        },
+        {
+            "name": "partial-hstring-list-1",
+            "der": "30030401F0"
+        },
+        {
+            "name": "partial-hstring-list-2",
+            "der": "3003040100"
+        },
+        {
+            "name": "whole-bstring-list",
+            "der": "30070401AA0402AAAA"
+        },
+        {
+            "name": "whole-hstring-list",
+            "der": "30070401AA0402AAAA"
+        },
+        {
+            "name": "mixed-bstring-list",
+            "der": "30080402F0F004020F00"
+        },
+        {
+            "name": "mixed-hstring-list",
+            "der": "30080402F0F004020F00"
+        }
+    ]
+}

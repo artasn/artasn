@@ -367,9 +367,8 @@ pub fn ber_encode_value(
             }
         }
         BuiltinValue::BitString(bit_string) => {
-            let le_bytes = bit_string.to_bytes_le();
-            buf.extend(&le_bytes);
-            buf.push(0x00); // TODO: implement support for bit strings with bit length not a multiple of 8
+            buf.extend(bit_string.data.iter().rev());
+            buf.push(bit_string.unused_bits); 
         }
         BuiltinValue::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
         BuiltinValue::Null => (),
