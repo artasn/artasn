@@ -19,7 +19,7 @@ macro_rules! resolve_integer {
             other => {
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
-                        "expecting INTEGER in constraint, found {}",
+                        "expecting INTEGER in constraint, but found {}",
                         other.tag_type(context)?
                     )),
                     loc: $constant.loc,

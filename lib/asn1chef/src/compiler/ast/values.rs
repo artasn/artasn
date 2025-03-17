@@ -41,20 +41,20 @@ pub fn parse_valuereference(
     })
 }
 
-pub fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<BuiltinValue> {
+pub fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<BigInt> {
     let sign = if num.element.sign.is_none() {
         Sign::Plus
     } else {
         Sign::Minus
     };
 
-    Ok(BuiltinValue::Integer(BigInt::from_biguint(
+    Ok(BigInt::from_biguint(
         sign,
         num.element.value.element.0.clone(),
-    )))
+    ))
 }
 
-pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<BuiltinValue> {
+pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<RealLiteral> {
     let sign = if dec.element.sign.is_none() {
         Sign::Plus
     } else {
@@ -67,10 +67,10 @@ pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<BuiltinV
     let fraction = BigInt::from_biguint(sign, ufraction);
     let mantissa = whole * BigInt::from(10u64).pow(fraction_len) + fraction;
 
-    Ok(BuiltinValue::RealLiteral(RealLiteral {
+    Ok(RealLiteral {
         mantissa,
         exponent: BigInt::from_biguint(Sign::Minus, fraction_len.into()),
-    }))
+    })
 }
 
 fn parse_structure_value(
@@ -238,6 +238,133 @@ fn parse_byte_string(str: &str, radix: u32) -> (Vec<u8>, u8) {
     (bytes, 0)
 }
 
+fn create_named_bit_string(mut bit_positions: Vec<u64>) -> BitStringValue {
+    if bit_positions.is_empty() {
+        return BitStringValue {
+            data: Vec::new(),
+            unused_bits: 0,
+        };
+    }
+
+    bit_positions.sort();
+
+    let max_bit = *bit_positions.last().unwrap();
+    let unused_bits = match 8 - (max_bit + 1) % 8 {
+        8 => 0,
+        unused_bits => unused_bits,
+    };
+    let mut data = vec![0u8; ((max_bit + unused_bits + 1) / 8) as usize];
+    for bit_position in bit_positions {
+        let byte_offset = bit_position / 8;
+        if byte_offset == 0 {
+            data[0] |= (1 << (7 - bit_position)) as u8;
+        } else {
+            let bit_offset = bit_position % byte_offset;
+            data[byte_offset as usize] |= (1 << (7 - bit_offset)) as u8;
+        }
+    }
+
+    BitStringValue {
+        data,
+        unused_bits: unused_bits as u8,
+    }
+}
+
+fn parse_named_bit_string(
+    parser: &AstParser<'_>,
+    bit_string: &BitStringType,
+    ast_bits: &AstElement<AstStructureOfValue>,
+) -> Result<BitStringValue> {
+    let named_bits = match &bit_string.named_bits {
+        Some(named_bits) => named_bits,
+        None => {
+            return Err(Error {
+                kind: ErrorKind::Ast("the governing BIT STRING type does not define any named bits".to_string()),
+                loc: ast_bits.loc,
+            })
+        }
+    };
+    let named_bits = named_bits
+        .iter()
+        .map(|named_bit| {
+            Ok((
+                named_bit.name.element.clone(),
+                match named_bit.value.resolve(parser.context)? {
+                    BuiltinValue::Integer(i) => {
+                        if i.sign() == Sign::Minus {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "named bit value must be a positive INTEGER".to_string(),
+                                ),
+                                loc: named_bit.value.loc,
+                            });
+                        }
+                        let uint: u64 = match i.try_into() {
+                            Ok(uint) => uint,
+                            Err(_) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "named bit value cannot be larger than 2^64 - 1"
+                                            .to_string(),
+                                    ),
+                                    loc: named_bit.value.loc,
+                                })
+                            }
+                        };
+                        uint
+                    }
+                    other => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "named bit value must be of type INTEGER, but found {}",
+                                other.tag_type(parser.context)?
+                            )),
+                            loc: named_bit.value.loc,
+                        })
+                    }
+                },
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let ast_bits = ast_bits
+        .element
+        .elements
+        .iter()
+        .map(|ast_bit| match &ast_bit.element {
+            AstValue::ValueReference(valref) => Ok(valref),
+            _ => Err(Error {
+                kind: ErrorKind::Ast(
+                    "expecting a named bit identifier, but found a value literal".to_string(),
+                ),
+                loc: ast_bit.loc,
+            }),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut bit_positions = Vec::with_capacity(ast_bits.len());
+    for ast_bit in ast_bits {
+        let bit_offset = named_bits.iter().find_map(|(bit_name, bit_offset)| {
+            if bit_name == &ast_bit.element.0 {
+                Some(*bit_offset)
+            } else {
+                None
+            }
+        });
+        match bit_offset {
+            Some(bit_offset) => bit_positions.push(bit_offset),
+            None => return Err(Error {
+                kind: ErrorKind::Ast(
+                    format!("identifier '{}' is not defined as a named bit in the governing BIT STRING type", ast_bit.element.0),
+                ),
+                loc: ast_bit.loc,
+            })
+        }
+    }
+
+    Ok(create_named_bit_string(bit_positions))
+}
+
 pub fn parse_value(
     parser: &AstParser<'_>,
     value: &AstElement<AstValue>,
@@ -347,33 +474,39 @@ pub fn parse_value(
                         })
                     }
                 },
-                AstBuiltinValue::IntegerValue(num) => parse_integer_value(num)?,
-                AstBuiltinValue::DecimalValue(dec) => parse_decimal_value(dec)?,
+                AstBuiltinValue::IntegerValue(num) => {
+                    BuiltinValue::Integer(parse_integer_value(num)?)
+                }
+                AstBuiltinValue::DecimalValue(dec) => {
+                    BuiltinValue::RealLiteral(parse_decimal_value(dec)?)
+                }
                 AstBuiltinValue::StructureValue(seq_val) => {
                     parse_structure_value(parser, seq_val, target_type)?
                 }
-                AstBuiltinValue::StructureOfValue(of_val) => {
-                    let component_type = match &target_type.ty {
-                        BuiltinType::StructureOf(seq_of) => &seq_of.component_type,
-                        other_type => {
-                            return Err(Error {
-                                kind: ErrorKind::Ast(format!(
-                                    "SEQUENCE OF/SET OF value cannot be assigned to {}",
-                                    other_type,
-                                )),
-                                loc: builtin.loc,
-                            })
-                        }
-                    };
-                    let component_type = component_type.resolve(parser.context)?;
+                AstBuiltinValue::StructureOfValue(of_val) => match &target_type.ty {
+                    BuiltinType::StructureOf(seq_of) => {
+                        let component_type = seq_of.component_type.resolve(parser.context)?;
 
-                    let ast_elements = &of_val.element.elements;
-                    let mut elements = Vec::with_capacity(ast_elements.len());
-                    for ast_element in ast_elements {
-                        elements.push(parse_value(parser, ast_element, &component_type)?);
+                        let ast_elements = &of_val.element.elements;
+                        let mut elements = Vec::with_capacity(ast_elements.len());
+                        for ast_element in ast_elements {
+                            elements.push(parse_value(parser, ast_element, &component_type)?);
+                        }
+                        BuiltinValue::SequenceOf(elements)
                     }
-                    BuiltinValue::SequenceOf(elements)
-                }
+                    BuiltinType::BitString(bit_string) => {
+                        BuiltinValue::BitString(parse_named_bit_string(parser, bit_string, of_val)?)
+                    }
+                    other_type => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "SEQUENCE OF/SET OF value cannot be assigned to {}",
+                                other_type,
+                            )),
+                            loc: builtin.loc,
+                        })
+                    }
+                },
                 AstBuiltinValue::ChoiceValue(choice) => {
                     let alternative_ty = match &target_type.ty {
                         BuiltinType::Choice(ty) => 'block: {

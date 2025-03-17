@@ -98,12 +98,12 @@ impl ObjectIdentifier {
                             return Err(Error {
                                 kind: ErrorKind::Ast(if i == 0 {
                                     format!(
-                                        "expecting {} or INTEGER, found {}",
+                                        "expecting {} or INTEGER, but found {}",
                                         self.ty,
                                         other.tag_type(context)?
                                     )
                                 } else {
-                                    format!("expecting INTEGER, found {}", other.tag_type(context)?)
+                                    format!("expecting INTEGER, but found {}", other.tag_type(context)?)
                                 }),
                                 loc: valref.loc,
                             });

@@ -1,0 +1,96 @@
+{
+    "module": "NamedBitTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "nbs-empty",
+            "der": "030100"
+        },
+        {
+            "name": "nbs-a",
+            "der": "03020780"
+        },
+        {
+            "name": "nbs-b",
+            "der": "03020640"
+        },
+        {
+            "name": "nbs-c",
+            "der": "03020520"
+        },
+        {
+            "name": "nbs-d",
+            "der": "03020410"
+        },
+        {
+            "name": "nbs-e",
+            "der": "03020308"
+        },
+        {
+            "name": "nbs-f",
+            "der": "03020001"
+        },
+        {
+            "name": "nbs-g",
+            "der": "0303070080"
+        },
+        {
+            "name": "nbs-h",
+            "der": "030E0300000000000000000000000008"
+        },
+        {
+            "name": "nbs-ab",
+            "der": "030206C0"
+        },
+        {
+            "name": "nbs-ae",
+            "der": "03020388"
+        },
+        {
+            "name": "nbs-af",
+            "der": "03020081"
+        },
+        {
+            "name": "nbs-ag",
+            "der": "0303078080"
+        },
+        {
+            "name": "nbs-ah",
+            "der": "030E0380000000000000000000000008"
+        },
+        {
+            "name": "nbs-bd",
+            "der": "03020450"
+        },
+        {
+            "name": "nbs-bh",
+            "der": "030E0340000000000000000000000008"
+        },
+        {
+            "name": "nbs-ce",
+            "der": "03020328"
+        },
+        {
+            "name": "nbs-dg",
+            "der": "0303071080"
+        },
+        {
+            "name": "nbs-ef",
+            "der": "03020009"
+        },
+        {
+            "name": "nbs-abdeg",
+            "der": "030307D880"
+        },
+        {
+            "name": "nbs-abcdefgh",
+            "der": "030E03F9800000000000000000000008"
+        },
+        {
+            "name": "nbs-aabbcc",
+            "der": "030205E0"
+        }
+    ]
+}

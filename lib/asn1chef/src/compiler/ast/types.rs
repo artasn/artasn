@@ -3,7 +3,7 @@ use crate::{
     compiler::{context::DeclaredType, parser::*},
     module::*,
     types::*,
-    values::Value,
+    values::{BuiltinValue, Value},
 };
 
 lazy_static::lazy_static! {
@@ -192,6 +192,33 @@ fn parse_enumerated_type(
     Ok(BuiltinType::Enumerated(items))
 }
 
+fn parse_named_numbers(
+    parser: &AstParser<'_>,
+    ast_named_numbers: &AstElement<AstNamedNumberList>,
+) -> Result<Vec<NamedNumber>> {
+    let mut named_numbers = Vec::with_capacity(ast_named_numbers.element.0.len());
+
+    for ast_named_number in &ast_named_numbers.element.0 {
+        let name = ast_named_number
+            .element
+            .name
+            .as_ref()
+            .map(|name| name.0.clone());
+        let value = match &ast_named_number.element.num.element {
+            AstIntegerValueReference::IntegerValue(int) => AstElement::new(
+                Value::BuiltinValue(BuiltinValue::Integer(values::parse_integer_value(int)?)),
+                int.loc,
+            ),
+            AstIntegerValueReference::ValueReference(valref) => {
+                values::parse_valuereference(parser, valref)
+            }
+        };
+        named_numbers.push(NamedNumber { name, value });
+    }
+
+    Ok(named_numbers)
+}
+
 fn parse_builtin_type(
     parser: &AstParser<'_>,
     builtin: &AstElement<AstBuiltinType>,
@@ -202,8 +229,11 @@ fn parse_builtin_type(
         AstBuiltinType::Integer(_) => BuiltinType::Integer(IntegerType {
             named_values: None, // TODO
         }),
-        AstBuiltinType::BitString(_) => BuiltinType::BitString(BitStringType {
-            named_bits: None, // TODO
+        AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
+            named_bits: match &bit_string.element.named_bits {
+                Some(named_bits) => Some(parse_named_numbers(parser, named_bits)?),
+                None => None,
+            },
         }),
         AstBuiltinType::OctetString(_) => BuiltinType::OctetString,
         AstBuiltinType::Null(_) => BuiltinType::Null,

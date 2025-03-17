@@ -1,0 +1,42 @@
+NamedBitTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+NamedBitString ::= BIT STRING {
+    a (0),
+    b (1),
+    c (2),
+    d (3),
+    e (4),
+    f (7),
+    g (8),
+    h (100)
+}
+
+nbs-empty NamedBitString ::= {}
+
+nbs-a NamedBitString ::= { a }
+nbs-b NamedBitString ::= { b }
+nbs-c NamedBitString ::= { c }
+nbs-d NamedBitString ::= { d }
+nbs-e NamedBitString ::= { e }
+nbs-f NamedBitString ::= { f }
+nbs-g NamedBitString ::= { g }
+nbs-h NamedBitString ::= { h }
+
+nbs-ab NamedBitString ::= { a, b }
+nbs-ae NamedBitString ::= { a, e }
+nbs-af NamedBitString ::= { a, f }
+nbs-ag NamedBitString ::= { a, g }
+nbs-ah NamedBitString ::= { a, h }
+
+nbs-bd NamedBitString ::= { b, d }
+nbs-bh NamedBitString ::= { b, h }
+nbs-ce NamedBitString ::= { c, e }
+nbs-dg NamedBitString ::= { d, g }
+nbs-ef NamedBitString ::= { e, f }
+
+nbs-abdeg NamedBitString ::= { a, b, d, e, g }
+nbs-abcdefgh NamedBitString ::= { a, b, c, d, e, f, g, h }
+
+nbs-aabbcc NamedBitString ::= { a, a, b, b, c, c }
+
+END

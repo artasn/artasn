@@ -93,12 +93,12 @@ variant DefinitiveOidComponent = NamedNumber | ValueReference | Number;
 rule NamedNumber {
     captures {
         name = ValueReference
-        num = Number
+        num = IntegerValueReference
     }
     name = ValueReference
     operator (
     persist
-    num = Number
+    num = IntegerValueReference
     operator )
 }
 
@@ -953,7 +953,9 @@ rule StructureOfValue {
         elements = repeated: Value
     }
     operator {
-    elements = Value
+    optional {
+        elements = Value
+    }
     optional repeated {
         operator ,
         elements = Value
@@ -1030,3 +1032,4 @@ variant BuiltinValue = ContainingValue | Null | BooleanValue | SpecialRealValue 
     StructureValue | ObjectIdentifierValue | ChoiceValue;
 
 variant Value = BuiltinValue | ValueReference;
+variant IntegerValueReference = IntegerValue | ValueReference;

@@ -210,4 +210,8 @@ mod test {
         test_encode_octet_string,
         "../../test-data/encode/OctetStringTest"
     );
+    json_test!(
+        test_encode_named_bit_string,
+        "../../test-data/encode/NamedBitTest"
+    );
 }

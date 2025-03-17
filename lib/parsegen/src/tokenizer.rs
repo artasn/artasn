@@ -381,12 +381,12 @@ impl ErrorKind {
                 };
                 if let Some(found_data) = &found.data {
                     format!(
-                        "expecting {}, found {}",
+                        "expecting {}, but found {}",
                         expecting_str,
                         found_data.to_string(&found.kind)
                     )
                 } else {
-                    format!("expecting {}, found {}", expecting_str, found.kind)
+                    format!("expecting {}, but found {}", expecting_str, found.kind)
                 }
             }
             ErrorKind::IllegalStringCharacter {
@@ -398,12 +398,12 @@ impl ErrorKind {
                 indicator
             ),
             ErrorKind::ExpectingKeyword { expecting, found } => format!(
-                "expecting keyword {}, found keyword {}",
+                "expecting keyword {}, but found keyword {}",
                 expecting.name(),
                 found.name()
             ),
             ErrorKind::ExpectingOperator { expecting, found } => format!(
-                "expecting operator '{}', found operator '{}'",
+                "expecting operator '{}', but found operator '{}'",
                 expecting.name(),
                 found.name()
             ),

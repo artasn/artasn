@@ -21,6 +21,30 @@ fn big_uint_to_u64(big: &AstElement<AstNumber>) -> Result<u64> {
     })
 }
 
+fn named_number_to_u64(named_num: &AstElement<AstNamedNumber>) -> Result<u64> {
+    match &named_num.element.num.element {
+        AstIntegerValueReference::IntegerValue(int) => {
+            if int.element.sign.is_some() {
+                return Err(Error {
+                    kind: ErrorKind::Ast("node must be an unsigned integer".to_string()),
+                    loc: int.loc,
+                });
+            }
+
+            Ok(big_uint_to_u64(&int.element.value)?)
+        }
+        AstIntegerValueReference::ValueReference(valref) => {
+            Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "expecting INTEGER literal, but found identifier '{}'",
+                    valref.element.0
+                )),
+                loc: valref.loc,
+            })
+        }
+    }
+}
+
 pub fn name_and_oid_to_module_ident(
     name: &AstElement<AstTypeReference>,
     oid: Option<&AstElement<AstDefinitiveOid>>,
@@ -39,7 +63,7 @@ pub fn name_and_oid_to_module_ident(
                                 OidTreeNodeSearch::Number(big_uint_to_u64(num)?)
                             }
                             AstDefinitiveOidComponent::NamedNumber(named_num) => {
-                                OidTreeNodeSearch::Number(big_uint_to_u64(&named_num.element.num)?)
+                                OidTreeNodeSearch::Number(named_number_to_u64(named_num)?)
                             }
                             AstDefinitiveOidComponent::ValueReference(val_ref) => {
                                 OidTreeNodeSearch::Name(
@@ -93,7 +117,7 @@ pub fn parse_object_identifier(
                     }
                     AstObjectIdentifierComponent::NamedNumber(named_num) => {
                         ObjectIdentifierComponent::IntegerLiteral(AstElement::new(
-                            big_uint_to_u64(&named_num.element.num)?,
+                            named_number_to_u64(named_num)?,
                             named_num.element.num.loc,
                         ))
                     }
