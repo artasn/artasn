@@ -273,13 +273,15 @@ fn create_named_bit_string(mut bit_positions: Vec<u64>) -> BitStringValue {
 fn parse_named_bit_string(
     parser: &AstParser<'_>,
     bit_string: &BitStringType,
-    ast_bits: &AstElement<AstStructureOfValue>,
+    ast_bits: &AstElement<AstNamedBitStringValue>,
 ) -> Result<BitStringValue> {
     let named_bits = match &bit_string.named_bits {
         Some(named_bits) => named_bits,
         None => {
             return Err(Error {
-                kind: ErrorKind::Ast("the governing BIT STRING type does not define any named bits".to_string()),
+                kind: ErrorKind::Ast(
+                    "the governing BIT STRING type does not define any named bits".to_string(),
+                ),
                 loc: ast_bits.loc,
             })
         }
@@ -327,23 +329,8 @@ fn parse_named_bit_string(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let ast_bits = ast_bits
-        .element
-        .elements
-        .iter()
-        .map(|ast_bit| match &ast_bit.element {
-            AstValue::ValueReference(valref) => Ok(valref),
-            _ => Err(Error {
-                kind: ErrorKind::Ast(
-                    "expecting a named bit identifier, but found a value literal".to_string(),
-                ),
-                loc: ast_bit.loc,
-            }),
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut bit_positions = Vec::with_capacity(ast_bits.len());
-    for ast_bit in ast_bits {
+    let mut bit_positions = Vec::with_capacity(ast_bits.element.0.len());
+    for ast_bit in &ast_bits.element.0 {
         let bit_offset = named_bits.iter().find_map(|(bit_name, bit_offset)| {
             if bit_name == &ast_bit.element.0 {
                 Some(*bit_offset)
@@ -363,6 +350,17 @@ fn parse_named_bit_string(
     }
 
     Ok(create_named_bit_string(bit_positions))
+}
+
+fn parse_braced_value<T: Parseable>(
+    braced: &AstElement<AstBracedTokenStream>,
+) -> Result<AstElement<T>> {
+    let mut stream = TokenStream::from_tokens(braced.element.0.clone());
+    let context = ParseContext::new(&mut stream);
+    match T::parse(context) {
+        ParseResult::Ok(value) => Ok(value),
+        ParseResult::Fail(err) | ParseResult::Error(err) => Err(err),
+    }
 }
 
 pub fn parse_value(
@@ -449,28 +447,54 @@ pub fn parse_value(
                         })
                     }
                 },
-                AstBuiltinValue::ObjectIdentifierValue(object_id) => match &target_type.ty {
+                AstBuiltinValue::BracedTokenStream(braced) => match &target_type.ty {
+                    BuiltinType::BitString(bit_string) => {
+                        let ast_named_bits =
+                            parse_braced_value::<AstNamedBitStringValue>(braced)?;
+                        BuiltinValue::BitString(parse_named_bit_string(
+                            parser,
+                            bit_string,
+                            &ast_named_bits,
+                        )?)
+                    }
                     BuiltinType::ObjectIdentifier => {
+                        let object_id =
+                            parse_braced_value::<AstObjectIdentifierValue>(braced)?;
                         BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
                             parser,
-                            object_id,
+                            &object_id,
                             TagType::ObjectIdentifier,
                         )?)
                     }
                     BuiltinType::RelativeOid => {
+                        let object_id =
+                            parse_braced_value::<AstObjectIdentifierValue>(braced)?;
                         BuiltinValue::RelativeOid(object_id::parse_object_identifier(
                             parser,
-                            object_id,
+                            &object_id,
                             TagType::RelativeOid,
                         )?)
                     }
-                    other_type => {
+                    BuiltinType::Structure(_) => {
+                        let struct_val = parse_braced_value::<AstStructureValue>(braced)?;
+                        parse_structure_value(parser, &struct_val, target_type)?
+                    }
+                    BuiltinType::StructureOf(struct_of) => {
+                        let struct_of_val =
+                            parse_braced_value::<AstStructureOfValue>(braced)?;
+                        let component_type = struct_of.component_type.resolve(parser.context)?;
+
+                        let ast_elements = &struct_of_val.element.0;
+                        let mut elements = Vec::with_capacity(ast_elements.len());
+                        for ast_element in ast_elements {
+                            elements.push(parse_value(parser, ast_element, &component_type)?);
+                        }
+                        BuiltinValue::SequenceOf(elements)
+                    }
+                    other => {
                         return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "OBJECT IDENTIFIER or RELATIVE-OID value cannot be assigned to {}",
-                                other_type,
-                            )),
-                            loc: builtin.loc,
+                            kind: ErrorKind::Ast(format!("illegal value for {}", other)),
+                            loc: braced.loc,
                         })
                     }
                 },
@@ -480,33 +504,6 @@ pub fn parse_value(
                 AstBuiltinValue::DecimalValue(dec) => {
                     BuiltinValue::RealLiteral(parse_decimal_value(dec)?)
                 }
-                AstBuiltinValue::StructureValue(seq_val) => {
-                    parse_structure_value(parser, seq_val, target_type)?
-                }
-                AstBuiltinValue::StructureOfValue(of_val) => match &target_type.ty {
-                    BuiltinType::StructureOf(seq_of) => {
-                        let component_type = seq_of.component_type.resolve(parser.context)?;
-
-                        let ast_elements = &of_val.element.elements;
-                        let mut elements = Vec::with_capacity(ast_elements.len());
-                        for ast_element in ast_elements {
-                            elements.push(parse_value(parser, ast_element, &component_type)?);
-                        }
-                        BuiltinValue::SequenceOf(elements)
-                    }
-                    BuiltinType::BitString(bit_string) => {
-                        BuiltinValue::BitString(parse_named_bit_string(parser, bit_string, of_val)?)
-                    }
-                    other_type => {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "SEQUENCE OF/SET OF value cannot be assigned to {}",
-                                other_type,
-                            )),
-                            loc: builtin.loc,
-                        })
-                    }
-                },
                 AstBuiltinValue::ChoiceValue(choice) => {
                     let alternative_ty = match &target_type.ty {
                         BuiltinType::Choice(ty) => 'block: {

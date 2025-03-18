@@ -3,6 +3,7 @@ extern EncodingReference
 extern ValueReference
 extern Number
 extern StringLiteral
+extern BracedTokenStream
 
 rule Program {
     captures {
@@ -926,6 +927,22 @@ rule ValueAssignment {
     value = Value
 }
 
+rule NamedBitStringValue {
+    captures {
+        bits = repeated: ValueReference
+    }
+    operator {
+    optional {
+        bits = ValueReference
+    }
+    optional repeated {
+        operator ,
+        bits = ValueReference
+    }
+    operator }
+    return bits
+}
+
 rule StructureValue {
     captures {
         components = repeated: StructureValueComponent
@@ -961,6 +978,7 @@ rule StructureOfValue {
         elements = Value
     }
     operator }
+    return elements
 }
 
 rule ChoiceValue {
@@ -1028,8 +1046,7 @@ rule ContainingValue {
     return value
 }
 
-variant BuiltinValue = ContainingValue | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | StructureOfValue |
-    StructureValue | ObjectIdentifierValue | ChoiceValue;
+variant BuiltinValue = ContainingValue | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
 
 variant Value = BuiltinValue | ValueReference;
 variant IntegerValueReference = IntegerValue | ValueReference;

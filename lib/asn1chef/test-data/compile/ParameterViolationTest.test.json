@@ -1,4 +1,4 @@
 [
-    "compile error: value violates constraints of type at ParameterViolationTest.asn:19:12",
-    "compile error: value violates constraints of type at ParameterViolationTest.asn:23:12"
+    "compile error: value violates constraints of type at ParameterViolationTest.asn:20:1",
+    "compile error: value violates constraints of type at ParameterViolationTest.asn:24:1"
 ]

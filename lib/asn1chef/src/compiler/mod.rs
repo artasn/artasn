@@ -134,7 +134,7 @@ impl Compiler {
 
     pub fn add_source(&mut self, path: String, source: String) -> CompileResult<()> {
         let mut token_stream =
-            TokenStream::new(&source, self.config.permit_lowercase_string_indicator);
+            TokenStream::from_string(&source, self.config.permit_lowercase_string_indicator);
         let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
         match parser {
             ParseResult::Ok(program) => {

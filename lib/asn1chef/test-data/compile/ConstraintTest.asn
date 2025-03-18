@@ -116,9 +116,9 @@ NestedValueConstraint1 ::= SEQUENCE {
         baz INTEGER (10 | 20)
     }
 }
-nvc1-valid1   NestedValueConstraint1 ::= { foo 0, bar { baz 10 }}
+nvc1-valid1   NestedValueConstraint1 ::= { foo 0,  bar { baz 10 }}
 nvc1-invalid1 NestedValueConstraint1 ::= { foo 11, bar { baz 10 }}
-nvc1-invalid2 NestedValueConstraint1 ::= { foo 0, bar { baz 15 }}
+nvc1-invalid2 NestedValueConstraint1 ::= { foo 0,  bar { baz 15 }}
 nvc1-invalid3 NestedValueConstraint1 ::= { foo 11, bar { baz 15 }}
 
 END

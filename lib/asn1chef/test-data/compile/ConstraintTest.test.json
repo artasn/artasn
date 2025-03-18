@@ -29,6 +29,6 @@
     "compile error: value violates constraints of type at ConstraintTest.asn:110:52",
     "compile error: value violates constraints of type at ConstraintTest.asn:111:50",
     "compile error: value violates constraints of type at ConstraintTest.asn:120:50",
-    "compile error: value violates constraints of type at ConstraintTest.asn:121:63",
+    "compile error: value violates constraints of type at ConstraintTest.asn:121:65",
     "compile error: value violates constraints of type at ConstraintTest.asn:122:50"
 ]

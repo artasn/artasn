@@ -4,13 +4,22 @@
 use super::tokenizer::*;
 
 pub struct TokenStream {
-    tokenizer: Tokenizer,
+    tokenizer: Box<dyn Tokenizer>,
 }
 
 impl TokenStream {
-    pub fn new(source: &str, permit_lowercase_string_indicator: bool) -> TokenStream {
+    pub fn from_string(source: &str, permit_lowercase_string_indicator: bool) -> TokenStream {
         TokenStream {
-            tokenizer: Tokenizer::new(source, permit_lowercase_string_indicator),
+            tokenizer: Box::new(StringTokenizer::new(
+                source,
+                permit_lowercase_string_indicator,
+            )),
+        }
+    }
+
+    pub fn from_tokens(tokens: Vec<Token>) -> TokenStream {
+        TokenStream {
+            tokenizer: Box::new(AotTokenizer::new(tokens)),
         }
     }
 
@@ -29,6 +38,10 @@ impl TokenStream {
         }
     }
 
+    pub fn try_next(&mut self) -> Result<Token> {
+        Ok(self.tokenizer.tokenize_next()?)
+    }
+
     pub fn set_cursor(&mut self, cursor: usize) {
         self.tokenizer.set_cursor(cursor);
     }
@@ -37,7 +50,11 @@ impl TokenStream {
         self.tokenizer.cursor()
     }
 
-    pub fn into_tokenizer(self) -> Tokenizer {
+    pub fn offset(&self) -> usize {
+        self.tokenizer.offset()
+    }
+
+    pub fn into_tokenizer(self) -> Box<dyn Tokenizer> {
         self.tokenizer
     }
 
@@ -224,7 +241,7 @@ impl ParseableEnum for Keyword {
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
-                        TokenData::Keyword(num) => num,
+                        TokenData::Keyword(keyword) => keyword,
                         _ => unreachable!(),
                     },
                     loc: token.loc,
@@ -264,7 +281,7 @@ impl ParseableEnum for Operator {
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
-                        TokenData::Operator(num) => num,
+                        TokenData::Operator(op) => op,
                         _ => unreachable!(),
                     },
                     loc: token.loc,
@@ -296,6 +313,67 @@ impl Operator {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AstBracedTokenStream(pub Vec<Token>);
+
+impl Parseable for AstBracedTokenStream {
+    fn parse(context: ParseContext) -> ParseResult<Self> {
+        let mut tokens = Vec::new();
+        match context.tokens.try_parse(
+            TokenKind::Operator,
+            Some(TokenData::Operator(Operator::OpenBrace)),
+        ) {
+            Ok(token) => tokens.push(token),
+            Err(err) => return ParseResult::Fail(err),
+        };
+
+        let mut brace_depth = 1;
+        loop {
+            let next_token = match context.tokens.try_next() {
+                Ok(token) => token,
+                Err(err) => return ParseResult::Fail(err),
+            };
+
+            match next_token.kind {
+                TokenKind::Operator => {
+                    let op = match next_token.data.as_ref().unwrap() {
+                        TokenData::Operator(op) => op,
+                        _ => unreachable!(),
+                    };
+                    match op {
+                        Operator::OpenBrace => brace_depth += 1,
+                        Operator::CloseBrace => brace_depth -= 1,
+                        _ => (),
+                    }
+                }
+                TokenKind::Eoi => {
+                    return ParseResult::Fail(Error {
+                        loc: next_token.loc,
+                        kind: ErrorKind::ExpectingOther {
+                            expecting: vec![(
+                                TokenKind::Operator,
+                                Some(TokenData::Operator(Operator::CloseBrace)),
+                            )],
+                            found: next_token,
+                        },
+                    })
+                }
+                _ => (),
+            }
+
+            tokens.push(next_token);
+            if brace_depth == 0 {
+                let last_token = tokens.last().unwrap();
+                let loc = Loc::new(
+                    tokens[0].loc.offset,
+                    (last_token.loc.offset + last_token.loc.len) - tokens[0].loc.offset,
+                );
+                return ParseResult::Ok(AstElement::new(AstBracedTokenStream(tokens), loc));
+            }
+        }
+    }
+}
+
 pub struct ParseContext<'a> {
     pub tokens: &'a mut TokenStream,
     start: usize,
@@ -304,7 +382,7 @@ pub struct ParseContext<'a> {
 impl<'a> ParseContext<'a> {
     pub fn new(tokens: &'a mut TokenStream) -> ParseContext<'a> {
         ParseContext {
-            start: tokens.cursor(),
+            start: tokens.offset(),
             tokens,
         }
     }
@@ -319,7 +397,7 @@ impl<'a> ParseContext<'a> {
     pub fn loc(&self) -> Loc {
         Loc {
             offset: self.start,
-            len: self.tokens.cursor() - self.start,
+            len: self.tokens.offset() - self.start,
         }
     }
 }

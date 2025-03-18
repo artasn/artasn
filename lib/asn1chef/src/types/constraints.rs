@@ -398,7 +398,7 @@ mod test {
     use super::Constraint;
 
     fn parse_constraint(context: &mut Context, text: &str) -> Constraint {
-        let mut stream = TokenStream::new(
+        let mut stream = TokenStream::from_string(
             &format!(
                 "ConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN\n{}\nEND\n",
                 text
