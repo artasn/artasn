@@ -1,9 +1,12 @@
-use super::{values, AstParser};
+use super::{
+    values::{self, ParseValueAssignmentStage},
+    AstParser,
+};
 use crate::{
-    compiler::{context::DeclaredType, parser::*},
+    compiler::{ast::class, context::DeclaredType, parser::*},
     module::*,
     types::*,
-    values::{BuiltinValue, Value},
+    values::{BuiltinValue, TypedValue, ValueReference},
 };
 
 lazy_static::lazy_static! {
@@ -23,6 +26,14 @@ lazy_static::lazy_static! {
         ModuleIdentifier::with_name(String::from("CharacterString")),
         String::from("CharacterString"),
     );
+    static ref TYPE_IDENTIFIER_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        String::from("CLASS-TYPE-IDENTIFIER"),
+    );
+    static ref ABSTRACT_SYNTAX_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        String::from("CLASS-ABSTRACT-SYNTAX"),
+    );
 }
 
 fn parse_structure_components(
@@ -40,6 +51,22 @@ fn parse_structure_components(
         .iter()
         .enumerate()
         .map(|(i, component)| {
+            let forbidden_ident = match component.element.name.element.0.as_str() {
+                "asn1chef-special" if parser.module != REAL_IDENT.module => {
+                    Some("asn1chef-special")
+                }
+                "asn1chef-external" if parser.module != EXTERNAL_IDENT.module => {
+                    Some("asn1chef-external")
+                }
+                _ => None,
+            };
+            if let Some(forbidden_ident) = forbidden_ident {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!("{} is a forbidden identifier", forbidden_ident)),
+                    loc: component.element.name.loc,
+                });
+            }
+
             let ty = parse_type(
                 parser,
                 &component.element.ty,
@@ -77,6 +104,7 @@ fn parse_structure_components(
 
                     Ok(Box::new(values::parse_value(
                         parser,
+                        ParseValueAssignmentStage::NormalValues,
                         default,
                         &resolved_ty,
                     )?))
@@ -84,7 +112,7 @@ fn parse_structure_components(
                     Some(result) => Some(result?),
                     None => None,
                 },
-                optional: component.element.optional.is_some(),
+                optional: component.element.optional,
                 component_type: Box::new(ty),
             })
         })
@@ -171,10 +199,11 @@ fn parse_enumerated_type(
         let value = match &ast_item.element.num {
             Some(num) => EnumerationItemValue::Specified(values::parse_value(
                 parser,
+                ParseValueAssignmentStage::NormalValues,
                 num,
                 &ResolvedType {
-                    tag: Some(Tag::universal(TagType::Integer)),
-                    ty: BuiltinType::Integer(IntegerType { named_values: None }),
+                    tag: Some(Tag::universal(TagType::Enumerated)),
+                    ty: BuiltinType::Enumerated(Vec::new()),
                     constraint: None,
                 },
             )?),
@@ -206,11 +235,19 @@ fn parse_named_numbers(
             .map(|name| name.0.clone());
         let value = match &ast_named_number.element.num.element {
             AstIntegerValueReference::IntegerValue(int) => AstElement::new(
-                Value::BuiltinValue(BuiltinValue::Integer(values::parse_integer_value(int)?)),
+                TypedValue {
+                    resolved_type: ResolvedType::universal(TagType::Integer),
+                    value: ValueReference::BuiltinValue(BuiltinValue::Integer(
+                        values::parse_integer_value(int)?,
+                    )),
+                },
                 int.loc,
             ),
             AstIntegerValueReference::ValueReference(valref) => {
-                values::parse_valuereference(parser, valref)
+                values::parse_valuereference(parser, valref).map(|valref| TypedValue {
+                    resolved_type: ResolvedType::universal(TagType::Integer),
+                    value: ValueReference::Reference(valref),
+                })
             }
         };
         named_numbers.push(NamedNumber { name, value });
@@ -294,18 +331,11 @@ fn parse_builtin_type(
     }))
 }
 
-fn resolve_typereference(
+pub(crate) fn resolve_typereference(
     parser: &AstParser<'_>,
     typeref: &AstElement<AstTypeReference>,
 ) -> AstElement<QualifiedIdentifier> {
-    AstElement::new(
-        parser
-            .context
-            .lookup_module(&parser.module)
-            .expect("lookup_module")
-            .resolve_symbol(parser.context, &typeref.element.0),
-        typeref.loc,
-    )
+    parser.resolve_symbol(&typeref.as_ref().map(|typeref| &typeref.0))
 }
 
 #[derive(Debug, Clone)]
@@ -316,7 +346,7 @@ pub enum Parameter {
     },
     Value {
         value_type: TaggedType,
-        value: AstElement<Value>,
+        value: AstElement<TypedValue>,
     },
 }
 
@@ -326,18 +356,16 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
     parameters: &[(&String, &Parameter)],
 ) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<Parameter>)> {
     let name = resolve_typereference(parser, &typeref.element.name);
-    let parameterized_ast = match parser.context.lookup_parameterized_type(&name.element) {
-        Some(ast) => ast,
-        None => {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "undefined reference to parameterized type '{}'",
-                    name.element
-                )),
-                loc: name.loc,
-            })
-        }
-    };
+    let parameterized_ast = parser
+        .context
+        .lookup_parameterized_type(&name.element)
+        .ok_or_else(|| Error {
+            kind: ErrorKind::Ast(format!(
+                "undefined reference to parameterized type '{}'",
+                name.element
+            )),
+            loc: name.loc,
+        })?;
     let decl_list = &parameterized_ast
         .element
         .parameters
@@ -375,7 +403,12 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                         TypeContext::Contextless,
                     )?;
                     let resolved_type = value_type.resolve(parser.context)?;
-                    let value = values::parse_value(parser, &ast.element.0, &resolved_type)?;
+                    let value = values::parse_value(
+                        parser,
+                        ParseValueAssignmentStage::NormalValues,
+                        &ast.element.0,
+                        &resolved_type,
+                    )?;
                     Parameter::Value { value_type, value }
                 }
                 (param, decl) => {
@@ -417,6 +450,18 @@ fn parse_untagged_type(
                 &TypeAssignmentParseMode::Parameterized { parameters },
             )?
             .expect("parse_type_assignment for parameterized type returned None");
+            let decl = match decl {
+                ParsedTypeAssignment::DeclaredType(decl) => decl,
+                ParsedTypeAssignment::InformationObjectClass(_) => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "parameterized type cannot resolve to an information object class"
+                                .to_string(),
+                        ),
+                        loc: ty.loc,
+                    })
+                }
+            };
             let resolved = decl.ty.resolve(parser.context)?;
 
             UntaggedType::BuiltinType(resolved.ty)
@@ -436,6 +481,29 @@ fn parse_untagged_type(
             } else {
                 UntaggedType::Reference(resolve_typereference(parser, typeref))
             }
+        }
+        AstUntaggedType::ObjectClassFieldType(ast_ocf) => {
+            let class_type = ast_ocf
+                .element
+                .class_type
+                .as_ref()
+                .map(|class_type| class_type.0.clone());
+            let (kind, field) = match &ast_ocf.element.field.element {
+                AstFieldReference::TypeFieldReference(type_field) => (
+                    ObjectClassFieldReferenceKind::OpenType,
+                    type_field.element.0.as_ref().map(|name| name.0.clone()),
+                ),
+                AstFieldReference::ValueFieldReference(value_field) => (
+                    ObjectClassFieldReferenceKind::Value,
+                    value_field.element.0.as_ref().map(|name| name.0.clone()),
+                ),
+            };
+
+            UntaggedType::ObjectClassField(ObjectClassFieldReference {
+                class_type,
+                kind,
+                field,
+            })
         }
     };
     Ok(TaggedType {
@@ -523,7 +591,7 @@ pub fn parse_type(
             let (mut kind, source) = match &ast_tagged_type.element.kind {
                 Some(kind) => (
                     match kind.element {
-                        AstTagKind::TagKindExplicit(_) => TagKind::Explicit,
+                        AstTagKind::TagKindExplicit(_) => TagKind::Explicit(None),
                         AstTagKind::TagKindImplicit(_) => TagKind::Implicit,
                     },
                     TagSource::KindSpecified,
@@ -533,29 +601,46 @@ pub fn parse_type(
                         // AUTOMATIC does not always mean IMPLICIT
                         // see checks below
                         TagDefault::Automatic | TagDefault::Implicit => TagKind::Implicit,
-                        TagDefault::Explicit => TagKind::Explicit,
+                        TagDefault::Explicit => TagKind::Explicit(None),
                     },
                     TagSource::KindImplied,
                 ),
             };
 
-            // TODO: should this be type-resolved so that references to CHOICE types are checked?
-            if matches!(
-                &tagged_type.ty,
-                UntaggedType::BuiltinType(BuiltinType::Choice(_))
-            ) && kind == TagKind::Implicit
-            {
-                match source {
-                    TagSource::KindSpecified => {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(
-                                "CHOICE is not permitted to have IMPLICIT tagging".to_string(),
-                            ),
-                            loc: ast_tagged_type.element.kind.as_ref().unwrap().loc,
-                        })
+            if matches!(kind, TagKind::Implicit) {
+                // TODO: this should probably be type-resolved so that references to CHOICE types are checked
+                if matches!(
+                    &tagged_type.ty,
+                    UntaggedType::BuiltinType(BuiltinType::Choice(_))
+                ) {
+                    match source {
+                        TagSource::KindSpecified => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "CHOICE is not permitted to have IMPLICIT tagging".to_string(),
+                                ),
+                                loc: ast_tagged_type.element.kind.as_ref().unwrap().loc,
+                            })
+                        }
+                        _ => {
+                            kind = TagKind::Explicit(None);
+                        }
                     }
-                    _ => {
-                        kind = TagKind::Explicit;
+                } else if matches!(&tagged_type.ty,
+                    UntaggedType::ObjectClassField(ocf) if ocf.kind == ObjectClassFieldReferenceKind::OpenType
+                ) {
+                    match source {
+                        TagSource::KindSpecified => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "information object class open type field reference is not permitted to have IMPLICIT tagging".to_string(),
+                                ),
+                                loc: ast_tagged_type.element.kind.as_ref().unwrap().loc,
+                            })
+                        }
+                        _ => {
+                            kind = TagKind::Explicit(None);
+                        }
                     }
                 }
             }
@@ -592,15 +677,17 @@ pub fn parse_type(
                 }
                 _ => tagged_type.tag.or(match &tagged_type.ty {
                     UntaggedType::BuiltinType(builtin) => builtin.tag_type().map(Tag::universal),
-                    UntaggedType::Reference(_) => None,
+                    UntaggedType::Reference(_) | UntaggedType::ObjectClassField(_) => None,
                 }),
             };
             if let Some(tag) = &mut tag {
                 if matches!(
                     &tagged_type.ty,
                     UntaggedType::BuiltinType(BuiltinType::Choice(_))
-                ) {
-                    tag.kind = TagKind::Explicit;
+                ) || matches!(&tagged_type.ty,
+                        UntaggedType::ObjectClassField(field_ref) if field_ref.kind == ObjectClassFieldReferenceKind::OpenType)
+                {
+                    tag.kind = TagKind::Explicit(None);
                 }
             }
             TaggedType {
@@ -677,70 +764,114 @@ pub enum TypeAssignmentParseMode {
     Parameterized { parameters: Vec<Parameter> },
 }
 
+pub enum ParsedTypeAssignment {
+    DeclaredType(DeclaredType),
+    InformationObjectClass(InformationObjectClass),
+}
+
 pub fn parse_type_assignment(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
     mode: &TypeAssignmentParseMode,
-) -> Result<Option<(QualifiedIdentifier, DeclaredType)>> {
+) -> Result<Option<(QualifiedIdentifier, ParsedTypeAssignment)>> {
     let ast_name = &type_assignment.element.name;
     let name = ast_name.element.0.clone();
-    let parameter_names = parse_type_assignment_parameters(parser, type_assignment)?;
-
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
-    match mode {
-        TypeAssignmentParseMode::Normal => {
-            if parameter_names
-                .map(|parameters| parameters.len())
-                .unwrap_or(0)
-                > 0
-            {
-                Ok(None)
-            } else {
-                let ty = parse_type(
-                    parser,
-                    &type_assignment.element.ty,
-                    &[],
-                    TypeContext::Contextless,
-                )?;
 
-                Ok(Some((ident, DeclaredType { ty })))
+    match &type_assignment.element.subject.element {
+        AstTypeAssignmentSubject::Type(ast_type) => {
+            let parameter_names = parse_type_assignment_parameters(parser, type_assignment)?;
+
+            match mode {
+                TypeAssignmentParseMode::Normal => {
+                    if parameter_names
+                        .map(|parameters| parameters.len())
+                        .unwrap_or(0)
+                        > 0
+                    {
+                        Ok(None)
+                    } else {
+                        let ty = parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
+
+                        Ok(Some((
+                            ident,
+                            ParsedTypeAssignment::DeclaredType(DeclaredType { ty }),
+                        )))
+                    }
+                }
+                TypeAssignmentParseMode::Parameterized { parameters } => match parameter_names {
+                    Some(names) => {
+                        if names.len() != parameters.len() {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "type '{}' expects {} parameters, but found {}",
+                                    ident,
+                                    names.len(),
+                                    parameters.len(),
+                                )),
+                                loc: ast_name.loc,
+                            });
+                        }
+
+                        let named_parameters = names
+                            .iter()
+                            .map(|param| match param {
+                                ParameterDecl::Type { name } => name,
+                                ParameterDecl::Value { name, .. } => name,
+                            })
+                            .zip(parameters)
+                            .collect::<Vec<(&String, &Parameter)>>();
+                        let ty = parse_type(
+                            parser,
+                            ast_type,
+                            &named_parameters,
+                            TypeContext::Contextless,
+                        )?;
+
+                        Ok(Some((
+                            ident,
+                            ParsedTypeAssignment::DeclaredType(DeclaredType { ty }),
+                        )))
+                    }
+                    None => panic!(
+                        "type '{}' is not parameterized, but the parse mode is Parameterized",
+                        ident,
+                    ),
+                },
             }
         }
-        TypeAssignmentParseMode::Parameterized { parameters } => match parameter_names {
-            Some(names) => {
-                if names.len() != parameters.len() {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "type '{}' expects {} parameters, but found {}",
-                            ident,
-                            names.len(),
-                            parameters.len(),
-                        )),
-                        loc: ast_name.loc,
-                    });
-                }
-
-                let named_parameters = names
-                    .iter()
-                    .map(|param| match param {
-                        ParameterDecl::Type { name } => name,
-                        ParameterDecl::Value { name, .. } => name,
-                    })
-                    .zip(parameters)
-                    .collect::<Vec<(&String, &Parameter)>>();
-                let ty = parse_type(
-                    parser,
-                    &type_assignment.element.ty,
-                    &named_parameters,
-                    TypeContext::Contextless,
-                )?;
-
-                Ok(Some((ident, DeclaredType { ty })))
-            }
-            None => panic!(
-                "type '{}' is not parameterized, but the parse mode is Parameterized",
+        AstTypeAssignmentSubject::AbstractSyntax(_) => {
+            // clone ABSTRACT-SYNTAX instead of being a reference to it
+            // in the future, this should somehow be a distinct type
+            // maybe assign a unique ID?
+            let class = parser
+                .context
+                .lookup_information_object_class(&ABSTRACT_SYNTAX_IDENT)
+                .expect("missing definition of ABSTRACT-SYNTAX");
+            Ok(Some((
                 ident,
-            ),
-        },
+                ParsedTypeAssignment::InformationObjectClass(class.clone()),
+            )))
+        }
+        AstTypeAssignmentSubject::TypeIdentifier(_) => {
+            // clone TYPE-IDENTIFIER instead of being a reference to it
+            // in the future, this should somehow be a distinct type
+            // maybe assign a unique ID?
+            let class = parser
+                .context
+                .lookup_information_object_class(&TYPE_IDENTIFIER_IDENT)
+                .expect("missing definition of TYPE-IDENTIFIER");
+            Ok(Some((
+                ident,
+                ParsedTypeAssignment::InformationObjectClass(class.clone()),
+            )))
+        }
+        AstTypeAssignmentSubject::InformationObjectClass(ioc) => {
+            let class = class::parse_information_object_class(parser, ioc)?;
+            Ok(Some((
+                ident,
+                ParsedTypeAssignment::InformationObjectClass(class),
+            )))
+        }
     }
 }

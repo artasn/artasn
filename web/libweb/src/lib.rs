@@ -1,4 +1,4 @@
-use std::{num::ParseIntError, panic};
+use std::{collections::HashSet, num::ParseIntError, panic};
 
 use asn1chef::{
     compiler::{options::CompilerConfig, CompileError, Compiler, Context},
@@ -157,6 +157,27 @@ fn serialize_tagged_type(context: &Context, tagged_type: &TaggedType) -> JsValue
             let obj = serialize_builtin_type(context, builtin);
             (obj, "type")
         }
+        UntaggedType::ObjectClassField(ocf) => {
+            let obj = Object::new();
+            Reflect::set(
+                &obj,
+                &"class".into(),
+                &ocf.class_type.as_ref().element.into(),
+            )
+            .unwrap();
+            Reflect::set(&obj, &"field".into(), &ocf.field.as_ref().element.into()).unwrap();
+            Reflect::set(
+                &obj,
+                &"kind".into(),
+                &(match &ocf.kind {
+                    ObjectClassFieldReferenceKind::Value => "value",
+                    ObjectClassFieldReferenceKind::OpenType => "openType",
+                })
+                .into(),
+            )
+            .unwrap();
+            (obj.into(), "objectClassField")
+        }
     };
     Reflect::set(&obj, &"mode".into(), &mode.into()).unwrap();
     if let Some(tag) = tagged_type.tag.as_ref() {
@@ -194,7 +215,7 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
                     Reflect::set(
                         &obj,
                         &"defaultValue".into(),
-                        &serialize_valuereference(context, &default_value.element),
+                        &serialize_typed_value(context, &default_value.element),
                     )
                     .unwrap();
                 }
@@ -215,15 +236,15 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
     obj.into()
 }
 
-fn serialize_valuereference(context: &Context, valref: &Value) -> JsValue {
-    let (obj, mode) = match valref {
-        Value::Reference(reference) => {
+fn serialize_typed_value(context: &Context, typed_value: &TypedValue) -> JsValue {
+    let (obj, mode) = match &typed_value.value {
+        ValueReference::Reference(reference) => {
             let obj = serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(reference))
                 .expect("QualifiedIdentifier to_value");
             (obj, "reference")
         }
-        Value::BuiltinValue(value) => {
-            let obj = serialize_value(context, value);
+        ValueReference::BuiltinValue(value) => {
+            let obj = serialize_builtin_value(context, value, &typed_value.resolved_type);
             (obj, "value")
         }
     };
@@ -231,7 +252,11 @@ fn serialize_valuereference(context: &Context, valref: &Value) -> JsValue {
     obj
 }
 
-fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
+fn serialize_builtin_value(
+    context: &Context,
+    value: &BuiltinValue,
+    resolved_type: &ResolvedType,
+) -> JsValue {
     let obj = Object::new();
     Reflect::set(
         &obj,
@@ -252,10 +277,51 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
             let bigint = js_sys::BigInt::new(&int_str).expect("INTEGER -> bigint");
             ("value", bigint.into())
         }
-        BuiltinValue::BitString(bits) => {
-            let bits_str: JsValue = bits.to_string().into();
-            let bigint = js_sys::BigInt::new(&bits_str).expect("BIT STRING -> bigint");
-            ("value", bigint.into())
+        BuiltinValue::Enumerated(enum_value) => {
+            let name = 'block: {
+                match &enum_value.element.value {
+                    ValueReference::BuiltinValue(builtin) => {
+                        let num: i64 = match builtin {
+                            BuiltinValue::Integer(i) => i.try_into().unwrap(),
+                            other => panic!("ENUMERATED is {:#?}", other),
+                        };
+                        match &resolved_type.ty {
+                            BuiltinType::Enumerated(enumerated) => {
+                                for item in enumerated {
+                                    let item_num = match &item.value {
+                                        EnumerationItemValue::Implied(implied) => *implied,
+                                        EnumerationItemValue::Specified(specified) => {
+                                            let specified = specified.resolve(context).unwrap();
+                                            match &specified.value {
+                                                BuiltinValue::Integer(i) => i.try_into().unwrap(),
+                                                other => panic!(
+                                                    "EnumerationItemValue::Specified is {:#?}",
+                                                    other
+                                                ),
+                                            }
+                                        }
+                                    };
+                                    if num == item_num {
+                                        break 'block item.name.element.clone();
+                                    }
+                                }
+
+                                break 'block String::from("<unknown>");
+                            }
+                            other => panic!("ENUMERATED value type is {}", other),
+                        }
+                    }
+                    ValueReference::Reference(_) => panic!("ENUMERATED is reference"),
+                }
+            };
+            ("value", name.into())
+        }
+        BuiltinValue::BitString(bs) => {
+            let obj = Object::new();
+
+            Reflect::set(&obj, &"data".into(), &bs.to_string().into()).unwrap();
+            Reflect::set(&obj, &"unusedBits".into(), &bs.unused_bits.into()).unwrap();
+            ("value", obj.into())
         }
         BuiltinValue::OctetString(octet_string) => {
             ("value", hex::encode_upper(octet_string).into())
@@ -265,6 +331,7 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
             let oid = oid.resolve_oid(context).expect("resolve oid");
             ("value", oid.to_string().into())
         }
+        BuiltinValue::RealLiteral(lit) => ("value", lit.to_string().into()),
         BuiltinValue::Sequence(sequence) => {
             let components = Array::new();
             for component in &sequence.components {
@@ -273,7 +340,7 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
                 Reflect::set(
                     &obj,
                     &"value".into(),
-                    &serialize_valuereference(context, &component.value.element),
+                    &serialize_typed_value(context, &component.value.element),
                 )
                 .unwrap();
                 components.push(&obj.into());
@@ -283,7 +350,7 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
         BuiltinValue::SequenceOf(seq_of) => {
             let elements = Array::new();
             for ast_element in seq_of {
-                elements.push(&serialize_valuereference(context, &ast_element.element));
+                elements.push(&serialize_typed_value(context, &ast_element.element));
             }
             ("elements", elements.into())
         }
@@ -298,8 +365,11 @@ fn serialize_value(context: &Context, value: &BuiltinValue) -> JsValue {
 pub fn libweb_init() -> *mut LibWeb {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
+    let mut compiler = Compiler::new(CompilerConfig::default());
+    compiler.add_stdlib().unwrap();
+
     Box::into_raw(Box::new(LibWeb {
-        compiler: Compiler::new(CompilerConfig::default()),
+        compiler,
         context: Context::new(),
         buffer: Vec::with_capacity(4 * 1024),
     }))
@@ -367,15 +437,28 @@ pub unsafe fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
     serde_wasm_bindgen::to_value(&definitions).expect("Vec<ModuleIdentifier> to_value")
 }
 
+lazy_static::lazy_static! {
+    static ref IGNORE_MODULES: HashSet<module::ModuleIdentifier> = HashSet::from_iter(vec![
+        module::ModuleIdentifier::with_name(String::from("CharacterString")),
+        module::ModuleIdentifier::with_name(String::from("EmbeddedPDV")),
+        module::ModuleIdentifier::with_name(String::from("External")),
+        module::ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        module::ModuleIdentifier::with_name(String::from("Real")),
+    ]);
+}
+
 #[wasm_bindgen]
 pub unsafe fn compiler_list_types(libweb_ptr: *mut LibWeb) -> JsValue {
     let libweb = Box::from_raw(libweb_ptr);
     let types = Array::new();
-    for (ident, ty) in libweb.context.list_types() {
+    for (ident, ty_decl) in libweb.context.list_types() {
+        if IGNORE_MODULES.contains(&ident.module) {
+            continue;
+        }
         types.push(
             &TypeDefinition {
                 ident: QualifiedIdentifier::new(&ident),
-                ty: serialize_tagged_type(&libweb.context, ty),
+                ty: serialize_tagged_type(&libweb.context, &ty_decl.ty),
             }
             .serialize(),
         );
@@ -389,11 +472,14 @@ pub unsafe fn compiler_list_values(libweb_ptr: *mut LibWeb) -> JsValue {
     let libweb = Box::from_raw(libweb_ptr);
     let types = Array::new();
     for (ident, val) in libweb.context.list_values() {
+        if IGNORE_MODULES.contains(&ident.module) {
+            continue;
+        }
         types.push(
             &ValueDefinition {
                 ident: QualifiedIdentifier::new(&ident),
                 ty: serialize_tagged_type(&libweb.context, &val.ty),
-                value: serialize_valuereference(&libweb.context, &val.value.element),
+                value: serialize_typed_value(&libweb.context, &val.value.element),
             }
             .serialize(),
         );

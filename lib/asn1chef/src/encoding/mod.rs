@@ -28,10 +28,6 @@ fn u64_to_le_bytes(num: u64) -> ([u8; mem::size_of::<u64>()], usize) {
     }
 }
 
-
-
-
-
 #[derive(Debug, Clone, Copy)]
 pub struct TlvPos {
     pub start: usize,

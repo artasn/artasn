@@ -1,9 +1,8 @@
+use int_enum::IntEnum;
+use num::BigInt;
 use std::fmt::Display;
 
-use int_enum::IntEnum;
-
 mod simple;
-use num::BigInt;
 pub use simple::*;
 
 mod structured;
@@ -12,13 +11,16 @@ pub use structured::*;
 mod constraints;
 pub use constraints::*;
 
+mod class;
+pub use class::*;
+
 use crate::{
     compiler::{
         parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
     module::QualifiedIdentifier,
-    values::{BuiltinValue, Value, ValueResolve},
+    values::{BuiltinValue, TypedValue, ValueResolve},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,6 +39,21 @@ impl Display for Class {
             Self::ContextSpecific => "CONTEXT-SPECIFIC",
             Self::Private => "PRIVATE",
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TagKind {
+    Explicit(Option<(Class, u16)>),
+    Implicit,
+}
+
+impl Display for TagKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Explicit(_) => f.write_str("EXPLICIT"),
+            Self::Implicit => f.write_str("IMPLICIT"),
+        }
     }
 }
 
@@ -118,25 +135,11 @@ impl Tag {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum TagKind {
-    Explicit,
-    Implicit,
-}
-
-impl Display for TagKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Explicit => f.write_str("EXPLICIT"),
-            Self::Implicit => f.write_str("IMPLICIT"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum UntaggedType {
     BuiltinType(BuiltinType),
     Reference(AstElement<QualifiedIdentifier>),
+    ObjectClassField(ObjectClassFieldReference),
 }
 
 impl Display for UntaggedType {
@@ -144,6 +147,7 @@ impl Display for UntaggedType {
         match self {
             Self::BuiltinType(builtin) => builtin.fmt(f),
             Self::Reference(typeref) => typeref.element.fmt(f),
+            Self::ObjectClassField(ocf) => ocf.fmt(f),
         }
     }
 }
@@ -200,6 +204,14 @@ pub struct TaggedType {
 }
 
 impl TaggedType {
+    pub fn universal(tag_type: TagType) -> TaggedType {
+        TaggedType {
+            tag: Some(Tag::universal(tag_type)),
+            ty: UntaggedType::BuiltinType(BuiltinType::universal(tag_type)),
+            constraint: None,
+        }
+    }
+
     pub fn resolve(&self, context: &Context) -> Result<ResolvedType> {
         let mut tagged_ty = self;
         let mut tag = self.tag.as_ref();
@@ -235,6 +247,15 @@ impl TaggedType {
 
                     tagged_ty = &decl.ty;
                     tag = tag.or(tagged_ty.tag.as_ref());
+                }
+                UntaggedType::ObjectClassField(ocf) => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "expecting type, but found information object class field reference '{}'",
+                            ocf
+                        )),
+                        loc: ocf.class_type.loc,
+                    });
                 }
             }
         }
@@ -307,7 +328,7 @@ impl TagType {
 impl Display for TagType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Any => "<ANY>",
+            Self::Any => "ANY",
             Self::Boolean => "BOOLEAN",
             Self::Integer => "INTEGER",
             Self::BitString => "BIT STRING",
@@ -353,6 +374,7 @@ pub enum TypeForm {
 
 #[derive(Debug, Clone)]
 pub enum BuiltinType {
+    Any,
     Boolean,
     Integer(IntegerType),
     BitString(BitStringType),
@@ -378,6 +400,7 @@ pub enum BuiltinType {
 impl BuiltinType {
     pub fn universal(tag_type: TagType) -> BuiltinType {
         match tag_type {
+            TagType::Any => Self::Any,
             TagType::Boolean => Self::Boolean,
             TagType::Integer => Self::Integer(IntegerType { named_values: None }),
             TagType::BitString => Self::BitString(BitStringType { named_bits: None }),
@@ -400,6 +423,7 @@ impl BuiltinType {
 
     pub fn tag_type(&self) -> Option<TagType> {
         Some(match self {
+            Self::Any => TagType::Any,
             Self::Boolean => TagType::Boolean,
             Self::Integer(_) => TagType::Integer,
             Self::BitString(_) => TagType::BitString,
@@ -423,15 +447,9 @@ impl BuiltinType {
         })
     }
 
-    /// TODO: This needs a lot more checked. See https://stackoverflow.com/a/70213161.
-    pub fn form(&self, tag: &Tag) -> TypeForm {
+    pub fn form(&self) -> TypeForm {
         match self {
-            Self::Structure(_) | Self::StructureOf(_) => {
-                match (tag.class, TagType::try_from(tag.num)) {
-                    (Class::Universal, Ok(TagType::Real)) => TypeForm::Primitive,
-                    _ => TypeForm::Constructed,
-                }
-            }
+            Self::Structure(_) | Self::StructureOf(_) => TypeForm::Constructed,
             _ => TypeForm::Primitive,
         }
     }
@@ -439,13 +457,13 @@ impl BuiltinType {
     pub fn ensure_satisfied_by_value(
         &self,
         context: &Context,
-        valref: &AstElement<Value>,
+        valref: &AstElement<TypedValue>,
         constraint: Option<&Constraint>,
     ) -> Result<()> {
-        let value = valref.resolve(context)?;
+        let typed_value = valref.resolve(context)?;
 
         let size_ok = match constraint {
-            Some(constraint) => match value {
+            Some(constraint) => match &typed_value.value {
                 BuiltinValue::BitString(value) => constraint.includes_integer(
                     context,
                     ConstraintCheckMode::Size,
@@ -466,7 +484,7 @@ impl BuiltinType {
             None => None,
         };
         let value_ok = match constraint {
-            Some(constraint) => match value {
+            Some(constraint) => match &typed_value.value {
                 BuiltinValue::Boolean(_) | BuiltinValue::OctetString(_) => {
                     constraint.includes_value(context, valref)?
                 }
@@ -488,19 +506,26 @@ impl BuiltinType {
             _ => (),
         }
 
-        if let (Self::Structure(seq), BuiltinValue::Sequence(value)) = (self, value) {
+        if let (Self::Structure(seq), BuiltinValue::Sequence(value)) = (self, &typed_value.value) {
             for seq_component in &seq.components {
                 let val_component = value
                     .components
                     .iter()
                     .find(|val_component| val_component.name.element == seq_component.name.element);
                 if let Some(val_component) = val_component {
-                    let seq_ty = seq_component.component_type.resolve(context)?;
-                    seq_ty.ty.ensure_satisfied_by_value(
-                        context,
-                        &val_component.value,
-                        seq_component.component_type.constraint.as_ref(),
-                    )?;
+                    match &seq_component.component_type.ty {
+                        UntaggedType::ObjectClassField(ocf) => {
+                            // println!("need to verify OCF: {ocf:#?}");
+                        }
+                        _ => {
+                            let seq_ty = seq_component.component_type.resolve(context)?;
+                            seq_ty.ty.ensure_satisfied_by_value(
+                                context,
+                                &val_component.value,
+                                seq_component.component_type.constraint.as_ref(),
+                            )?;
+                        }
+                    }
                 } else if seq_component.default_value.is_none() && !seq_component.optional {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
@@ -523,5 +548,11 @@ impl Display for BuiltinType {
             Self::Choice(_) => f.write_str("CHOICE"),
             other => other.tag_type().unwrap().fmt(f),
         }
+    }
+}
+
+impl PartialEq for BuiltinType {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag_type() == other.tag_type()
     }
 }

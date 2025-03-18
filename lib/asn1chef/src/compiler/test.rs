@@ -75,11 +75,7 @@ fn test_encode_value(
     declared_value: &DeclaredValue,
     expected_der: &[u8],
 ) {
-    let tagged_type = declared_value
-        .ty
-        .resolve(context)
-        .expect("failed to resolve type");
-    let value = declared_value
+    let typed_value = declared_value
         .value
         .resolve(context)
         .expect("failed to resolve value");
@@ -87,8 +83,8 @@ fn test_encode_value(
     let mut buf = Vec::with_capacity(expected_der.len());
     let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
     let encoder = der_ts.get_codec().encoder.unwrap();
-    encoder(&der_ts, &mut buf, context, value, &tagged_type)
-        .unwrap_or_else(|_| panic!("failed to encode value '{}'", ident));
+    encoder(&der_ts, &mut buf, context, &typed_value)
+        .unwrap_or_else(|err| panic!("failed to encode value '{}': {}", ident, err.kind));
     let buf = buf.into_iter().rev().collect::<Vec<u8>>();
 
     assert!(
@@ -182,7 +178,7 @@ fn test_decode_value(
 ) {
     let mode = DecodeMode::SpecificType {
         source_ident: match &declared_value.ty.ty {
-            UntaggedType::BuiltinType(_) => {
+            UntaggedType::BuiltinType(_) | UntaggedType::ObjectClassField(_) => {
                 panic!("value type is not a typereference")
             }
             UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
@@ -373,4 +369,8 @@ json_compile_test!(
 json_compile_test!(
     test_parameter_violation,
     "../../test-data/compile/ParameterViolationTest"
+);
+json_compile_test!(
+    test_information_object_class,
+    "../../test-data/compile/classes/InformationObjectClassTest"
 );

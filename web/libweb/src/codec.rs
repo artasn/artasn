@@ -232,7 +232,7 @@ pub fn compiler_decode_value(
                     return format!("no such type: {}", ident).into();
                 }
             };
-            let resolved = match source.resolve(&libweb.context) {
+            let resolved = match source.ty.resolve(&libweb.context) {
                 Ok(resolved) => resolved,
                 Err(err) => {
                     let _ = Box::into_raw(libweb);
@@ -303,30 +303,24 @@ pub unsafe fn compiler_encode_value(
     );
     let mut libweb = Box::from_raw(libweb_ptr);
     if let Some(value_decl) = libweb.context.lookup_value(&ident) {
-        match value_decl.ty.resolve(&libweb.context) {
-            Ok(ty) => match value_decl.value.resolve(&libweb.context) {
-                Ok(value) => {
-                    libweb.buffer.clear();
-                    match encoder(ts, &mut libweb.buffer, &libweb.context, value, &ty) {
-                        Ok(()) => {
-                            let mut reverse = Vec::with_capacity(libweb.buffer.len());
-                            for b in libweb.buffer.iter().rev() {
-                                reverse.push(*b);
-                            }
-                            let _ = Box::into_raw(libweb);
-                            hex::encode_upper(&reverse)
+        match value_decl.value.resolve(&libweb.context) {
+            Ok(value) => {
+                libweb.buffer.clear();
+                match encoder(ts, &mut libweb.buffer, &libweb.context, &value) {
+                    Ok(()) => {
+                        let mut reverse = Vec::with_capacity(libweb.buffer.len());
+                        for b in libweb.buffer.iter().rev() {
+                            reverse.push(*b);
                         }
-                        Err(err) => {
-                            let _ = Box::into_raw(libweb);
-                            err.kind.to_string()
-                        }
+                        let _ = Box::into_raw(libweb);
+                        hex::encode_upper(&reverse)
+                    }
+                    Err(err) => {
+                        let _ = Box::into_raw(libweb);
+                        err.kind.to_string()
                     }
                 }
-                Err(err) => {
-                    let _ = Box::into_raw(libweb);
-                    err.kind.to_string()
-                }
-            },
+            }
             Err(err) => {
                 let _ = Box::into_raw(libweb);
                 err.kind.to_string()

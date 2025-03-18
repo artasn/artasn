@@ -193,13 +193,7 @@ fn ber_encode_structure(
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
-    resolved_type: &ResolvedType,
 ) -> Result<()> {
-    let ty_components = match &resolved_type.ty {
-        BuiltinType::Structure(structure) => &structure.components,
-        _ => unreachable!(),
-    };
-
     // ast.rs guarantees all components in SEQUENCE/SET type are provided in value,
     // and that the value provides only components in the SEQUENCE/SET type,
     // and that the component values are in the same order as in the type definition
@@ -208,14 +202,8 @@ fn ber_encode_structure(
         if component.is_default {
             continue;
         }
-        let value = component.value.resolve(context)?;
-        let value_ty = ty_components
-            .iter()
-            .find(|ty_component| ty_component.name.element == component.name.element)
-            .expect("find type component matching value component for SEQUENCE/SET")
-            .component_type
-            .resolve(context)?;
-        ber_encode_value(buf, context, value, &value_ty)?;
+        let typed_value = component.value.resolve(context)?;
+        ber_encode_value(buf, context, &typed_value)?;
     }
 
     Ok(())
@@ -226,7 +214,6 @@ fn ber_encode_external(
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
-    resolved_type: &ResolvedType,
 ) -> Result<()> {
     if components
         .iter()
@@ -234,95 +221,77 @@ fn ber_encode_external(
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
-        ber_encode_structure(buf, context, components, resolved_type)?;
+        ber_encode_structure(buf, context, components)?;
     } else {
         let data_value = components
             .iter()
             .find(|component| component.name.element.as_str() == "data-value")
             .expect("missing data-value");
         let data_value = data_value.value.resolve(context)?;
-        ber_encode_value(
-            buf,
-            context,
-            data_value,
-            &ResolvedType {
-                tag: Some(Tag::new(
-                    Class::ContextSpecific,
-                    1,
-                    TagKind::Implicit,
-                    TagSource::KindSpecified,
-                )), // this is the tag for the 'octet-aligned' variant of 'encoding CHOICE { ... }'
-                ty: BuiltinType::OctetString,
-                constraint: None,
-            },
-        )?;
+        ber_encode_value(buf, context, &data_value)?;
 
         if let Some(data_value_descriptor) = components
             .iter()
             .find(|component| component.name.element.as_str() == "data-value-descriptor")
         {
             let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
-            ber_encode_value(
-                buf,
-                context,
-                data_value_descriptor,
-                &ResolvedType::universal(TagType::ObjectDescriptor),
-            )?;
+            ber_encode_value(buf, context, &data_value_descriptor)?;
         }
 
-        let (direct_reference, indirect_reference) = match &components[0].value.resolve(context)? {
-            BuiltinValue::Choice(choice) => {
-                let alternative_value = choice.value.resolve(context)?;
-                match choice.alternative.element.as_str() {
-                    "syntax" => (Some(alternative_value), None),
-                    "presentation-context-id" => (None, Some(alternative_value)),
-                    "context-negotiation" => match alternative_value {
-                        BuiltinValue::Sequence(seq) => {
-                            let presentation_context_id =
-                                seq.components[0].value.resolve(context)?;
-                            let transfer_syntax = seq.components[1].value.resolve(context)?;
-                            (Some(transfer_syntax), Some(presentation_context_id))
-                        }
+        let (direct_reference, indirect_reference) =
+            match &components[0].value.resolve(context)?.value {
+                BuiltinValue::Choice(choice) => {
+                    let alternative_value = choice.value.resolve(context)?;
+                    match choice.alternative.element.as_str() {
+                        "syntax" => (Some(alternative_value), None),
+                        "presentation-context-id" => (None, Some(alternative_value)),
+                        "context-negotiation" => match &alternative_value.value {
+                            BuiltinValue::Sequence(seq) => {
+                                let presentation_context_id =
+                                    seq.components[0].value.resolve(context)?;
+                                let transfer_syntax = seq.components[1].value.resolve(context)?;
+                                (Some(transfer_syntax), Some(presentation_context_id))
+                            }
+                            _ => unreachable!(),
+                        },
                         _ => unreachable!(),
-                    },
-                    _ => unreachable!(),
+                    }
                 }
-            }
-            _ => unreachable!(),
-        };
+                _ => unreachable!(),
+            };
         if let Some(indirect_reference) = indirect_reference {
-            ber_encode_value(
-                buf,
-                context,
-                indirect_reference,
-                &ResolvedType::universal(TagType::Integer),
-            )?;
+            ber_encode_value(buf, context, &indirect_reference)?;
         }
         if let Some(direct_reference) = direct_reference {
-            ber_encode_value(
-                buf,
-                context,
-                direct_reference,
-                &ResolvedType::universal(TagType::ObjectIdentifier),
-            )?;
+            ber_encode_value(buf, context, &direct_reference)?;
         }
     }
     Ok(())
 }
 
-fn ber_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
+fn ber_encode_tag(
+    buf: &mut Vec<u8>,
+    tag: &Tag,
+    ctx: TagContext<'_>,
+    form_override: Option<TypeForm>,
+) {
     let class = match tag.class {
         Class::Universal => 0b00,
         Class::Application => 0b01,
         Class::ContextSpecific => 0b10,
         Class::Private => 0b11,
     };
-    let form = match (ctx.is_outer_explicit, ctx.ty.form(tag)) {
-        // if not the outer tag of an EXPLICIT definition and is primitive, form = 0
-        (false, TypeForm::Primitive) => 0b0,
-        // if either the outer tag of an EXPLICIT definition or is constructed, form = 1
-        _ => 0b1,
-    };
+    let form = form_override
+        .map(|form| match form {
+            TypeForm::Primitive => 0b0,
+            TypeForm::Constructed => 0b1,
+        })
+        .unwrap_or_else(|| match (ctx.is_outer_explicit, ctx.ty.form()) {
+            // if not the outer tag of an EXPLICIT definition and is primitive, form = 0
+            (false, TypeForm::Primitive) => 0b0,
+            // if either the outer tag of an EXPLICIT definition or is constructed, form = 1
+            _ => 0b1,
+        });
     if tag.num >= 31 {
         write_vlq(tag.num as u64, buf);
     }
@@ -334,6 +303,28 @@ fn ber_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
     buf.push(class << 6 | form << 5 | msb_tag);
 }
 
+fn is_real_type(ty: &BuiltinType) -> bool {
+    match ty {
+        BuiltinType::Structure(structure) => structure
+            .components
+            .iter()
+            .find(|component| component.name.element.as_str() == "asn1chef-special")
+            .is_some(),
+        _ => false,
+    }
+}
+
+fn is_external_type(ty: &BuiltinType) -> bool {
+    match ty {
+        BuiltinType::Structure(structure) => structure
+            .components
+            .iter()
+            .find(|component| component.name.element.as_str() == "asn1chef-external")
+            .is_some(),
+        _ => false,
+    }
+}
+
 /// Reverse-encodes the value, including its tag.
 /// The resulting bytes are in reverse order.
 /// The bytes of the final output must be reversed to be valid DER.
@@ -342,11 +333,12 @@ fn ber_encode_tag(buf: &mut Vec<u8>, tag: &Tag, ctx: TagContext<'_>) {
 pub fn ber_encode_value(
     buf: &mut Vec<u8>,
     context: &Context,
-    value: &BuiltinValue,
-    resolved_type: &ResolvedType,
+    typed_value: &ResolvedValue,
 ) -> Result<()> {
+    let resolved_type = &typed_value.ty;
+
     let start_len = buf.len();
-    match value {
+    match &typed_value.value {
         BuiltinValue::Boolean(b) => {
             if *b {
                 buf.push(0xff);
@@ -368,7 +360,7 @@ pub fn ber_encode_value(
         }
         BuiltinValue::BitString(bit_string) => {
             buf.extend(bit_string.data.iter().rev());
-            buf.push(bit_string.unused_bits); 
+            buf.push(bit_string.unused_bits);
         }
         BuiltinValue::OctetString(octet_string) => buf.extend(octet_string.iter().rev()),
         BuiltinValue::Null => (),
@@ -405,7 +397,7 @@ pub fn ber_encode_value(
         }
         BuiltinValue::Enumerated(enumerated) => {
             let resolved = enumerated.resolve(context)?;
-            let num = match resolved {
+            let num = match &resolved.value {
                 BuiltinValue::Integer(num) => num.clone(),
                 other => {
                     return Err(Error {
@@ -423,86 +415,67 @@ pub fn ber_encode_value(
             buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
         }
         BuiltinValue::Sequence(structure) | BuiltinValue::Set(structure) => {
-            let tag = resolved_type
-                .tag
-                .as_ref()
-                .expect("SEQUENCE or SET without a tag");
-            match (tag.class, TagType::try_from(tag.num)) {
-                (Class::Universal, Ok(TagType::Real)) => {
-                    let special = structure
-                        .components
-                        .iter()
-                        .find(|component| component.name.element.as_str() == "asn1chef-special");
-                    if let Some(special) = special {
-                        match special.value.resolve(context)? {
-                            BuiltinValue::Enumerated(enumerated) => {
-                                match enumerated.resolve(context)? {
-                                    BuiltinValue::Integer(int) => {
-                                        let int: u32 =
-                                            int.try_into().expect("SpecialReal is out of bounds");
-                                        if int == 0 {
-                                            // PLUS-INFINITY
-                                            buf.push(0x40);
-                                        } else if int == 1 {
-                                            // MINUS-INFINITY
-                                            buf.push(0x41);
-                                        } else if int == 2 {
-                                            // NOT-A-NUMBER
-                                            buf.push(0x42);
-                                        } else {
-                                            unreachable!();
-                                        }
-                                    }
-                                    _ => unreachable!(),
-                                }
+            if is_real_type(&typed_value.ty.ty) {
+                let special = structure
+                    .components
+                    .iter()
+                    .find(|component| component.name.element.as_str() == "asn1chef-special");
+                if let Some(special) = special {
+                    match &special.value.resolve(context)?.value {
+                        BuiltinValue::Integer(int) => {
+                            let int: u32 = int.try_into().expect("SpecialReal is out of bounds");
+                            if int == 0 {
+                                // PLUS-INFINITY
+                                buf.push(0x40);
+                            } else if int == 1 {
+                                // MINUS-INFINITY
+                                buf.push(0x41);
+                            } else if int == 2 {
+                                // NOT-A-NUMBER
+                                buf.push(0x42);
+                            } else {
+                                unreachable!();
                             }
-                            _ => unreachable!(),
                         }
-                    } else {
-                        macro_rules! to_int {
-                            ( $component:expr) => {{
-                                let component = &$component;
-                                match component.value.resolve(context)? {
-                                    BuiltinValue::Integer(int) => int.clone(),
-                                    _ => unreachable!(),
-                                }
-                            }};
-                        }
-
-                        let mantissa = to_int!(structure.components[0]);
-                        let base = to_int!(structure.components[1]);
-                        let exponent = to_int!(structure.components[2]);
-
-                        ber_encode_real(
-                            buf,
-                            mantissa,
-                            base.try_into().expect("base is out of bounds"),
-                            exponent,
-                        );
+                        _ => unreachable!(),
                     }
+                } else {
+                    macro_rules! to_int {
+                        ( $component:expr) => {{
+                            let component = &$component;
+                            match &component.value.resolve(context)?.value {
+                                BuiltinValue::Integer(int) => int.clone(),
+                                _ => unreachable!(),
+                            }
+                        }};
+                    }
+
+                    let mantissa = to_int!(structure.components[0]);
+                    let base = to_int!(structure.components[1]);
+                    let exponent = to_int!(structure.components[2]);
+
+                    ber_encode_real(
+                        buf,
+                        mantissa,
+                        base.try_into().expect("base is out of bounds"),
+                        exponent,
+                    );
                 }
-                (Class::Universal, Ok(TagType::External)) => {
-                    ber_encode_external(buf, context, &structure.components, resolved_type)?
-                }
-                _ => {
-                    ber_encode_structure(buf, context, &structure.components, resolved_type)?;
-                }
+            } else if is_external_type(&typed_value.ty.ty) {
+                ber_encode_external(buf, context, &structure.components)?
+            } else {
+                ber_encode_structure(buf, context, &structure.components)?;
             }
         }
         BuiltinValue::SequenceOf(structure) | BuiltinValue::SetOf(structure) => {
-            let component_type = match &resolved_type.ty {
-                BuiltinType::StructureOf(structure_ty) => &structure_ty.component_type,
-                other => unreachable!("value is SequenceOf but type is {:?}", other),
-            };
-            let component_type = component_type.resolve(context)?;
             for element in structure.iter().rev() {
                 let resolved = element.resolve(context)?;
-                ber_encode_value(buf, context, resolved, &component_type)?;
+                ber_encode_value(buf, context, &resolved)?;
             }
         }
         BuiltinValue::Choice(choice) => {
             let value = choice.value.resolve(context)?;
-            ber_encode_value(buf, context, value, &choice.alternative_type)?;
+            ber_encode_value(buf, context, &value)?;
         }
         BuiltinValue::CharacterString(tag_type, str) => {
             ber_encode_character_string(buf, *tag_type, str);
@@ -540,12 +513,11 @@ pub fn ber_encode_value(
                 })
                 .expect("CONTAINING value for type without constraint")
                 .expect("CONTAINING value for type without contents constraint");
-            let contained_type = constraint.ty.resolve(context)?;
 
             let ts = match &constraint.encoded_by {
                 Some(encoded_by) => {
                     let resolved = encoded_by.resolve(context)?;
-                    match resolved {
+                    match &resolved.value {
                         BuiltinValue::ObjectIdentifier(oid) => {
                             let oid = oid.resolve_oid(context)?;
                             match TransferSyntax::get_by_oid(&oid) {
@@ -583,7 +555,7 @@ pub fn ber_encode_value(
 
             let contained_value = containing.value.resolve(context)?;
             let encoder = ts.get_codec().encoder.unwrap();
-            encoder(ts, buf, context, contained_value, &contained_type)?;
+            encoder(ts, buf, context, &contained_value)?;
 
             match &resolved_type.ty {
                 // write the bit string unused bits count
@@ -597,29 +569,46 @@ pub fn ber_encode_value(
     let tag = resolved_type.tag.as_ref();
     if let Some(tag) = tag {
         let end_len = buf.len();
-        if tag.kind == TagKind::Explicit {
-            if let Some(tag_type) = resolved_type.ty.tag_type() {
+        if let TagKind::Explicit(inner_tag) = &tag.kind {
+            if let Some((class, num)) = inner_tag.or(resolved_type
+                .ty
+                .tag_type()
+                .map(|tag_type| (Class::Universal, tag_type as u16)))
+            {
                 write_tlv_len((end_len - start_len) as u64, buf);
                 ber_encode_tag(
                     buf,
-                    &Tag::universal(tag_type),
+                    &Tag {
+                        class,
+                        num,
+                        kind: TagKind::Implicit,
+                        source: TagSource::TagImplied,
+                    },
                     TagContext {
                         is_outer_explicit: false,
                         ty: &resolved_type.ty,
                     },
+                    None,
                 );
             }
         }
 
         let end_len = buf.len();
         write_tlv_len((end_len - start_len) as u64, buf);
+
+        let form_override = if is_real_type(&typed_value.ty.ty) {
+            Some(TypeForm::Primitive)
+        } else {
+            None
+        };
         ber_encode_tag(
             buf,
             tag,
             TagContext {
-                is_outer_explicit: tag.kind == TagKind::Explicit,
+                is_outer_explicit: matches!(tag.kind, TagKind::Explicit(_)),
                 ty: &resolved_type.ty,
             },
+            form_override,
         );
     } else {
         assert!(

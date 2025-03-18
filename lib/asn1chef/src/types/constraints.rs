@@ -5,7 +5,7 @@ use crate::{
         parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
-    values::{BuiltinValue, Value, ValueResolve},
+    values::{BuiltinValue, TypedValue, ValueResolve},
 };
 
 use super::TaggedType;
@@ -14,7 +14,7 @@ macro_rules! resolve_integer {
     ( $context:expr, $constant:expr ) => {{
         let context = $context;
         let constant = $constant.resolve(context)?;
-        match constant {
+        match constant.value {
             BuiltinValue::Integer(integer) => integer,
             other => {
                 return Err(Error {
@@ -64,17 +64,24 @@ pub struct Constraint {
 
 #[derive(Debug, Clone)]
 pub enum SubtypeElement {
-    SingleValue(AstElement<Value>),
+    SingleValue(AstElement<TypedValue>),
     ValueRange(ValueRange),
     Size(Constraint),
     InnerType(InnerTypeConstraints),
     Contents(ContentsConstraint),
+    Table(TableConstraint),
+}
+
+#[derive(Debug, Clone)]
+pub struct TableConstraint {
+    pub set_name: AstElement<String>,
+    pub field_ref: Option<AstElement<String>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ContentsConstraint {
     pub ty: TaggedType,
-    pub encoded_by: Option<AstElement<Value>>,
+    pub encoded_by: Option<AstElement<TypedValue>>,
 }
 
 #[derive(Debug, Clone)]
@@ -134,15 +141,15 @@ impl ValueRange {
 
 #[derive(Debug, Clone)]
 pub enum RangeLowerBound {
-    Eq(AstElement<Value>),
-    Gt(AstElement<Value>),
+    Eq(AstElement<TypedValue>),
+    Gt(AstElement<TypedValue>),
     Min,
 }
 
 #[derive(Debug, Clone)]
 pub enum RangeUpperBound {
-    Eq(AstElement<Value>),
-    Lt(AstElement<Value>),
+    Eq(AstElement<TypedValue>),
+    Lt(AstElement<TypedValue>),
     Max,
 }
 
@@ -153,6 +160,16 @@ pub enum ConstraintCheckMode {
 }
 
 impl Constraint {
+    pub fn find<F: Fn(&SubtypeElement) -> bool>(&self, f: F) -> Option<&SubtypeElement> {
+        self.flatten().iter().find_map(|subtype| {
+            if f(&subtype.element) {
+                Some(&subtype.element)
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn flatten(&self) -> Vec<&AstElement<SubtypeElement>> {
         self.elements.iter().flatten().collect()
     }
@@ -174,13 +191,13 @@ impl Constraint {
                     match &mut bounds {
                         Some((lower_bound, upper_bound)) => {
                             match lower_bound {
-                                Some(lower_bound) if single_value < lower_bound => {
+                                Some(lower_bound) if &single_value < lower_bound => {
                                     *lower_bound = single_value.clone();
                                 }
                                 _ => (),
                             };
                             match upper_bound {
-                                Some(upper_bound) if single_value > upper_bound => {
+                                Some(upper_bound) if &single_value > upper_bound => {
                                     *upper_bound = single_value.clone();
                                 }
                                 _ => (),
@@ -283,7 +300,7 @@ impl Constraint {
     pub fn includes_value(
         &self,
         context: &Context,
-        value: &AstElement<Value>,
+        value: &AstElement<TypedValue>,
     ) -> Result<Option<bool>> {
         let mut has_matching_constraint = false;
 
@@ -311,7 +328,7 @@ impl Constraint {
     ) -> Result<Option<bool>> {
         macro_rules! cmp_constant {
             ( $value:expr, $op:tt, $constant:expr ) => {{
-                $value $op resolve_integer!(context, $constant)
+                $value $op &resolve_integer!(context, $constant)
             }};
         }
 
@@ -387,7 +404,11 @@ impl Constraint {
 mod test {
     use crate::{
         compiler::{
-            ast::{self, types::TypeAssignmentParseMode, AstParser},
+            ast::{
+                self,
+                types::{ParsedTypeAssignment, TypeAssignmentParseMode},
+                AstParser,
+            },
             options::CompilerConfig,
             parser::*,
             Context,
@@ -442,6 +463,12 @@ mod test {
                     )
                     .unwrap()
                     .unwrap();
+                    let tagged_type = match tagged_type {
+                        ParsedTypeAssignment::DeclaredType(decl) => decl,
+                        ParsedTypeAssignment::InformationObjectClass(_) => {
+                            panic!("unexpected CLASS")
+                        }
+                    };
                     context.register_type(ident.clone(), tagged_type);
                     ident
                 };

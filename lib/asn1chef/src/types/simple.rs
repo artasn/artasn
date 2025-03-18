@@ -1,4 +1,4 @@
-use crate::{compiler::parser::AstElement, values::Value};
+use crate::{compiler::parser::AstElement, values::TypedValue};
 
 #[derive(Debug, Clone)]
 pub struct IntegerType {
@@ -8,7 +8,7 @@ pub struct IntegerType {
 #[derive(Debug, Clone)]
 pub struct NamedNumber {
     pub name: AstElement<String>,
-    pub value: AstElement<Value>,
+    pub value: AstElement<TypedValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ pub type EnumeratedType = Vec<EnumerationItem>;
 
 #[derive(Debug, Clone)]
 pub enum EnumerationItemValue {
-    Specified(AstElement<Value>),
+    Specified(AstElement<TypedValue>),
     Implied(i64),
 }
 

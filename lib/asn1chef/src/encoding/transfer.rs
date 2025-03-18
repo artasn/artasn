@@ -1,8 +1,7 @@
 use super::*;
 use crate::{
     compiler::{parser::Result, Context},
-    types::ResolvedType,
-    values::{BuiltinValue, Oid},
+    values::{Oid, ResolvedValue},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -45,8 +44,7 @@ type EncodeFunc = fn(
     syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
     context: &Context,
-    value: &BuiltinValue,
-    value_type: &ResolvedType,
+    typed_value: &ResolvedValue,
 ) -> Result<()>;
 type DecodeFunc = fn(
     syntax: &TransferSyntax,
@@ -287,14 +285,13 @@ fn ber_encode_value(
     syntax: &TransferSyntax,
     buf: &mut Vec<u8>,
     context: &Context,
-    value: &BuiltinValue,
-    value_type: &ResolvedType,
+    typed_value: &ResolvedValue,
 ) -> Result<()> {
     match syntax {
         TransferSyntax::Basic(_) => (),
         other => panic!("illegal TransferSyntax (expecting Basic): {:?}", other),
     };
-    ber::ber_encode_value(buf, context, value, value_type)
+    ber::ber_encode_value(buf, context, typed_value)
 }
 
 fn ber_decode_value(

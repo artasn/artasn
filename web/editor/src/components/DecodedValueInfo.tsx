@@ -1,6 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
-import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, TagClass, TlvPos, TlvTag, TransferSyntax } from '../wasm-definitions';
+import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, QualifiedIdentifier, TagClass, TlvPos, TlvTag, TransferSyntax } from '../wasm-definitions';
 import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
 import { ChevronRight } from '@mui/icons-material';
@@ -8,11 +8,12 @@ import { ChevronRight } from '@mui/icons-material';
 export type DecodedValueViewMode = 'tlv' | 'components';
 
 export interface DecodedValueInfoProps {
+    typeIdent?: QualifiedIdentifier;
     encodedValue: string;
     viewMode: DecodedValueViewMode;
 }
 
-const DecodedValueInfo = ({ encodedValue, viewMode }: DecodedValueInfoProps) => {
+const DecodedValueInfo = ({ typeIdent, encodedValue, viewMode }: DecodedValueInfoProps) => {
     const [values, setValues] = useState<{
         values: DecodedValue[]
     } | {
@@ -22,17 +23,18 @@ const DecodedValueInfo = ({ encodedValue, viewMode }: DecodedValueInfoProps) => 
     });
 
     useEffect(() => {
-        // const options = { mode: 'contextless' };
-        const options: DecodeOptions = {
-            mode: 'specificType',
-            ident: {
-                module: {
-                    name: 'CycleB',
-                    oid: '2.1337.1.1.66'
-                },
-                name: 'FileHeader',
-            }
-        };
+        let options: DecodeOptions;
+        if (typeIdent) {
+            options = {
+                mode: 'specificType',
+                ident: typeIdent,
+            };
+        } else {
+            options = {
+                mode: 'contextless',
+            };
+        }
+
         compiler.decodeValue(TransferSyntax.DER, encodedValue, options).then(res => {
             if (typeof res === 'string') {
                 setValues({
@@ -235,7 +237,7 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
                             &nbsp;
                         </>
                     )}
-                    <span style={{ color: LITERAL_COLOR }}>{kind.data.toString()}</span>
+                    <span style={{ color: LITERAL_COLOR }}>{kind.data}</span>
                 </>
             );
         case 'OBJECT IDENTIFIER':
@@ -272,7 +274,7 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
             return 'DATE';
         case 'TIME-OF-DAY':
             // TODO
-            return 'TIME-OF-DAY';    
+            return 'TIME-OF-DAY';
         case 'DATE-TIME':
             // TODO
             return 'DATE-TIME';

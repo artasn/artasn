@@ -1,14 +1,51 @@
-use crate::{compiler::parser::AstElement, values::Value};
+use std::fmt::Display;
 
-use super::{TagType, TaggedType};
+use crate::{
+    compiler::{
+        parser::{AstElement, Result},
+        Context,
+    },
+    values::TypedValue,
+};
+
+use super::{TagType, TaggedType, UntaggedType};
 
 #[derive(Debug, Clone)]
 pub struct StructureComponent {
-    // Left blank for SequenceOf/SetOf
     pub name: AstElement<String>,
     pub component_type: Box<TaggedType>,
     pub optional: bool,
-    pub default_value: Option<Box<AstElement<Value>>>,
+    pub default_value: Option<Box<AstElement<TypedValue>>>,
+}
+
+impl StructureComponent {
+    pub fn resolve_possible_types(&self, _context: &Context) -> Result<Vec<TaggedType>> {
+        match &self.component_type.ty {
+            UntaggedType::ObjectClassField(_) => todo!("resolve ObjectClassField possible types"),
+            _ => Ok(vec![*self.component_type.clone()]),
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct ObjectClassFieldReference {
+    pub class_type: AstElement<String>,
+    pub kind: ObjectClassFieldReferenceKind,
+    pub field: AstElement<String>,
+}
+
+impl Display for ObjectClassFieldReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.class_type.element)?;
+        f.write_str(".&")?;
+        f.write_str(&self.field.element)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObjectClassFieldReferenceKind {
+    OpenType,
+    Value,
 }
 
 #[derive(Debug, Clone)]

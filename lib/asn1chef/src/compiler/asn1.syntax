@@ -1,9 +1,10 @@
 extern TypeReference
-extern EncodingReference
+extern UppercaseReference
 extern ValueReference
 extern Number
 extern StringLiteral
 extern BracedTokenStream
+extern SyntaxTokenLiteral
 
 rule Program {
     captures {
@@ -33,7 +34,7 @@ rule ModuleHeader {
     captures {
         name = TypeReference
         oid = optional: ModuleIdentifier
-        encoding_reference = optional: EncodingReference
+        encoding_reference = optional: UppercaseReference
         tag_default = optional: TagDefault
         extension_default = optional: ExtensionDefault
         exports = optional: Exports
@@ -44,7 +45,7 @@ rule ModuleHeader {
     oid = optional ModuleIdentifier
     keyword DEFINITIONS
     optional {
-        encoding_reference = EncodingReference
+        encoding_reference = UppercaseReference
         keyword INSTRUCTIONS
     }
     tag_default = optional TagDefault
@@ -305,7 +306,7 @@ rule ParameterizedReference {
 
 variant Reference = TypeReference | ValueReference;
 
-variant Assignment = TypeAssignment | ValueAssignment;
+variant Assignment = ObjectClassSetAssignment | TypeAssignment | ValueAssignment;
 
 rule ParameterDeclList {
     captures {
@@ -343,7 +344,7 @@ rule TypeAssignment {
     captures {
         name = TypeReference
         parameters = optional: ParameterDeclList
-        ty = Type
+        subject = TypeAssignmentSubject
     }
     name = TypeReference
     optional {
@@ -351,8 +352,14 @@ rule TypeAssignment {
     }
     operator ::=
     persist
-    ty = Type
+    subject = TypeAssignmentSubject
 }
+
+variant TypeAssignmentSubject = TypeIdentifier {
+    keyword TYPE-IDENTIFIER
+} | AbstractSyntax {
+    keyword ABSTRACT-SYNTAX
+} | InformationObjectClass | Type;
 
 rule Constraint {
     captures {
@@ -398,7 +405,7 @@ rule SubtypeElementSet {
     return elements
 }
 
-variant SubtypeElement = ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
+variant SubtypeElement = TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -414,6 +421,23 @@ variant SubtypeElement = ContentsConstraint | InnerTypeConstraints | SizeConstra
     value = Value
     return value
 };
+
+rule TableConstraint {
+    captures {
+        set_name = TypeReference
+        field_ref = optional: ValueReference
+    }
+    operator {
+    persist
+    set_name = TypeReference
+    operator }
+    optional {
+        operator {
+        operator @
+        field_ref = ValueReference
+        operator }
+    }
+}
 
 variant ContentsConstraint = EncodedBy {
     captures {
@@ -690,7 +714,7 @@ rule StructureComponent {
         name = ValueReference
         ty = Type
         default = optional: Value
-        optional = optional: Optional
+        optional = bool
     }
     name = ValueReference
     ty = Type
@@ -700,12 +724,20 @@ rule StructureComponent {
         default = Value
     }
     optional {
-        optional = Optional
+        keyword OPTIONAL
+        optional = true
     }
 }
 
-rule Optional {
-    keyword OPTIONAL
+rule ObjectClassFieldType {
+    captures {
+        class_type = UppercaseReference
+        field = FieldReference
+    }
+    class_type = UppercaseReference
+    operator .
+    persist
+    field = FieldReference
 }
 
 rule Choice {
@@ -818,14 +850,14 @@ variant Class = Universal {
 
 rule Tag {
     captures {
-        encoding_reference = optional: EncodingReference
+        encoding_reference = optional: UppercaseReference
         class = optional: Class
         class_number = Number
     }
     operator [
     persist
     optional {
-        encoding_reference = EncodingReference
+        encoding_reference = UppercaseReference
         operator :
     }
     optional {
@@ -910,7 +942,7 @@ variant Parameter = TypeParameter {
     return value
 };
 
-variant UntaggedType = BuiltinType | ParameterizedTypeReference | TypeReference;
+variant UntaggedType = BuiltinType | ObjectClassFieldType | ParameterizedTypeReference | TypeReference;
 
 variant Type = TaggedType | ConstrainedType;
 
@@ -926,6 +958,33 @@ rule ValueAssignment {
     operator ::=
     value = Value
 }
+
+rule ObjectClassSetAssignment {
+    captures {
+        name = TypeReference
+        ty = UppercaseReference
+        elements = repeated: ObjectClassSetElement
+        extensible = bool
+    }
+    name = TypeReference
+    ty = UppercaseReference
+    operator ::=
+    operator {
+    elements = ObjectClassSetElement
+    persist
+    optional repeated {
+        operator |
+        elements = ObjectClassSetElement
+    }
+    optional {
+        operator ,
+        operator ...
+        extensible = true
+    }
+    operator }
+}
+
+variant ObjectClassSetElement = ValueReference | BracedTokenStream;
 
 rule NamedBitStringValue {
     captures {
@@ -992,6 +1051,19 @@ rule ChoiceValue {
     value = Value
 }
 
+rule OpenTypeValue {
+    captures {
+        open_type = OpenTypeValueTypeReference
+        value = boxed Value
+    }
+    open_type = OpenTypeValueTypeReference
+    operator :
+    persist
+    value = Value
+}
+
+variant OpenTypeValueTypeReference = ObjectClassValueFieldReference | Type;
+
 rule Negative {
     operator -
 }
@@ -1046,7 +1118,130 @@ rule ContainingValue {
     return value
 }
 
-variant BuiltinValue = ContainingValue | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
+variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectClassValueFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
 
 variant Value = BuiltinValue | ValueReference;
 variant IntegerValueReference = IntegerValue | ValueReference;
+
+rule InformationObjectClass {
+    captures {
+        fields = repeated: ObjectClassField
+        syntax = SyntaxList
+    }
+    keyword CLASS
+    persist
+    operator {
+    fields = ObjectClassField
+    optional repeated {
+        operator ,
+        fields = ObjectClassField
+    }
+    operator }
+    keyword WITH
+    keyword SYNTAX
+    syntax = SyntaxList
+}
+
+variant ObjectClassField = TypeField | ValueField;
+
+rule TypeField {
+    captures {
+        name = TypeFieldReference
+        optional = bool
+    }
+    name = TypeFieldReference
+    persist
+    optional {
+        keyword OPTIONAL
+        optional = true
+    }
+}
+
+rule ValueField {
+    captures {
+        name = ValueFieldReference
+        ty = Type
+        default = optional: Value
+        optional = bool
+        unique = bool
+    }
+    name = ValueFieldReference
+    persist
+    ty = Type
+    optional {
+        keyword DEFAULT
+        default = Value
+    }
+    optional {
+        keyword OPTIONAL
+        optional = true
+    }
+    optional {
+        keyword UNIQUE
+        unique = true
+    }
+}
+
+rule TypeFieldReference {
+    captures {
+        name = TypeReference
+    }
+    operator &
+    name = TypeReference
+    return name
+}
+
+rule ValueFieldReference {
+    captures {
+        name = ValueReference
+    }
+    operator &
+    name = ValueReference
+    return name
+}
+
+variant FieldReference = TypeFieldReference | ValueFieldReference;
+
+rule SyntaxList {
+    captures {
+        elements = repeated: SyntaxListElement
+    }
+    operator {
+    persist
+    repeated {
+        elements = SyntaxListElement
+    }
+    operator }
+}
+
+variant SyntaxListElement = OptionalSyntaxElement {
+    captures {
+        items = repeated: SyntaxItem
+    }
+    operator [
+    persist
+    repeated {
+        items = SyntaxItem
+    }
+    operator ]
+    return items
+} | RequiredSyntaxElement {
+    captures {
+        item = SyntaxItem
+    }
+    item = SyntaxItem
+    return item
+};
+
+variant SyntaxItem = FieldReference | SyntaxTokenLiteral;
+
+rule ObjectClassValueFieldReference {
+    captures {
+        class_value_name = ValueReference
+        field_ref = FieldReference
+    }
+    class_value_name = ValueReference
+    operator .
+    persist
+    field_ref = FieldReference
+}

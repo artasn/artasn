@@ -97,12 +97,13 @@ fn exit_with_error(args: std::fmt::Arguments) -> ! {
 fn elapsed_to_string(start: &Instant) -> String {
     let elapsed = start.elapsed();
     let ms = elapsed.as_millis();
+    let us = elapsed.as_micros();
     if ms == 0 {
-        format!("{}us", elapsed.as_micros())
+        format!("{}us", us)
     } else {
         let s = elapsed.as_secs();
         if s == 0 {
-            format!("{}ms", ms)
+            format!("{}.{:03}ms", ms, us % 1000)
         } else {
             format!("{}.{:03}s", s, ms % 1000)
         }
@@ -225,13 +226,6 @@ fn main() {
                 )),
             };
 
-            let resolved_type = match declared_value.ty.resolve(&context) {
-                Ok(resolved_type) => resolved_type,
-                Err(err) => exit_with_error(format_args!(
-                    "failed to resolve value's type: {}",
-                    err.kind.message()
-                )),
-            };
             let value = match declared_value.value.resolve(&context) {
                 Ok(value) => value,
                 Err(err) => exit_with_error(format_args!(
@@ -241,7 +235,7 @@ fn main() {
             };
 
             let mut buf = Vec::with_capacity(64 * 1024);
-            match encoder(ts, &mut buf, &context, value, &resolved_type) {
+            match encoder(ts, &mut buf, &context, &value) {
                 Ok(()) => (),
                 Err(err) => exit_with_error(format_args!(
                     "failed to encode value: {}",

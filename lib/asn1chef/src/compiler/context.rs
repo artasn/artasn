@@ -3,13 +3,13 @@ use indexmap::IndexMap;
 use super::parser::{AstElement, AstTypeAssignment};
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
-    types::{Class, TaggedType},
-    values::Value,
+    types::{Class, InformationObjectClass, TaggedType},
+    values::{ObjectClassReference, TypedValue},
 };
 
 #[derive(Debug)]
 pub struct DeclaredValue {
-    pub value: AstElement<Value>,
+    pub value: AstElement<TypedValue>,
     pub ty: TaggedType,
 }
 
@@ -23,6 +23,9 @@ pub struct Context {
     modules: IndexMap<ModuleIdentifier, ModuleHeader>,
     parameterized_types: IndexMap<QualifiedIdentifier, AstElement<AstTypeAssignment>>,
     types: IndexMap<QualifiedIdentifier, DeclaredType>,
+    classes: IndexMap<QualifiedIdentifier, InformationObjectClass>,
+    class_values: IndexMap<QualifiedIdentifier, ObjectClassReference>,
+    class_sets: IndexMap<QualifiedIdentifier, Vec<ObjectClassReference>>,
     values: IndexMap<QualifiedIdentifier, DeclaredValue>,
 }
 
@@ -38,6 +41,9 @@ impl Context {
             modules: IndexMap::new(),
             parameterized_types: IndexMap::new(),
             types: IndexMap::new(),
+            classes: IndexMap::new(),
+            class_values: IndexMap::new(),
+            class_sets: IndexMap::new(),
             values: IndexMap::new(),
         }
     }
@@ -46,6 +52,9 @@ impl Context {
         self.modules.clear();
         self.parameterized_types.clear();
         self.types.clear();
+        self.classes.clear();
+        self.class_values.clear();
+        self.class_sets.clear();
         self.values.clear();
     }
 
@@ -79,6 +88,30 @@ impl Context {
         self.types.insert(ident, decl);
     }
 
+    pub fn register_information_object_class(
+        &mut self,
+        ident: QualifiedIdentifier,
+        decl: InformationObjectClass,
+    ) {
+        self.classes.insert(ident, decl);
+    }
+
+    pub fn register_information_object_class_value(
+        &mut self,
+        ident: QualifiedIdentifier,
+        decl: ObjectClassReference,
+    ) {
+        self.class_values.insert(ident, decl);
+    }
+
+    pub fn register_information_object_class_set(
+        &mut self,
+        ident: QualifiedIdentifier,
+        decl: Vec<ObjectClassReference>,
+    ) {
+        self.class_sets.insert(ident, decl);
+    }
+
     pub fn register_parameterized_type(
         &mut self,
         ident: QualifiedIdentifier,
@@ -110,6 +143,27 @@ impl Context {
 
     pub fn lookup_type<'a>(&'a self, ident: &QualifiedIdentifier) -> Option<&'a DeclaredType> {
         self.types.get(ident)
+    }
+
+    pub fn lookup_information_object_class<'a>(
+        &'a self,
+        ident: &QualifiedIdentifier,
+    ) -> Option<&'a InformationObjectClass> {
+        self.classes.get(ident)
+    }
+
+    pub fn lookup_information_object_class_value<'a>(
+        &'a self,
+        ident: &QualifiedIdentifier,
+    ) -> Option<&'a ObjectClassReference> {
+        self.class_values.get(ident)
+    }
+
+    pub fn lookup_information_object_class_set<'a>(
+        &'a self,
+        ident: &QualifiedIdentifier,
+    ) -> Option<&'a Vec<ObjectClassReference>> {
+        self.class_sets.get(ident)
     }
 
     pub fn lookup_type_mut<'a>(

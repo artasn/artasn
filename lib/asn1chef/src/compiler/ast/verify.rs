@@ -28,49 +28,57 @@ fn verify_unique_component_tags(context: &Context, structure: &Structure) -> Res
             let mut consecutive_optionals: Vec<ComponentData> = Vec::new();
             for i in 0..structure.components.len() {
                 let component = &structure.components[i];
-                let possible_tags = component
-                    .component_type
-                    .resolve(context)?
-                    .get_possible_tags(context)?;
+                match &component.component_type.ty {
+                    UntaggedType::ObjectClassField(_) => {
+                        // TODO: implement this
+                        continue;
+                    }
+                    _ => {
+                        let possible_tags = component
+                            .component_type
+                            .resolve(context)?
+                            .get_possible_tags(context)?;
 
-                let illegal_component = 'block: {
-                    for data in &consecutive_optionals {
-                        if possible_tags
-                            .iter()
-                            .find(|(tag, _)| {
-                                tag.class == data.tag_series[0].class
-                                    && tag.num == data.tag_series[0].num
-                            })
-                            .is_some()
-                        {
-                            break 'block Some(data);
+                        let illegal_component = 'block: {
+                            for data in &consecutive_optionals {
+                                if possible_tags
+                                    .iter()
+                                    .find(|(tag, _)| {
+                                        tag.class == data.tag_series[0].class
+                                            && tag.num == data.tag_series[0].num
+                                    })
+                                    .is_some()
+                                {
+                                    break 'block Some(data);
+                                }
+                            }
+
+                            None
+                        };
+                        if let Some(illegal_component) = illegal_component {
+                            return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "SEQUENCE component '{}' and component '{}' must have distinct tags",
+                                illegal_component.name.element, component.name.element
+                            )),
+                            loc: illegal_component.name.loc,
+                        });
+                        }
+
+                        if component.optional || component.default_value.is_some() {
+                            for (tag, _) in possible_tags {
+                                consecutive_optionals.push(ComponentData {
+                                    name: component.name.clone(),
+                                    tag_series: vec![TagData {
+                                        class: tag.class,
+                                        num: tag.num,
+                                    }],
+                                });
+                            }
+                        } else {
+                            consecutive_optionals.clear();
                         }
                     }
-
-                    None
-                };
-                if let Some(illegal_component) = illegal_component {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "SEQUENCE component '{}' and component '{}' must have distinct tags",
-                            illegal_component.name.element, component.name.element
-                        )),
-                        loc: illegal_component.name.loc,
-                    });
-                }
-
-                if component.optional || component.default_value.is_some() {
-                    for (tag, _) in possible_tags {
-                        consecutive_optionals.push(ComponentData {
-                            name: component.name.clone(),
-                            tag_series: vec![TagData {
-                                class: tag.class,
-                                num: tag.num,
-                            }],
-                        });
-                    }
-                } else {
-                    consecutive_optionals.clear();
                 }
             }
         }

@@ -9,7 +9,7 @@ int-enum = "1.1"
 indexmap = "2.8"
 iso8601 = "0.6"
 lazy_static = "1.5"
-num = { version = "0.4" }
+num = "0.4"
 regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }

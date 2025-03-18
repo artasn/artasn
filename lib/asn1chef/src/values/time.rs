@@ -311,18 +311,20 @@ impl GeneralizedTime {
         if let Some(millisecond) = &self.millisecond {
             str.write_fmt(format_args!(".{}", millisecond)).unwrap();
         }
-        if let Some(tz) = &self.tz { match tz {
-            TimeZone::Z => str.write_str("Z").unwrap(),
-            TimeZone::Offset { sign, hour, minute } => {
-                str.write_str(match sign {
-                    TimeZoneSign::Plus => "+",
-                    TimeZoneSign::Minus => "-",
-                })
-                .unwrap();
-                str.write_fmt(format_args!("{:02}", hour)).unwrap();
-                str.write_fmt(format_args!("{:02}", minute)).unwrap();
+        if let Some(tz) = &self.tz {
+            match tz {
+                TimeZone::Z => str.write_str("Z").unwrap(),
+                TimeZone::Offset { sign, hour, minute } => {
+                    str.write_str(match sign {
+                        TimeZoneSign::Plus => "+",
+                        TimeZoneSign::Minus => "-",
+                    })
+                    .unwrap();
+                    str.write_fmt(format_args!("{:02}", hour)).unwrap();
+                    str.write_fmt(format_args!("{:02}", minute)).unwrap();
+                }
             }
-        } }
+        }
         str
     }
 }

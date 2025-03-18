@@ -1,0 +1,44 @@
+{
+    "module": "TypeIdentifierTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "hello-world-request-1",
+            "der": "300E80016481058B092F0000A202C000"
+        },
+        {
+            "name": "hello-world-request-2",
+            "der": "300E80016581058B092F0000A202C000"
+        },
+        {
+            "name": "hello-world-request-3",
+            "der": "300E80016681058B092F0000A202C000"
+        },
+        {
+            "name": "hello-world-request-4",
+            "der": "300E80016781058B092F0000A202C000"
+        },
+        {
+            "name": "read-dir-request-1",
+            "der": "3015800200C881058B092F0001A208300616012F0101FF"
+        },
+        {
+            "name": "read-file-request-1",
+            "der": "30198002012C81058B092F0002A20C300A16082F666F6F2E747874"
+        },
+        {
+            "name": "read-file-request-2",
+            "der": "30198002012D81058B092F0002A20C300A16082F666F6F2E747874"
+        },
+        {
+            "name": "read-file-request-3",
+            "der": "30198002012E81058B092F0002A20C300A16082F666F6F2E747874"
+        },
+        {
+            "name": "read-file-request-4",
+            "der": "30198002012F81058B092F0002A20C300A16082F666F6F2E747874"
+        }
+    ]
+}
