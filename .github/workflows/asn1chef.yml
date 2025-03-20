@@ -39,13 +39,20 @@ jobs:
       run: make test
 
     - name: Build CLI
-      run: make build-cli
+      run: make build-cli build-cli-deb
 
-    - name: Archive CLI Artifact
+    - name: Archive CLI Binary Artifact
       uses: actions/upload-artifact@v4
       with:
         name: asn1chef-cli
         path: lib/target/release/asn1chef
+        overwrite: true
+
+    - name: Archive CLI Debian Package Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: asn1chef-cli-deb
+        path: asn1chef.deb
         overwrite: true
 
     - name: Build VSCode Web

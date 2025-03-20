@@ -23,8 +23,8 @@ pub struct BitStringValue {
 impl Display for BitStringValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut bit_str = String::with_capacity(self.data.len() * 8);
-        if self.data.len() > 0 {
-            for byte in self.data.iter().take(self.data.len() - 1).cloned() {
+        if !self.data.is_empty() {
+            for byte in self.data.iter().take(self.data.len() - 1) {
                 // write each byte with zero padding to the left of the number
                 write!(&mut bit_str, "{:0<8b}", byte).unwrap();
             }

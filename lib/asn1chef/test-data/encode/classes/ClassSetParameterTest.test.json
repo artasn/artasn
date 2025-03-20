@@ -1,0 +1,14 @@
+{
+    "module": "ClassSetParameterTest",
+    "tests": ["Encode"],
+    "values": [
+        {
+            "name": "hash1-request-example",
+            "der": "3016A00A80048B092F01A102050081080123456789ABCDEF"
+        },
+        {
+            "name": "hash2-request-example",
+            "der": "3023A01780048B092F02A10F300D80081337DEADBEEF133781011081080123456789ABCDEF"
+        }
+    ]
+}

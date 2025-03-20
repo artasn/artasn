@@ -1,0 +1,8 @@
+Package: asn1chef
+Version: 0.1-0
+Section: base
+Priority: optional
+Architecture: amd64
+Maintainer: Lucas Baizer
+Description: asn1chef
+ CLI for ASN.1Chef

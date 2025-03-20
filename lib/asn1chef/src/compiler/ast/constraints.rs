@@ -151,20 +151,48 @@ fn parse_subtype_element(
                     })
                 }
             }
-            SubtypeElement::Table(parse_table_constraint(table))
+            SubtypeElement::Table(parse_table_constraint(table, parameters)?)
         }
     })
 }
 
-fn parse_table_constraint(table: &AstElement<AstTableConstraint>) -> TableConstraint {
-    TableConstraint {
-        set_name: table.element.set_name.as_ref().map(|name| name.0.clone()),
+fn parse_table_constraint(
+    table: &AstElement<AstTableConstraint>,
+    parameters: &[(&String, &Parameter)],
+) -> Result<TableConstraint> {
+    let set_name = table.element.set_name.as_ref().map(|name| name.0.clone());
+    let set_parameter = parameters.iter().find_map(|(name, parameter)| {
+        if *name == &set_name.element {
+            Some(*parameter)
+        } else {
+            None
+        }
+    });
+    let set_name = match set_parameter {
+        Some(param) => match param {
+            Parameter::ObjectSet {
+                set_name,
+                ..
+            } => set_name.clone(),
+            other => return Err(Error {
+                kind: ErrorKind::Ast(format!("expecting {} to be an information object class set parameter, but found a {} parameter", set_name.element, match other {
+                    Parameter::Type { .. } => "type",
+                    Parameter::Value { .. } => "value",
+                    Parameter::ObjectSet { .. } => unreachable!(),
+                })),
+                loc: set_name.loc,
+            }),
+        },
+        None => set_name,
+    };
+    Ok(TableConstraint {
+        set_name,
         field_ref: table
             .element
             .field_ref
             .as_ref()
             .map(|field_ref| field_ref.as_ref().map(|name| name.0.clone())),
-    }
+    })
 }
 
 fn parse_contents_constraint(
@@ -400,15 +428,38 @@ fn parse_constrained_type(
                             }
                             _ => resolved_component.component_type.resolve(parser.context)?,
                         };
-                        component_constraints.push((
-                            resolved_component.name.element.clone(),
-                            parse_type_constraint(
+                        if let Some(typeref) =
+                            types::ast_type_as_parameterized_type_reference(&component.element.ty)
+                        {
+                            let (type_assignment, parameters) =
+                                resolve_type_assignment_from_parameterized_type_reference(
+                                    parser,
+                                    typeref,
+                                    parameters.to_vec(),
+                                )?;
+                            let pending = parse_type_assignment_constraint_with_resolved_type(
                                 parser,
-                                &component.element.ty,
+                                type_assignment,
                                 &component_type,
-                                parameters,
-                            )?,
-                        ));
+                                parameters
+                                    .iter()
+                                    .map(|(name, param)| (name, param))
+                                    .collect(),
+                            )?;
+
+                            component_constraints
+                                .push((resolved_component.name.element.clone(), pending));
+                        } else {
+                            component_constraints.push((
+                                resolved_component.name.element.clone(),
+                                parse_type_constraint(
+                                    parser,
+                                    &component.element.ty,
+                                    &component_type,
+                                    parameters,
+                                )?,
+                            ));
+                        }
                     }
                     component_constraints
                 }
@@ -478,6 +529,44 @@ pub(crate) fn parse_type_constraint(
     })
 }
 
+pub(crate) fn resolve_type_assignment_from_parameterized_type_reference<'a>(
+    parser: &'a AstParser<'_>,
+    typeref: &AstElement<AstParameterizedTypeReference>,
+    parameters: Vec<(&String, &Parameter)>,
+) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<(String, Parameter)>)> {
+    let (ast, parameters) = types::resolve_parameterized_type_reference(
+        parser,
+        typeref,
+        &parameters
+            .iter()
+            .map(|(name, param)| (*name, *param))
+            .collect::<Vec<_>>(),
+    )?;
+
+    let names = ast
+        .element
+        .parameters
+        .as_ref()
+        .expect("resolved a non-parameterized type assignment AST")
+        .element
+        .0
+        .iter()
+        .map(|parameter| match &parameter.element {
+            AstParameterDecl::TypeParameterDecl(ast) => ast.element.0.element.0.clone(),
+            AstParameterDecl::ValueParameterDecl(ast) => ast.element.name.element.0.clone(),
+            AstParameterDecl::ObjectSetParameterDecl(ast) => ast.element.name.element.0.clone(),
+        })
+        .collect::<Vec<String>>();
+    let named_parameters = names.iter().zip(&parameters).collect::<Vec<_>>();
+    Ok((
+        ast,
+        named_parameters
+            .iter()
+            .map(|(name, param)| ((*name).clone(), (*param).clone()))
+            .collect(),
+    ))
+}
+
 fn resolve_type_assignment<'a>(
     parser: &'a AstParser<'_>,
     type_assignment: &'a AstElement<AstTypeAssignment>,
@@ -494,14 +583,6 @@ fn resolve_type_assignment<'a>(
     Ok(match &constrained.element {
         AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
             AstUntaggedType::ParameterizedTypeReference(typeref) => {
-                let (ast, parameters) = types::resolve_parameterized_type_reference(
-                    parser,
-                    typeref,
-                    &parameters
-                        .iter()
-                        .map(|(name, param)| (*name, *param))
-                        .collect::<Vec<_>>(),
-                )?;
                 // recursively resolve the AST until we reach the root type
                 // e.g:
                 //
@@ -515,23 +596,18 @@ fn resolve_type_assignment<'a>(
                 //   A{K, V} ::= SEQUENCE { k K, v V },
                 //   [("K", UTF8String), ("V", INTEGER)]
                 // )
-                let names = ast
-                    .element
-                    .parameters
-                    .as_ref()
-                    .expect("resolved a non-parameterized type assignment AST")
-                    .element
-                    .0
-                    .iter()
-                    .map(|parameter| match &parameter.element {
-                        AstParameterDecl::TypeParameterDecl(ast) => ast.element.0.element.0.clone(),
-                        AstParameterDecl::ValueParameterDecl(ast) => {
-                            ast.element.name.element.0.clone()
-                        }
-                    })
-                    .collect::<Vec<String>>();
-                let named_parameters = names.iter().zip(&parameters).collect::<Vec<_>>();
-                resolve_type_assignment(parser, ast, named_parameters)?
+                let (ast, named_parameters) =
+                    resolve_type_assignment_from_parameterized_type_reference(
+                        parser, typeref, parameters,
+                    )?;
+                resolve_type_assignment(
+                    parser,
+                    ast,
+                    named_parameters
+                        .iter()
+                        .map(|(name, parameter)| (name, parameter))
+                        .collect(),
+                )?
             }
             _ => (
                 type_assignment,
@@ -557,6 +633,38 @@ pub struct PendingConstraint {
     pub component_constraints: Vec<(String, PendingConstraint)>,
 }
 
+pub(crate) fn parse_type_assignment_constraint_with_resolved_type(
+    parser: &AstParser<'_>,
+    type_assignment: &AstElement<AstTypeAssignment>,
+    constrained_type: &ResolvedType,
+    parameters: Vec<(&String, &Parameter)>,
+) -> Result<PendingConstraint> {
+    let (type_assignment, mut params) =
+        resolve_type_assignment(parser, type_assignment, parameters)?;
+
+    for (_, param) in &mut params {
+        if let Parameter::Type { ast, tagged_type } = param {
+            let constrained_type = tagged_type.resolve(parser.context)?;
+            let constraint = parse_type_constraint(parser, ast, &constrained_type, &[])?;
+            apply_pending_constraint(tagged_type, constraint);
+        }
+    }
+
+    let pending = parse_type_constraint(
+        parser,
+        match &type_assignment.element.subject.element {
+            AstTypeAssignmentSubject::Type(ast_type) => ast_type,
+            _ => panic!("parameterized type resolves to a CLASS"),
+        },
+        constrained_type,
+        &params
+            .iter()
+            .map(|(name, param)| (name, param))
+            .collect::<Vec<_>>(),
+    )?;
+    Ok(pending)
+}
+
 pub fn parse_type_assignment_constraint(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
@@ -575,31 +683,13 @@ pub fn parse_type_assignment_constraint(
                 let ident = QualifiedIdentifier::new(parser.module.clone(), name);
                 let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
                 let constrained_type = constrained_type.ty.resolve(parser.context)?;
-
-                let (type_assignment, mut params) =
-                    resolve_type_assignment(parser, type_assignment, Vec::new())?;
-
-                for (_, param) in &mut params {
-                    if let Parameter::Type { ast, tagged_type } = param {
-                        let constrained_type = tagged_type.resolve(parser.context)?;
-                        let constraint =
-                            parse_type_constraint(parser, ast, &constrained_type, &[])?;
-                        apply_pending_constraint(tagged_type, constraint);
-                    }
-                }
-
-                let pending = parse_type_constraint(
+                let pending = parse_type_assignment_constraint_with_resolved_type(
                     parser,
-                    match &type_assignment.element.subject.element {
-                        AstTypeAssignmentSubject::Type(ast_type) => ast_type,
-                        _ => panic!("parameterized type resolves to a CLASS"),
-                    },
+                    type_assignment,
                     &constrained_type,
-                    &params
-                        .iter()
-                        .map(|(name, param)| (name, param))
-                        .collect::<Vec<_>>(),
+                    Vec::new(),
                 )?;
+
                 Ok(Some((ident, pending)))
             }
         }

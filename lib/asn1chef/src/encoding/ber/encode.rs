@@ -217,7 +217,7 @@ fn ber_encode_external(
 ) -> Result<()> {
     if components
         .iter()
-        .any(|component| component.name.element.as_str() == "encoding")
+        .any(|component| component.name.element == "encoding")
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
@@ -225,14 +225,14 @@ fn ber_encode_external(
     } else {
         let data_value = components
             .iter()
-            .find(|component| component.name.element.as_str() == "data-value")
+            .find(|component| component.name.element == "data-value")
             .expect("missing data-value");
         let data_value = data_value.value.resolve(context)?;
         ber_encode_value(buf, context, &data_value)?;
 
         if let Some(data_value_descriptor) = components
             .iter()
-            .find(|component| component.name.element.as_str() == "data-value-descriptor")
+            .find(|component| component.name.element == "data-value-descriptor")
         {
             let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
             ber_encode_value(buf, context, &data_value_descriptor)?;
@@ -308,8 +308,7 @@ fn is_real_type(ty: &BuiltinType) -> bool {
         BuiltinType::Structure(structure) => structure
             .components
             .iter()
-            .find(|component| component.name.element.as_str() == "asn1chef-special")
-            .is_some(),
+            .any(|component| component.name.element == "asn1chef-special"),
         _ => false,
     }
 }
@@ -319,8 +318,7 @@ fn is_external_type(ty: &BuiltinType) -> bool {
         BuiltinType::Structure(structure) => structure
             .components
             .iter()
-            .find(|component| component.name.element.as_str() == "asn1chef-external")
-            .is_some(),
+            .any(|component| component.name.element == "asn1chef-external"),
         _ => false,
     }
 }
@@ -419,7 +417,7 @@ pub fn ber_encode_value(
                 let special = structure
                     .components
                     .iter()
-                    .find(|component| component.name.element.as_str() == "asn1chef-special");
+                    .find(|component| component.name.element == "asn1chef-special");
                 if let Some(special) = special {
                     match &special.value.resolve(context)?.value {
                         BuiltinValue::Integer(int) => {

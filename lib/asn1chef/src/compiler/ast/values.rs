@@ -9,7 +9,11 @@ use crate::{
     values::*,
 };
 
-use super::{class, object_id, types, AstParser};
+use super::{
+    class,
+    constraints::{self, apply_pending_constraint},
+    object_id, types, AstParser,
+};
 
 lazy_static::lazy_static! {
     static ref PLUS_INFINITY_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
@@ -89,7 +93,7 @@ fn parse_object_class_field<'a, 'b>(
             SubtypeElement::Table(table) => table,
             _ => unreachable!(),
         },
-        None => todo!("information object class field references without table constraints are currently unsupported"),
+        None => todo!("information object class field references without table constraints are currently unsupported: {}.&{}\n{:#?}", class_type.element, field.element, ty_component.component_type.constraint),
     };
 
     let class = parser
@@ -213,24 +217,27 @@ fn parse_object_class_field_reference(
                                 if let Some(type_field) = type_field {
                                     match type_field {
                                         ObjectClassValueField::Type(tagged_type) => {
-                                            let mut outer_tag = struct_component.component_type.tag.clone().expect("open type without a tag");
                                             let inner_type = tagged_type.resolve(parser.context)?;
-                                            match &mut outer_tag.kind {
-                                                TagKind::Explicit(inner_tag) => {
-                                                    *inner_tag = inner_type.tag.clone().map(|tag| (tag.class, tag.num));
-                                                    return Ok(ResolvedType {
-                                                        tag: Some(outer_tag),
-                                                        ty: inner_type.ty,
-                                                        constraint: inner_type.constraint,
-                                                    });
+                                            if let Some(mut outer_tag) = struct_component.component_type.tag.clone() {
+                                                match &mut outer_tag.kind {
+                                                    TagKind::Explicit(inner_tag) => {
+                                                        *inner_tag = inner_type.tag.clone().map(|tag| (tag.class, tag.num));
+                                                        return Ok(ResolvedType {
+                                                            tag: Some(outer_tag),
+                                                            ty: inner_type.ty,
+                                                            constraint: inner_type.constraint,
+                                                        });
+                                                    }
+                                                    TagKind::Implicit => {
+                                                        return Ok(ResolvedType {
+                                                            tag: struct_component.component_type.tag.clone(),
+                                                            ty: inner_type.ty,
+                                                            constraint: inner_type.constraint,
+                                                        });
+                                                    }
                                                 }
-                                                TagKind::Implicit => {
-                                                    return Ok(ResolvedType {
-                                                        tag: struct_component.component_type.tag.clone(),
-                                                        ty: inner_type.ty,
-                                                        constraint: inner_type.constraint,
-                                                    });
-                                                }
+                                            } else {
+                                                return Ok(inner_type);
                                             }
                                         }
                                         ObjectClassValueField::Value(_) => unreachable!(),
@@ -870,7 +877,7 @@ pub fn parse_value(
                         loc: otv.element.open_type.loc,
                     });
                 }
-                return Ok(parse_value(parser, stage, &otv.element.value, target_type)?);
+                return parse_value(parser, stage, &otv.element.value, target_type);
             }
             AstBuiltinValue::ObjectClassValueFieldReference(class_value_field_ref) => {
                 if stage != ParseValueAssignmentStage::ClassReferenceValues {
@@ -1048,13 +1055,36 @@ pub fn parse_value_assignment(
     Ok(match stage {
         ParseValueAssignmentStage::NormalValues
         | ParseValueAssignmentStage::ClassReferenceValues => {
-            let ty = types::parse_type(
+            let mut ty = types::parse_type(
                 parser,
                 &value_assignment.element.ty,
                 &[],
                 types::TypeContext::Contextless,
             )?;
-            let resolved_ty = ty.resolve(parser.context)?;
+            let mut resolved_ty = ty.resolve(parser.context)?;
+
+            if let Some(typeref) =
+                types::ast_type_as_parameterized_type_reference(&value_assignment.element.ty)
+            {
+                let (type_assignment, parameters) =
+                    constraints::resolve_type_assignment_from_parameterized_type_reference(
+                        parser,
+                        typeref,
+                        Vec::new(),
+                    )?;
+                let pending = constraints::parse_type_assignment_constraint_with_resolved_type(
+                    parser,
+                    type_assignment,
+                    &resolved_ty,
+                    parameters
+                        .iter()
+                        .map(|(name, param)| (name, param))
+                        .collect(),
+                )?;
+                apply_pending_constraint(&mut ty, pending);
+                resolved_ty = ty.resolve(parser.context)?;
+            }
+
             let val =
                 match parse_value(parser, stage, &value_assignment.element.value, &resolved_ty) {
                     Ok(val) => val,

@@ -14,7 +14,7 @@ clean:
 
 build: build-cli build-editor
 
-.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor test
+.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-cli-deb build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor test
 
 .install-cargo:
 	$(shell which cargo > /dev/null || (echo "Rust and Cargo are required to build $(PROG). Visit https://rustup.rs/ to do so") && exit 1)
@@ -23,6 +23,17 @@ build-cli: .install-cargo
 	cd lib && \
 	$(CARGO) build --package cli $(MODE) && \
 	cd ..
+
+BUILD_CLI_DIR=/tmp/asn1chef/build-cli-deb
+build-cli-deb: build-cli
+	rm -rf $(BUILD_CLI_DIR) && \
+	mkdir -p $(BUILD_CLI_DIR) && \
+	mkdir -p $(BUILD_CLI_DIR)/usr/local/bin && \
+	cp -r ./lib/cli/DEBIAN $(BUILD_CLI_DIR) && \
+	cp ./lib/target/release/asn1chef $(BUILD_CLI_DIR)/usr/local/bin/ && \
+	dpkg-deb --build $(BUILD_CLI_DIR) && \
+	cp -r $(BUILD_CLI_DIR).deb ./asn1chef.deb && \
+	rm -rf $(BUILD_CLI_DIR) $(BUILD_CLI_DIR).deb
 
 .install-wasm: .install-cargo
 	$(shell rustup target list --installed | grep $(WASM_TARGET) > /dev/null || (rustup target add $(WASM_TARGET)))

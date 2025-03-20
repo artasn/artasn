@@ -168,7 +168,7 @@ impl Parseable for AstUppercaseReference {
                     _ => unreachable!(),
                 };
                 for ch in name.chars() {
-                    if !ch.is_ascii_uppercase() {
+                    if !ch.is_ascii_uppercase() && ch != '-' {
                         return ParseResult::Fail(Error {
                             loc: token.loc,
                             kind: ErrorKind::ExpectingOther {

@@ -252,35 +252,42 @@ pub(crate) fn parse_object_class_set_assignment(
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
 
     let mut classes = Vec::new();
-    for ast_element in &ast_set.element.elements {
-        match &ast_element.element {
-            AstObjectClassSetElement::BracedTokenStream(tokens) => {
-                let class = parser.context.lookup_information_object_class(
-                    &types::resolve_typereference(
-                        parser,
-                        &ast_set
-                            .element
-                            .ty
-                            .as_ref()
-                            .map(|name| AstTypeReference(name.0.clone())),
-                    )
-                    .element,
-                );
-                let class = class.ok_or_else(|| Error {
-                    kind: ErrorKind::Ast(format!(
-                        "undefined reference to information object class '{}'",
-                        ast_set.element.ty.element.0
-                    )),
-                    loc: ast_set.element.ty.loc,
-                })?;
-                classes.push(ObjectClassReference::Value(
-                    parse_information_object_class_value(parser, tokens, class)?,
-                ));
-            }
-            AstObjectClassSetElement::ValueReference(valref) => {
-                classes.push(ObjectClassReference::Reference(
-                    values::resolve_valuereference(parser, valref),
-                ));
+    match &ast_set.element.subject.element {
+        AstObjectClassSetAssignmentSubject::EmptyExtensible(_) => {
+
+        }
+        AstObjectClassSetAssignmentSubject::ObjectSet(set) => {
+            for ast_element in &set.element.elements {
+                match &ast_element.element {
+                    AstObjectClassSetElement::BracedTokenStream(tokens) => {
+                        let class = parser.context.lookup_information_object_class(
+                            &types::resolve_typereference(
+                                parser,
+                                &ast_set
+                                    .element
+                                    .ty
+                                    .as_ref()
+                                    .map(|name| AstTypeReference(name.0.clone())),
+                            )
+                            .element,
+                        );
+                        let class = class.ok_or_else(|| Error {
+                            kind: ErrorKind::Ast(format!(
+                                "undefined reference to information object class '{}'",
+                                ast_set.element.ty.element.0
+                            )),
+                            loc: ast_set.element.ty.loc,
+                        })?;
+                        classes.push(ObjectClassReference::Value(
+                            parse_information_object_class_value(parser, tokens, class)?,
+                        ));
+                    }
+                    AstObjectClassSetElement::ValueReference(valref) => {
+                        classes.push(ObjectClassReference::Reference(
+                            values::resolve_valuereference(parser, valref),
+                        ));
+                    }
+                }
             }
         }
     }

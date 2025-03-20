@@ -514,7 +514,7 @@ impl BuiltinType {
                     .find(|val_component| val_component.name.element == seq_component.name.element);
                 if let Some(val_component) = val_component {
                     match &seq_component.component_type.ty {
-                        UntaggedType::ObjectClassField(ocf) => {
+                        UntaggedType::ObjectClassField(_ocf) => {
                             // println!("need to verify OCF: {ocf:#?}");
                         }
                         _ => {

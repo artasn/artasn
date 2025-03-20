@@ -127,7 +127,7 @@ impl Context {
     pub fn lookup_module_by_name<'a>(&'a self, name: &str) -> Option<&'a ModuleHeader> {
         self.modules
             .values()
-            .find(|value| value.ident.name.as_str() == name)
+            .find(|value| value.ident.name == name)
     }
 
     pub fn lookup_module<'a>(&'a self, ident: &ModuleIdentifier) -> Option<&'a ModuleHeader> {

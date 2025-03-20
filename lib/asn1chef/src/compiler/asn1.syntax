@@ -323,14 +323,21 @@ rule ParameterDeclList {
     return parameters
 }
 
-variant ParameterDecl = ValueParameterDecl {
+variant ParameterDecl = ObjectSetParameterDecl {
+    captures {
+        class_type = UppercaseReference
+        name = TypeReference
+    }
+    class_type = UppercaseReference
+    operator :
+    name = TypeReference
+} | ValueParameterDecl {
     captures {
         ty = Type
         name = ValueReference
     }
     ty = Type
     operator :
-    persist
     name = ValueReference
 } | TypeParameterDecl {
     captures {
@@ -928,7 +935,16 @@ rule ParameterList {
     return parameters
 }
 
-variant Parameter = TypeParameter {
+variant Parameter = ObjectSetParameter {
+    captures {
+        object_set = TypeReference
+    }
+    operator {
+    persist
+    object_set = TypeReference
+    operator }
+    return object_set
+} | TypeParameter {
     captures {
         ty = Type
     }
@@ -963,13 +979,24 @@ rule ObjectClassSetAssignment {
     captures {
         name = TypeReference
         ty = UppercaseReference
-        elements = repeated: ObjectClassSetElement
-        extensible = bool
+        subject = ObjectClassSetAssignmentSubject
     }
     name = TypeReference
     ty = UppercaseReference
     operator ::=
     operator {
+    subject = ObjectClassSetAssignmentSubject
+    persist
+    operator }
+}
+
+variant ObjectClassSetAssignmentSubject = EmptyExtensible {
+    operator ...
+} | ObjectSet {
+    captures {
+        elements = repeated: ObjectClassSetElement
+        extensible = bool
+    }
     elements = ObjectClassSetElement
     persist
     optional repeated {
@@ -981,8 +1008,7 @@ rule ObjectClassSetAssignment {
         operator ...
         extensible = true
     }
-    operator }
-}
+};
 
 variant ObjectClassSetElement = ValueReference | BracedTokenStream;
 

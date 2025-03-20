@@ -360,4 +360,8 @@ mod test {
         test_type_identifier,
         "../../test-data/encode/classes/TypeIdentifierTest"
     );
+    json_test!(
+        test_class_set_parameter,
+        "../../test-data/encode/classes/ClassSetParameterTest"
+    );
 }

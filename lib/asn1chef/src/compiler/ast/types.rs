@@ -348,6 +348,10 @@ pub enum Parameter {
         value_type: TaggedType,
         value: AstElement<TypedValue>,
     },
+    ObjectSet {
+        // class_name: AstElement<String>,
+        set_name: AstElement<String>,
+    },
 }
 
 pub(crate) fn resolve_parameterized_type_reference<'a>(
@@ -411,17 +415,28 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                     )?;
                     Parameter::Value { value_type, value }
                 }
+                (
+                    AstParameter::ObjectSetParameter(ast),
+                    AstParameterDecl::ObjectSetParameterDecl(_decl),
+                ) => Parameter::ObjectSet {
+                    // class_name: decl.element.class_type.as_ref().map(|name| name.0.clone()),
+                    set_name: ast.element.0.as_ref().map(|name| name.0.clone()),
+                },
                 (param, decl) => {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(
-                            "expecting {} parameter but found {} parameter",
+                            "expecting {} parameter, but found {} parameter",
                             match decl {
                                 AstParameterDecl::TypeParameterDecl(_) => "type",
                                 AstParameterDecl::ValueParameterDecl(_) => "value",
+                                AstParameterDecl::ObjectSetParameterDecl(_) =>
+                                    "information object class set",
                             },
                             match param {
                                 AstParameter::TypeParameter(_) => "type",
                                 AstParameter::ValueParameter(_) => "value",
+                                AstParameter::ObjectSetParameter(_) =>
+                                    "information object class set",
                             },
                         )),
                         loc: parameter.loc,
@@ -699,14 +714,15 @@ pub fn parse_type(
     })
 }
 
-pub(crate) enum ParameterDecl {
-    Type {
-        name: String,
-    },
-    Value {
-        // value_type: TaggedType,
-        name: String,
-    },
+pub(crate) struct ParameterDecl {
+    _kind: ParameterDeclKind,
+    name: String,
+}
+
+pub(crate) enum ParameterDeclKind {
+    Type,
+    Value,
+    ObjectSet,
 }
 
 pub(crate) fn parse_type_assignment_parameters(
@@ -721,16 +737,16 @@ pub(crate) fn parse_type_assignment_parameters(
                 .iter()
                 .map(|param| {
                     Ok(match &param.element {
-                        AstParameterDecl::TypeParameterDecl(decl) => ParameterDecl::Type {
+                        AstParameterDecl::TypeParameterDecl(decl) => ParameterDecl {
+                            _kind: ParameterDeclKind::Type,
                             name: decl.element.0.element.0.clone(),
                         },
-                        AstParameterDecl::ValueParameterDecl(decl) => ParameterDecl::Value {
-                            // value_type: parse_type(
-                            //     parser,
-                            //     &decl.element.ty,
-                            //     &[],
-                            //     TypeContext::Contextless,
-                            // )?,
+                        AstParameterDecl::ValueParameterDecl(decl) => ParameterDecl {
+                            _kind: ParameterDeclKind::Value,
+                            name: decl.element.name.element.0.clone(),
+                        },
+                        AstParameterDecl::ObjectSetParameterDecl(decl) => ParameterDecl {
+                            _kind: ParameterDeclKind::ObjectSet,
                             name: decl.element.name.element.0.clone(),
                         },
                     })
@@ -756,6 +772,23 @@ pub fn parse_parameterized_type_assignment(
         )))
     } else {
         Ok(None)
+    }
+}
+
+pub(crate) fn ast_type_as_parameterized_type_reference(
+    ast: &AstElement<AstType>,
+) -> Option<&AstElement<AstParameterizedTypeReference>> {
+    let constrained: &AstElement<AstConstrainedType> = match &ast.element {
+        AstType::TaggedType(tagged) => &tagged.element.ty,
+        AstType::ConstrainedType(constrained) => constrained,
+    };
+    let untagged = match &constrained.element {
+        AstConstrainedType::Suffixed(suffixed) => &suffixed.element.ty,
+        AstConstrainedType::TypeWithConstraint(_) => return None,
+    };
+    match &untagged.element {
+        AstUntaggedType::ParameterizedTypeReference(typeref) => Some(typeref),
+        _ => None,
     }
 }
 
@@ -815,10 +848,7 @@ pub fn parse_type_assignment(
 
                         let named_parameters = names
                             .iter()
-                            .map(|param| match param {
-                                ParameterDecl::Type { name } => name,
-                                ParameterDecl::Value { name, .. } => name,
-                            })
+                            .map(|param| &param.name)
                             .zip(parameters)
                             .collect::<Vec<(&String, &Parameter)>>();
                         let ty = parse_type(
