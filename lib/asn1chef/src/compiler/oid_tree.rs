@@ -111,12 +111,14 @@ pub fn search(searches: Vec<OidTreeNodeSearch>) -> Result<Oid> {
 }
 
 pub fn lookup_root_node<'a>(name: &str) -> Option<&'a OidTreeNode> {
-    ROOT_NODES.iter().find(|&root_node| root_node.name == name
+    ROOT_NODES.iter().find(|&root_node| {
+        root_node.name == name
             || root_node
                 .aliases
                 .as_ref()
                 .map(|aliases| aliases.contains(&name))
-                .unwrap_or(false))
+                .unwrap_or(false)
+    })
 }
 
 pub fn get_root_node<'a>(num: u64) -> Option<&'a OidTreeNode> {

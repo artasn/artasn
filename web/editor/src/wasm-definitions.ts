@@ -36,7 +36,7 @@ export type TaggedType = ((QualifiedIdentifier & {
     tag?: Tag;
 }) | (BuiltinType & {
     mode: 'type',
-    tag: Tag,
+    tag?: Tag,
 }));
 
 export enum TagClass {
@@ -125,7 +125,12 @@ export type ValueReference = (QualifiedIdentifier & {
     mode: 'reference',
 }) | (Value & {
     mode: 'value',
-});
+}) | {
+    mode: 'objectClassField';
+    class: string;
+    field: string;
+    kind: 'value' | 'openType';
+};
 
 export type Value = {
     type: 'BOOLEAN';
@@ -135,11 +140,14 @@ export type Value = {
     value: bigint;
 } | {
     type: 'BIT STRING';
-    // Binary-encoded bits of the string (an ASN.1 bstring).
-    value: string;
+    value: {
+        // Base 2 string representation of the bit string's bits (an ASN.1 bstring).
+        data: string;
+        unusedBits: number;
+    };
 } | {
     type: 'OCTET STRING';
-    // Hex-encoded bytes of the octet string (an ASN.1 hstring).
+    // Base 16 string representation of the octet string's bytes (an ASN.1 hstring).
     value: string;
 } | {
     type: 'NULL',
@@ -150,9 +158,10 @@ export type Value = {
     value: string;
 } | {
     type: 'REAL';
-    value: number;
+    value: string;
 } | {
     type: 'ENUMERATED';
+    value: string;
 } | {
     type: 'TIME';
 } | {

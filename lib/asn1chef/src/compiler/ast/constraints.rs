@@ -2,7 +2,8 @@ use crate::{compiler::parser::*, module::QualifiedIdentifier, types::*};
 
 use super::{
     types::{self, Parameter, TypeContext},
-    values, AstParser,
+    values::{self, ParseValueAssignmentStage},
+    AstParser,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,28 +47,55 @@ fn parse_subtype_element(
     ctx: ConstraintContext,
 ) -> Result<SubtypeElement> {
     Ok(match &ast_subtype_element.element {
-        AstSubtypeElement::SingleValueConstraint(single_value) => SubtypeElement::SingleValue(
-            values::parse_value(parser, &single_value.element.0, constrained_type)?,
-        ),
+        AstSubtypeElement::SingleValueConstraint(single_value) => {
+            SubtypeElement::SingleValue(values::parse_value(
+                parser,
+                ParseValueAssignmentStage::NormalValues,
+                &single_value.element.0,
+                constrained_type,
+            )?)
+        }
         AstSubtypeElement::ValueRangeConstraint(value_range) => {
+            match &constrained_type.ty {
+                BuiltinType::Integer(_) => (),
+                other => {
+                    if ctx != ConstraintContext::WithinSize {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "value range constraints cannot be applied to type {}",
+                                other,
+                            )),
+                            loc: value_range.loc,
+                        });
+                    }
+                }
+            }
             SubtypeElement::ValueRange(ValueRange {
                 lower: match &value_range.element.lower.element {
-                    AstRangeLowerBound::Value(value) => {
-                        RangeLowerBound::Eq(values::parse_value(parser, value, constrained_type)?)
-                    }
+                    AstRangeLowerBound::Value(value) => RangeLowerBound::Eq(values::parse_value(
+                        parser,
+                        ParseValueAssignmentStage::NormalValues,
+                        value,
+                        constrained_type,
+                    )?),
                     AstRangeLowerBound::GtValue(value) => RangeLowerBound::Gt(values::parse_value(
                         parser,
+                        ParseValueAssignmentStage::NormalValues,
                         &value.element.0,
                         constrained_type,
                     )?),
                     AstRangeLowerBound::Min(_) => RangeLowerBound::Min,
                 },
                 upper: match &value_range.element.upper.element {
-                    AstRangeUpperBound::Value(value) => {
-                        RangeUpperBound::Eq(values::parse_value(parser, value, constrained_type)?)
-                    }
+                    AstRangeUpperBound::Value(value) => RangeUpperBound::Eq(values::parse_value(
+                        parser,
+                        ParseValueAssignmentStage::NormalValues,
+                        value,
+                        constrained_type,
+                    )?),
                     AstRangeUpperBound::LtValue(value) => RangeUpperBound::Lt(values::parse_value(
                         parser,
+                        ParseValueAssignmentStage::NormalValues,
                         &value.element.0,
                         constrained_type,
                     )?),
@@ -78,9 +106,24 @@ fn parse_subtype_element(
         AstSubtypeElement::SizeConstraint(size_constraint) => {
             if ctx == ConstraintContext::WithinSize {
                 return Err(Error {
-                    kind: ErrorKind::Ast("SIZE constraints cannot be nested".to_string()),
+                    kind: ErrorKind::Ast("size constraints cannot be nested".to_string()),
                     loc: ast_subtype_element.loc,
                 });
+            }
+            match &constrained_type.ty {
+                BuiltinType::BitString(_)
+                | BuiltinType::OctetString
+                | BuiltinType::StructureOf(_)
+                | BuiltinType::CharacterString(_) => (),
+                other => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "size constraints cannot be applied to type {}",
+                            other,
+                        )),
+                        loc: size_constraint.loc,
+                    })
+                }
             }
             SubtypeElement::Size(parse_constraint(
                 parser,
@@ -96,7 +139,32 @@ fn parse_subtype_element(
         AstSubtypeElement::ContentsConstraint(contents) => SubtypeElement::Contents(
             parse_contents_constraint(parser, contents, constrained_type, parameters)?,
         ),
+        AstSubtypeElement::TableConstraint(table) => {
+            match &constrained_type.ty {
+                BuiltinType::Any => (),
+                _ => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "table constraints can only be applied to information object class field references".to_string()
+                        ),
+                        loc: table.loc,
+                    })
+                }
+            }
+            SubtypeElement::Table(parse_table_constraint(table))
+        }
     })
+}
+
+fn parse_table_constraint(table: &AstElement<AstTableConstraint>) -> TableConstraint {
+    TableConstraint {
+        set_name: table.element.set_name.as_ref().map(|name| name.0.clone()),
+        field_ref: table
+            .element
+            .field_ref
+            .as_ref()
+            .map(|field_ref| field_ref.as_ref().map(|name| name.0.clone())),
+    }
 }
 
 fn parse_contents_constraint(
@@ -109,7 +177,10 @@ fn parse_contents_constraint(
         BuiltinType::BitString(_) | BuiltinType::OctetString => (),
         other => {
             return Err(Error {
-                kind: ErrorKind::Ast(format!("contents constraint is invalid for {}", other,)),
+                kind: ErrorKind::Ast(format!(
+                    "contents constraints cannot be applied to type {}",
+                    other,
+                )),
                 loc: contents.loc,
             })
         }
@@ -123,6 +194,7 @@ fn parse_contents_constraint(
     let encoded_by = match encoded_by {
         Some(encoded_by) => Some(values::parse_value(
             parser,
+            ParseValueAssignmentStage::NormalValues,
             encoded_by,
             &ResolvedType::universal(TagType::ObjectIdentifier),
         )?),
@@ -322,8 +394,12 @@ fn parse_constrained_type(
                                 resolved_component.name.element == component.element.name.element.0
                             })
                             .expect("resolved type missing component from ast type");
-                        let component_type =
-                            resolved_component.component_type.resolve(parser.context)?;
+                        let component_type = match &resolved_component.component_type.ty {
+                            UntaggedType::ObjectClassField(_) => {
+                                ResolvedType::universal(TagType::Any)
+                            }
+                            _ => resolved_component.component_type.resolve(parser.context)?,
+                        };
                         component_constraints.push((
                             resolved_component.name.element.clone(),
                             parse_type_constraint(
@@ -383,7 +459,7 @@ fn parse_constrained_type(
     })
 }
 
-fn parse_type_constraint(
+pub(crate) fn parse_type_constraint(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
     constrained_type: &ResolvedType,
@@ -407,7 +483,11 @@ fn resolve_type_assignment<'a>(
     type_assignment: &'a AstElement<AstTypeAssignment>,
     parameters: Vec<(&String, &Parameter)>,
 ) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<(String, Parameter)>)> {
-    let constrained = match &type_assignment.element.ty.element {
+    let ast_type = match &type_assignment.element.subject.element {
+        AstTypeAssignmentSubject::Type(ast_type) => ast_type,
+        _ => panic!("parameterized type resolves to a CLASS"),
+    };
+    let constrained = match &ast_type.element {
         AstType::TaggedType(tagged_type) => &tagged_type.element.ty,
         AstType::ConstrainedType(constrained) => constrained,
     };
@@ -481,40 +561,49 @@ pub fn parse_type_assignment_constraint(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
 ) -> Result<Option<(QualifiedIdentifier, PendingConstraint)>> {
-    let name = type_assignment.element.name.element.0.clone();
-    let parameter_names = types::parse_type_assignment_parameters(parser, type_assignment)?;
-    if parameter_names
-        .map(|parameters| parameters.len())
-        .unwrap_or(0)
-        > 0
-    {
-        Ok(None)
-    } else {
-        let ident = QualifiedIdentifier::new(parser.module.clone(), name);
-        let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
-        let constrained_type = constrained_type.ty.resolve(parser.context)?;
+    match &type_assignment.element.subject.element {
+        AstTypeAssignmentSubject::Type(_) => {
+            let name = type_assignment.element.name.element.0.clone();
+            let parameter_names = types::parse_type_assignment_parameters(parser, type_assignment)?;
+            if parameter_names
+                .map(|parameters| parameters.len())
+                .unwrap_or(0)
+                > 0
+            {
+                Ok(None)
+            } else {
+                let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+                let constrained_type = parser.context.lookup_type(&ident).expect("lookup_type");
+                let constrained_type = constrained_type.ty.resolve(parser.context)?;
 
-        let (type_assignment, mut params) =
-            resolve_type_assignment(parser, type_assignment, Vec::new())?;
+                let (type_assignment, mut params) =
+                    resolve_type_assignment(parser, type_assignment, Vec::new())?;
 
-        for (_, param) in &mut params {
-            if let Parameter::Type { ast, tagged_type } = param {
-                let constrained_type = tagged_type.resolve(parser.context)?;
-                let constraint = parse_type_constraint(parser, ast, &constrained_type, &[])?;
-                apply_pending_constraint(tagged_type, constraint);
+                for (_, param) in &mut params {
+                    if let Parameter::Type { ast, tagged_type } = param {
+                        let constrained_type = tagged_type.resolve(parser.context)?;
+                        let constraint =
+                            parse_type_constraint(parser, ast, &constrained_type, &[])?;
+                        apply_pending_constraint(tagged_type, constraint);
+                    }
+                }
+
+                let pending = parse_type_constraint(
+                    parser,
+                    match &type_assignment.element.subject.element {
+                        AstTypeAssignmentSubject::Type(ast_type) => ast_type,
+                        _ => panic!("parameterized type resolves to a CLASS"),
+                    },
+                    &constrained_type,
+                    &params
+                        .iter()
+                        .map(|(name, param)| (name, param))
+                        .collect::<Vec<_>>(),
+                )?;
+                Ok(Some((ident, pending)))
             }
         }
-
-        let pending = parse_type_constraint(
-            parser,
-            &type_assignment.element.ty,
-            &constrained_type,
-            &params
-                .iter()
-                .map(|(name, param)| (name, param))
-                .collect::<Vec<_>>(),
-        )?;
-        Ok(Some((ident, pending)))
+        _ => Ok(None),
     }
 }
 

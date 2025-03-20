@@ -1,12 +1,20 @@
-External DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+External DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
 -- This is the current implementation of the EXTERNAL type.
--- It is the same as EMBEDDED PDV but has different components selected.
+-- It is structurally the same as EMBEDDED PDV but has different components selected.
+-- The X.680 standard definition of this type (see clause 37.5) assumes AUTOMATIC tagging.
+-- This module is defined with IMPLICIT tagging to make the mapped encoding for the X.690 EXTERNAL type easier.
+-- Components that are removed via the inner subtype constraint are tagged with PRIVATE.
+-- The remaining components are tagged with their equivalent tags in the X.690 EXTERNAL type.
+
+ExternalMarker ::= ENUMERATED {
+    is-external
+}
 
 -- EXTERNAL
 External ::= [UNIVERSAL 8] SEQUENCE {
     identification CHOICE {
-        syntaxes SEQUENCE {
+        syntaxes [PRIVATE 0] SEQUENCE {
             abstract OBJECT IDENTIFIER,
             transfer OBJECT IDENTIFIER
         },
@@ -24,17 +32,20 @@ External ::= [UNIVERSAL 8] SEQUENCE {
         -- Context-negotiation in progress, presentation-context-id
         -- identifies only the abstract syntax
         -- so the transfer syntax shall be specified
-        transfer-syntax OBJECT IDENTIFIER,
+        transfer-syntax [PRIVATE 1] OBJECT IDENTIFIER,
         -- The type of the value (for example, specification that it is the value of an ASN.1 type)
         -- is fixed by the application designer (and hence known to both sender and receiver).
         -- This case is provided primarily to support selective-field-encryption
         -- (or other encoding transformations) of an ASN.1 type
-        fixed NULL
+        fixed [PRIVATE 2] NULL
         -- The data value is the value of a fixed ASN.1 type (and hence known to both sender and receiver)
     },
     data-value-descriptor ObjectDescriptor OPTIONAL,
     -- This provides human-readable identification of the class of the value
-    data-value OCTET STRING
+    data-value [1] OCTET STRING,
+    asn1chef-external ExternalMarker OPTIONAL
+    -- the `asn1chef-external` component is not part of the standard definition of REAL,
+    -- and is used internally by asn1chef
 } (WITH COMPONENTS {
     ...,
     identification (WITH COMPONENTS {

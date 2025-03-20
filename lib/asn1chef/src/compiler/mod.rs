@@ -96,6 +96,7 @@ lazy_static::lazy_static! {
         ("Real.asn", include_str!("../../stdlib/Real.asn")),
         ("EmbeddedPDV.asn", include_str!("../../stdlib/EmbeddedPDV.asn")),
         ("CharacterString.asn", include_str!("../../stdlib/CharacterString.asn")),
+        ("InformationObjectClasses.asn", include_str!("../../stdlib/InformationObjectClasses.asn")),
     ];
 }
 
@@ -204,6 +205,7 @@ impl Compiler {
                     errors.extend(source_errors);
                 }
                 if errors.len() > 0 {
+                    dedup_errors(&mut errors);
                     return errors;
                 }
             }};
@@ -212,11 +214,18 @@ impl Compiler {
         stage!(register_all_modules);
         stage!(register_all_parameterized_types);
         stage!(register_all_types);
+        stage!(register_all_information_object_class_sets);
+        stage!(register_all_information_object_class_values);
         stage!(register_all_constraints);
-        stage!(register_all_values);
+        stage!(register_all_normal_values);
+        stage!(register_all_class_reference_values);
         stage!(verify_all_types);
         stage!(verify_all_values);
 
         Vec::new()
     }
+}
+
+fn dedup_errors(errors: &mut Vec<CompileError>) {
+    errors.dedup_by(|a, b| a.error == b.error && a.path == b.path && a.pos() == b.pos());
 }

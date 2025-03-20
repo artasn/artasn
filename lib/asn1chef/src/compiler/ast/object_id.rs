@@ -33,15 +33,13 @@ fn named_number_to_u64(named_num: &AstElement<AstNamedNumber>) -> Result<u64> {
 
             Ok(big_uint_to_u64(&int.element.value)?)
         }
-        AstIntegerValueReference::ValueReference(valref) => {
-            Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "expecting INTEGER literal, but found identifier '{}'",
-                    valref.element.0
-                )),
-                loc: valref.loc,
-            })
-        }
+        AstIntegerValueReference::ValueReference(valref) => Err(Error {
+            kind: ErrorKind::Ast(format!(
+                "expecting INTEGER literal, but found identifier '{}'",
+                valref.element.0
+            )),
+            loc: valref.loc,
+        }),
     }
 }
 
@@ -92,7 +90,10 @@ fn parse_object_identifier_component_valref(
     };
     base.map_or_else(
         || ObjectIdentifierComponent::ValueReference(values::parse_valuereference(parser, value)),
-        |lit| ObjectIdentifierComponent::IntegerLiteral(AstElement::new(lit.node, value.loc)),
+        |lit| ObjectIdentifierComponent::IntegerLiteral {
+            name: Some(value.as_ref().map(|name| name.0.clone())),
+            int: AstElement::new(lit.node, value.loc),
+        },
     )
 }
 
@@ -110,16 +111,19 @@ pub fn parse_object_identifier(
             .map(|elem| {
                 Ok(match &elem.element {
                     AstObjectIdentifierComponent::Number(num) => {
-                        ObjectIdentifierComponent::IntegerLiteral(AstElement::new(
-                            big_uint_to_u64(num)?,
-                            num.loc,
-                        ))
+                        ObjectIdentifierComponent::IntegerLiteral {
+                            name: None,
+                            int: AstElement::new(big_uint_to_u64(num)?, num.loc),
+                        }
                     }
                     AstObjectIdentifierComponent::NamedNumber(named_num) => {
-                        ObjectIdentifierComponent::IntegerLiteral(AstElement::new(
-                            named_number_to_u64(named_num)?,
-                            named_num.element.num.loc,
-                        ))
+                        ObjectIdentifierComponent::IntegerLiteral {
+                            name: Some(named_num.element.name.as_ref().map(|name| name.0.clone())),
+                            int: AstElement::new(
+                                named_number_to_u64(named_num)?,
+                                named_num.element.num.loc,
+                            ),
+                        }
                     }
                     AstObjectIdentifierComponent::ValueReference(val_ref) => {
                         parse_object_identifier_component_valref(parser, val_ref, ty)

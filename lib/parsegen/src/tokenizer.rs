@@ -9,7 +9,7 @@ macro_rules! enum_str {
     (pub enum $name:ident {
         $($variant:ident = $val:literal),*,
     }) => {
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub enum $name {
             $($variant),*
         }
@@ -179,7 +179,7 @@ lazy_static::lazy_static! {
     };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
     pub data: Option<TokenData>,
@@ -205,17 +205,18 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     Soi,
     ValueReference,
     TypeReference,
-    EncodingReference,
+    UppercaseReference,
     Keyword,
     Number,
     String,
     Operator,
     Eoi,
+    TokenLiteral,
 }
 
 impl Display for TokenKind {
@@ -224,17 +225,18 @@ impl Display for TokenKind {
             Self::Soi => "Soi",
             Self::ValueReference => "valuereference",
             Self::TypeReference => "typereference",
-            Self::EncodingReference => "encodingreference",
+            Self::UppercaseReference => "encodingreference",
             Self::Keyword => "keyword",
             Self::Number => "integer",
             Self::String => "string",
             Self::Operator => "operator",
             Self::Eoi => "Eoi",
+            Self::TokenLiteral => "token literal",
         })
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringKind {
     C,
     H,
@@ -251,7 +253,7 @@ impl Display for StringKind {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenData {
     Named(String),
     Number(num::BigUint),
@@ -274,13 +276,20 @@ impl TokenData {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub kind: ErrorKind,
     pub loc: Loc,
 }
 
 impl Error {
+    pub fn break_parser() -> Error {
+        Error {
+            kind: ErrorKind::BreakParser,
+            loc: Loc::default(),
+        }
+    }
+
     pub fn pos(&self, module_source: &str) -> (usize, usize) {
         if self.loc.offset == 0 {
             return (1, 1);
@@ -299,7 +308,7 @@ impl Error {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorKind {
     UnexpectedToken(char),
     ExpectingEoi,
@@ -331,7 +340,11 @@ pub enum ErrorKind {
     },
     UnterminatedString,
     ExpectingNegative,
+    IllegalTokenLiteral {
+        token: String,
+    },
     Ast(String),
+    BreakParser,
 }
 
 impl ErrorKind {
@@ -418,7 +431,11 @@ impl ErrorKind {
             ErrorKind::ExpectingNegative => {
                 "expecting provided token not to be present".to_string()
             }
+            ErrorKind::IllegalTokenLiteral { token } => {
+                format!("illegal token literal '{}'", token)
+            }
             ErrorKind::Ast(message) => message.clone(),
+            ErrorKind::BreakParser => "break parser".to_string(),
         }
     }
 }

@@ -39,7 +39,33 @@ impl TokenStream {
     }
 
     pub fn try_next(&mut self) -> Result<Token> {
-        Ok(self.tokenizer.tokenize_next()?)
+        self.tokenizer.tokenize_next()
+    }
+
+    pub fn try_parse_token_literal(&mut self) -> Result<Token> {
+        let token = self.tokenizer.tokenize_next()?;
+        match token.kind {
+            TokenKind::TypeReference | TokenKind::ValueReference | TokenKind::Keyword => {
+                return Ok(token);
+            }
+            TokenKind::Operator => match token.data.as_ref().unwrap() {
+                TokenData::Operator(op) => {
+                    if *op == Operator::Comma {
+                        return Ok(token);
+                    }
+                }
+                _ => unreachable!(),
+            },
+            _ => (),
+        }
+
+        Err(Error {
+            kind: ErrorKind::ExpectingOther {
+                expecting: vec![(TokenKind::TokenLiteral, None)],
+                found: token.clone(),
+            },
+            loc: token.loc,
+        })
     }
 
     pub fn set_cursor(&mut self, cursor: usize) {
@@ -129,9 +155,9 @@ impl Parseable for AstTypeReference {
 }
 
 #[derive(Debug, Clone)]
-pub struct AstEncodingReference(pub String);
+pub struct AstUppercaseReference(pub String);
 
-impl Parseable for AstEncodingReference {
+impl Parseable for AstUppercaseReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
@@ -147,7 +173,7 @@ impl Parseable for AstEncodingReference {
                             loc: token.loc,
                             kind: ErrorKind::ExpectingOther {
                                 expecting: vec![(
-                                    TokenKind::EncodingReference,
+                                    TokenKind::UppercaseReference,
                                     Some(TokenData::Named(name.clone())),
                                 )],
                                 found: token,
@@ -156,7 +182,7 @@ impl Parseable for AstEncodingReference {
                     }
                 }
                 ParseResult::Ok(AstElement {
-                    element: AstEncodingReference(match token.data.unwrap() {
+                    element: AstUppercaseReference(match token.data.unwrap() {
                         TokenData::Named(name) => name,
                         _ => unreachable!(),
                     }),
@@ -374,6 +400,81 @@ impl Parseable for AstBracedTokenStream {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AstSyntaxTokenLiteral {
+    pub token: std::string::String,
+}
+
+lazy_static::lazy_static! {
+    // from X.681 clause 10.6
+    static ref ILLEGAL_TOKEN_LITERALS: std::collections::HashSet<&'static str> = std::collections::HashSet::from_iter(vec![
+        "BIT",
+        "BOOLEAN",
+        "CHARACTER",
+        "CHOICE",
+        "CONTAINING",
+        "DATE",
+        "DATE-TIME",
+        "DURATION",
+        "EMBEDDED",
+        "END",
+        "ENUMERATED",
+        "EXTERNAL",
+        "FALSE",
+        "INSTANCE",
+        "INTEGER",
+        "MINUS-INFINITY",
+        "NOT-A-NUMBER",
+        "NULL",
+        "OBJECT",
+        "OCTET",
+        "OID-IRI",
+        "PLUS-INFINITY",
+        "REAL",
+        "RELATIVE-OID",
+        "RELATIVE-OID-IRI",
+        "SEQUENCE",
+        "SET",
+        "TIME",
+        "TIME-OF-DAY",
+        "TRUE",
+        "TYPE-IDENTIFIER",
+    ]);
+}
+
+impl Parseable for AstSyntaxTokenLiteral {
+    fn parse(context: ParseContext) -> ParseResult<Self> {
+        context
+            .tokens
+            .try_parse_token_literal()
+            .map(|token| {
+                let token_data = token.data.unwrap();
+                let token_text = match &token_data {
+                    TokenData::Named(named) => named.as_str(),
+                    TokenData::Keyword(keyword) => keyword.name(),
+                    TokenData::Operator(op) => op.name(),
+                    _ => unreachable!(),
+                };
+                if ILLEGAL_TOKEN_LITERALS.contains(token_text) {
+                    ParseResult::Error(Error {
+                        kind: ErrorKind::IllegalTokenLiteral {
+                            token: token_text.to_string(),
+                        },
+                        loc: token.loc,
+                    })
+                } else {
+                    ParseResult::Ok(AstElement {
+                        element: AstSyntaxTokenLiteral {
+                            token: token_text.to_string(),
+                        },
+                        loc: token.loc,
+                    })
+                }
+            })
+            .unwrap_or_else(ParseResult::Fail)
+    }
+}
+
 pub struct ParseContext<'a> {
     pub tokens: &'a mut TokenStream,
     start: usize,
@@ -387,7 +488,7 @@ impl<'a> ParseContext<'a> {
         }
     }
 
-    pub fn element<T>(&self, element: T) -> AstElement<T> {
+    pub fn element<T: Clone>(&self, element: T) -> AstElement<T> {
         AstElement {
             element,
             loc: self.loc(),
@@ -403,17 +504,17 @@ impl<'a> ParseContext<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct AstElement<T> {
+pub struct AstElement<T: Clone> {
     pub element: T,
     pub loc: Loc,
 }
 
-impl<T> AstElement<T> {
+impl<T: Clone> AstElement<T> {
     pub fn new(element: T, loc: Loc) -> AstElement<T> {
         AstElement { element, loc }
     }
 
-    pub fn map<U, F>(self, mapper: F) -> AstElement<U>
+    pub fn map<U: Clone, F>(self, mapper: F) -> AstElement<U>
     where
         F: FnOnce(T) -> U,
     {
@@ -424,6 +525,13 @@ impl<T> AstElement<T> {
         AstElement {
             element: &self.element,
             loc: self.loc,
+        }
+    }
+
+    pub fn with_loc(&self, loc: Loc) -> AstElement<T> {
+        AstElement {
+            element: self.element.clone(),
+            loc,
         }
     }
 }
@@ -450,7 +558,7 @@ impl Default for Loc {
     }
 }
 
-pub enum ParseResult<T: Sized> {
+pub enum ParseResult<T: Sized + Clone> {
     Ok(AstElement<T>),
     Fail(Error),
     Error(Error),
@@ -558,14 +666,14 @@ macro_rules! try_enum {
 
 pub trait Parseable
 where
-    Self: Sized,
+    Self: Sized + Clone,
 {
     fn parse(context: ParseContext<'_>) -> ParseResult<Self>;
 }
 
 pub trait ParseableEnum
 where
-    Self: Sized,
+    Self: Sized + Clone,
 {
     fn parse(context: ParseContext<'_>, data: Option<TokenData>) -> ParseResult<Self>;
 }

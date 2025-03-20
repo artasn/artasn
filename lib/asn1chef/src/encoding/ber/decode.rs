@@ -378,6 +378,9 @@ fn ber_decode_tlv(
                             source_ident: match &data.tagged_type.ty {
                                 UntaggedType::BuiltinType(_) => None,
                                 UntaggedType::Reference(typeref) => Some(typeref.element.clone()),
+                                UntaggedType::ObjectClassField(_) => {
+                                    todo!("handle ObjectClassField")
+                                }
                             },
                             component_name: data.name,
                             resolved: data

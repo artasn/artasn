@@ -1,0 +1,75 @@
+InformationObjectClassTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+PRODUCT ::= CLASS {
+  &code        INTEGER (1..99999) UNIQUE,
+  &description UTF8String (SIZE (1..100)),
+  &price       REAL,
+  &Feature     OPTIONAL
+} WITH SYNTAX { CODE &code, DESCRIPTION &description, PRICE &price [, FEATURE &Feature] }
+
+Generation ::= ENUMERATED { two-G, three-G, four-G, five-G }
+Weight ::= INTEGER
+
+product-iPhone PRODUCT ::= { CODE 101, DESCRIPTION "iPhone", PRICE 250.00, FEATURE Generation }
+product-glass-egg PRODUCT ::= { CODE 105, DESCRIPTION "Glass Egg", PRICE 2000.00 }
+
+ProductCatalog PRODUCT ::= {
+  product-iPhone |
+  {CODE 102, DESCRIPTION "Android Galaxy", PRICE 250.00, FEATURE Generation } |
+  {CODE 103, DESCRIPTION "Win7 Nokia", PRICE 150.00, FEATURE Generation } |
+  {CODE 104, DESCRIPTION "Bookshelf", PRICE 100.00, FEATURE Weight} |
+  product-glass-egg
+}
+
+Item ::= SEQUENCE {
+  itemCode        PRODUCT.&code ({ProductCatalog}),
+  itemDescription PRODUCT.&description({ProductCatalog}{@itemCode}),
+  feature         PRODUCT.&Feature ({ProductCatalog}{@itemCode}) OPTIONAL,
+  quantity        INTEGER (1..1000),
+  unitPrice       PRODUCT.&price ({ProductCatalog}{@itemCode})
+}
+
+item-iPhone-compliant-1 Item ::= {
+  itemCode 101,
+  itemDescription "iPhone",
+  feature Generation : four-G,
+  quantity 300,
+  unitPrice 250.00
+}
+item-iPhone-compliant-2 Item ::= {
+  itemCode product-iPhone.&code,
+  itemDescription product-iPhone.&description,
+  feature product-iPhone.&Feature : five-G,
+  quantity 300,
+  unitPrice product-iPhone.&price
+}
+item-iPhone-compliant-3 Item ::= {
+  itemCode product-iPhone.&code,
+  itemDescription product-iPhone.&description,
+  feature product-iPhone.&Feature : four-G,
+  quantity 300,
+  unitPrice product-iPhone.&price
+}
+-- item-iPhone-noncompliant-1 Item ::= {
+--   itemCode 101,
+--   itemDescription "not iPhone",
+--   feature Generation : four-G,
+--   quantity 300,
+--   unitPrice 250.00
+-- }
+
+item-glass-egg-compliant-1 Item ::= {
+  itemCode product-glass-egg.&code,
+  itemDescription product-glass-egg.&description,
+  quantity 1,
+  unitPrice product-glass-egg.&price
+}
+-- item-glass-egg-noncompliant-1 Item ::= {
+--   itemCode product-glass-egg.&code,
+--   itemDescription product-glass-egg.&description,
+--   feature Weight : 5,
+--   quantity 1,
+--   unitPrice product-glass-egg.&price
+-- }
+
+END

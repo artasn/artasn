@@ -1,7 +1,7 @@
-Classes DEFINITIONS EXPLICIT TAGS ::= BEGIN
+InformationObjectClasses DEFINITIONS EXPLICIT TAGS ::= BEGIN
 
 -- TYPE-IDENTIFIER
-TypeIdentifier ::= CLASS {
+CLASS-TYPE-IDENTIFIER ::= CLASS {
     &id OBJECT IDENTIFIER UNIQUE,
     &Type
 } WITH SYNTAX {
@@ -9,7 +9,7 @@ TypeIdentifier ::= CLASS {
 }
 
 -- ABSTRACT-SYNTAX
-AbstractSyntax ::= CLASS {
+CLASS-ABSTRACT-SYNTAX ::= CLASS {
    &id OBJECT IDENTIFIER UNIQUE,
    &Type,
    &property BIT STRING { handles-invalid-encodings(0) } DEFAULT {}
@@ -18,9 +18,9 @@ AbstractSyntax ::= CLASS {
 }
 
 -- INSTANCE OF
-InstanceOf{DefinedObjectClass} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
-    type-id DefinedObjectClass.&id,
-    value [0] DefinedObjectClass.&Type
-}
+-- InstanceOf{DefinedObjectClass} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
+--     type-id DefinedObjectClass.&id,
+--     value [0] DefinedObjectClass.&Type
+-- }
 
 END

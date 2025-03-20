@@ -1,6 +1,6 @@
 {
-  "name": "razzle-examples-with-typescript",
-  "version": "4.2.15",
+  "name": "asn1chef-editor",
+  "version": "0.1.0",
   "license": "MIT",
   "scripts": {
     "dev": "vite",

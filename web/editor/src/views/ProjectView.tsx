@@ -24,7 +24,7 @@ function getTypeString(ty: TaggedType): string {
         return ty.name + ' FROM ' + getModuleString(ty.module);
     } else {
         let str;
-        if (ty.tag.source !== TagSource.TagImplied) {
+        if (ty.tag && ty.tag.source !== TagSource.TagImplied) {
             if (ty.tag.class === TagClass.ContextSpecific) {
                 str = `[${ty.tag.num}] `;
             } else {
@@ -47,7 +47,7 @@ function getTypeString(ty: TaggedType): string {
 function getValueString(ref: ValueReference): string {
     if (ref.mode === 'reference') {
         return ref.name + ' FROM ' + getModuleString(ref.module);
-    } else {
+    } else if (ref.mode === 'value') {
         switch (ref.type) {
             case 'BOOLEAN':
                 return ref.value.toString().toUpperCase();
@@ -55,6 +55,7 @@ function getValueString(ref: ValueReference): string {
             case 'REAL':
                 return ref.value.toString();
             case 'BIT STRING':
+                return ref.value.data.slice(0, ref.value.data.length - ref.value.unusedBits);
             case 'OBJECT IDENTIFIER':
                 return ref.value;
             case 'OCTET STRING':
@@ -67,6 +68,10 @@ function getValueString(ref: ValueReference): string {
                 }
                 return '';
         }
+    } else if (ref.mode === 'objectClassField') {
+        return `${ref.class}.&${ref.field}`;
+    } else {
+        throw new Error('unreachable');
     }
 }
 
@@ -207,9 +212,13 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
             icon: IconValue,
         };
         for (const valueDef of declarations.values) {
+            let type = valueDef.ty.mode === 'reference' && {
+                module: valueDef.ty.module,
+                name: valueDef.ty.name,
+            };
             valuesItem.children!.push({
                 ...getValueItem(`values/${JSON.stringify(valueDef.ident)}`, valueDef.value, valueDef.ident.name, valueDef.ty),
-                data: { kind: 'value', ident: valueDef.ident },
+                data: { kind: 'value', ident: valueDef.ident, type  },
             });
         }
         items.push(valuesItem);
@@ -232,6 +241,7 @@ const ProjectView = () => {
         declarations: null,
         items: [],
     });
+    const [selectedItemType, setSelectedItemType] = useState<QualifiedIdentifier | null>(null);
     const [derValue, setDerValue] = useState('');
 
     const refreshTree = (res: compiler.CompileResult) => {
@@ -242,6 +252,7 @@ const ProjectView = () => {
                 items: [],
             });
             setDerValue('');
+            setSelectedItemType(null);
         } else {
             setTreeData(tree.hierarchical, res.declarations);
         }
@@ -279,10 +290,12 @@ const ProjectView = () => {
             if (parsed.data) {
                 if (parsed.data.kind === 'value') {
                     const ident: QualifiedIdentifier = parsed.data.ident;
+                    setSelectedItemType(parsed.data.type);
                     setDerValue(await compiler.encodeValue(TransferSyntax.DER, ident));
                 }
             } else {
                 setDerValue('');
+                setSelectedItemType(null);
             }
         }
     };
@@ -357,7 +370,7 @@ const ProjectView = () => {
                     maxWidth: '100%',
                     fontSize: '1rem',
                     userSelect: 'text',
-                }}><DecodedValueInfo viewMode="components" encodedValue={derValue} /></Card>
+                }}><DecodedValueInfo typeIdent={selectedItemType ?? undefined} viewMode="components" encodedValue={derValue} /></Card>
             </Box>
         </Box>
     );

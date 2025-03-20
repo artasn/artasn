@@ -1,10 +1,12 @@
+mod class;
+pub(crate) mod constraints;
 mod object_id;
 pub(crate) mod types;
-pub(crate) mod constraints;
 mod values;
 mod verify;
 
-use types::TypeAssignmentParseMode;
+use types::{ParsedTypeAssignment, TypeAssignmentParseMode};
+use values::{ParseValueAssignmentStage, ParsedValueAssignment};
 
 use super::options::CompilerConfig;
 use super::{parser::*, Context};
@@ -17,6 +19,18 @@ pub struct AstParser<'a> {
     pub config: &'a CompilerConfig,
     pub ast_module: &'a AstElement<AstModule>,
     pub module: ModuleIdentifier,
+}
+
+impl AstParser<'_> {
+    pub fn resolve_symbol(&self, symbol: &AstElement<&String>) -> AstElement<QualifiedIdentifier> {
+        AstElement::new(
+            self.context
+                .lookup_module(&self.module)
+                .expect("lookup_module")
+                .resolve_symbol(self.context, symbol.element),
+            symbol.loc,
+        )
+    }
 }
 
 pub struct AstVerifier<'a> {
@@ -243,7 +257,7 @@ pub fn register_all_parameterized_types(
     }
 }
 
-/// Stage 3: register all declared types.
+/// Stage 3: register all declared types and information object class types.
 pub fn register_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -252,7 +266,7 @@ pub fn register_all_types(
     match run_parser(context, config, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
-            if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
+            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
                 match types::parse_type_assignment(
                     &parser,
                     type_assignment,
@@ -268,7 +282,12 @@ pub fn register_all_types(
     }) {
         Ok(types) => {
             for (ident, decl) in types {
-                context.register_type(ident, decl);
+                match decl {
+                    ParsedTypeAssignment::DeclaredType(decl) => context.register_type(ident, decl),
+                    ParsedTypeAssignment::InformationObjectClass(decl) => {
+                        context.register_information_object_class(ident, decl)
+                    }
+                }
             }
             Vec::new()
         }
@@ -276,7 +295,75 @@ pub fn register_all_types(
     }
 }
 
-/// Stage 4: register the constraints for all types.
+// Stage 4: register all declared information object class sets.
+pub fn register_all_information_object_class_sets(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::ObjectClassSetAssignment(class_set_assignment) =
+                &assignment.element
+            {
+                results.push(class::parse_object_class_set_assignment(
+                    &parser,
+                    class_set_assignment,
+                ));
+            }
+        }
+        results
+    }) {
+        Ok(types) => {
+            for (ident, decl) in types {
+                context.register_information_object_class_set(ident, decl);
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+// Stage 5: register all declared information object class values.
+pub fn register_all_information_object_class_values(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
+                match values::parse_value_assignment(
+                    &parser,
+                    value_assignment,
+                    ParseValueAssignmentStage::ClassValues,
+                ) {
+                    Ok(Some(result)) => results.push(Ok(result)),
+                    Ok(None) => (),
+                    Err(err) => results.push(Err(err)),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(values) => {
+            for (ident, parsed) in values {
+                match parsed {
+                    ParsedValueAssignment::Value(_) => unreachable!(),
+                    ParsedValueAssignment::Class(class) => {
+                        context.register_information_object_class_value(ident, class)
+                    }
+                };
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+/// Stage 6: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
     config: &CompilerConfig,
@@ -286,10 +373,7 @@ pub fn register_all_constraints(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                match constraints::parse_type_assignment_constraint(
-                    &parser,
-                    type_assignment,
-                ) {
+                match constraints::parse_type_assignment_constraint(&parser, type_assignment) {
                     Ok(Some(decl)) => results.push(Ok(decl)),
                     Err(decl) => results.push(Err(decl)),
                     _ => (),
@@ -309,8 +393,9 @@ pub fn register_all_constraints(
     }
 }
 
-/// Stage 5: register all declared values.
-pub fn register_all_values(
+/// Stage 7: register all declared values that do not contain references
+/// to information object class fields.
+pub fn register_all_normal_values(
     context: &mut Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
@@ -319,14 +404,25 @@ pub fn register_all_values(
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
-                results.push(values::parse_value_assignment(&parser, value_assignment));
+                match values::parse_value_assignment(
+                    &parser,
+                    value_assignment,
+                    ParseValueAssignmentStage::NormalValues,
+                ) {
+                    Ok(Some(result)) => results.push(Ok(result)),
+                    Ok(None) => (),
+                    Err(err) => results.push(Err(err)),
+                }
             }
         }
         results
     }) {
         Ok(values) => {
-            for (ident, val) in values {
-                context.register_value(ident, val);
+            for (ident, parsed) in values {
+                match parsed {
+                    ParsedValueAssignment::Value(value) => context.register_value(ident, value),
+                    ParsedValueAssignment::Class(_) => unreachable!(),
+                };
             }
             Vec::new()
         }
@@ -334,7 +430,46 @@ pub fn register_all_values(
     }
 }
 
-/// Stage 6: verify all types.
+/// Stage 8: register all values that contain references to information object class fields.
+pub fn register_all_class_reference_values(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
+                match values::parse_value_assignment(
+                    &parser,
+                    value_assignment,
+                    ParseValueAssignmentStage::ClassReferenceValues,
+                ) {
+                    Ok(Some(result)) => results.push(Ok(result)),
+                    Ok(None) => (),
+                    Err(err) => results.push(Err(err)),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(values) => {
+            for (ident, parsed) in values {
+                // don't double-register parsed values
+                if context.lookup_value(&ident).is_none() {
+                    match parsed {
+                        ParsedValueAssignment::Value(value) => context.register_value(ident, value),
+                        ParsedValueAssignment::Class(_) => unreachable!(),
+                    };
+                }
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+/// Stage 9: verify all types.
 pub fn verify_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -358,7 +493,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Stage 7: verify all declared values.
+/// Stage 10: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     config: &CompilerConfig,

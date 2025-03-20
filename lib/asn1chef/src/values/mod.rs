@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use num::BigInt;
 
 mod simple;
@@ -8,6 +10,9 @@ pub use time::*;
 
 mod special;
 pub use special::*;
+
+mod class;
+pub use class::*;
 
 use crate::{
     compiler::{
@@ -29,12 +34,12 @@ pub enum BuiltinValue {
     ObjectIdentifier(ObjectIdentifier),
     RelativeOid(ObjectIdentifier),
     RealLiteral(RealLiteral),
-    Enumerated(Box<AstElement<Value>>),
+    Enumerated(Box<AstElement<TypedValue>>),
     Time(Time),
     Sequence(StructureValue),
-    SequenceOf(Vec<AstElement<Value>>),
+    SequenceOf(Vec<AstElement<TypedValue>>),
     Set(StructureValue),
-    SetOf(Vec<AstElement<Value>>),
+    SetOf(Vec<AstElement<TypedValue>>),
     Choice(ChoiceValue),
     CharacterString(TagType, String),
     UTCTime(UTCTime),
@@ -63,7 +68,7 @@ impl BuiltinValue {
             Self::Time(_) => TagType::Time,
             Self::Sequence(_) | Self::SequenceOf(_) => TagType::Sequence,
             Self::Set(_) | Self::SetOf(_) => TagType::Set,
-            Self::Choice(choice) => choice.value.resolve(context)?.tag_type(context)?,
+            Self::Choice(choice) => choice.value.resolve(context)?.value.tag_type(context)?,
             Self::CharacterString(tag_type, _) => *tag_type,
             Self::UTCTime(_) => TagType::UTCTime,
             Self::GeneralizedTime(_) => TagType::GeneralizedTime,
@@ -76,25 +81,103 @@ impl BuiltinValue {
     }
 }
 
+impl Display for BuiltinValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Boolean(b) => f.write_str(match b {
+                true => "TRUE",
+                false => "FALSE",
+            })?,
+            Self::Integer(i) => f.write_str(&i.to_string())?,
+            Self::BitString(bs) => f.write_fmt(format_args!("'{}'B", bs))?,
+            Self::OctetString(bytes) => {
+                f.write_fmt(format_args!("'{}'H", hex::encode_upper(bytes)))?
+            }
+            Self::Null => f.write_str("NULL")?,
+            Self::ObjectIdentifier(oid) | Self::RelativeOid(oid) => oid.fmt(f)?,
+            Self::RealLiteral(lit) => lit.fmt(f)?,
+            Self::Enumerated(_) => todo!("ENUMERATED to string"),
+            Self::Time(time) => f.write_fmt(format_args!("\"{}\"", time.source))?,
+            Self::Sequence(_) | Self::Set(_) => f.write_str("{ ... }")?,
+            Self::SequenceOf(_) | Self::SetOf(_) => f.write_str("{ ..., }")?,
+            Self::Choice(choice) => f.write_fmt(format_args!(
+                "{} : {}",
+                choice.alternative.element, choice.value.element.value
+            ))?,
+            Self::CharacterString(_, str) => f.write_fmt(format_args!("\"{}\"", str))?,
+            Self::UTCTime(time) => f.write_fmt(format_args!("\"{}\"", time.to_ber_string()))?,
+            Self::GeneralizedTime(time) => {
+                f.write_fmt(format_args!("\"{}\"", time.to_ber_string()))?
+            }
+            Self::Date(date) => f.write_fmt(format_args!("\"{}\"", date.to_ber_string()))?,
+            Self::TimeOfDay(time_of_day) => {
+                f.write_fmt(format_args!("\"{}\"", time_of_day.to_ber_string()))?
+            }
+            Self::DateTime(date_time) => {
+                f.write_fmt(format_args!("\"{}\"", date_time.to_ber_string()))?
+            }
+            Self::Duration(duration) => f.write_fmt(format_args!("\"{}\"", duration.source))?,
+            Self::Containing(containing) => f.write_fmt(format_args!(
+                "CONTAINING {}",
+                containing.value.element.value
+            ))?,
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum Value {
+pub struct ResolvedValue {
+    pub ty: ResolvedType,
+    pub value: BuiltinValue,
+}
+
+#[derive(Debug, Clone)]
+pub enum ValueReference {
     BuiltinValue(BuiltinValue),
     Reference(QualifiedIdentifier),
 }
 
+impl Display for ValueReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BuiltinValue(builtin) => builtin.fmt(f),
+            Self::Reference(reference) => reference.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypedValue {
+    pub resolved_type: ResolvedType,
+    pub value: ValueReference,
+}
+
 pub trait ValueResolve {
-    fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a BuiltinValue>;
+    fn resolve<'a>(&'a self, context: &'a Context) -> Result<ResolvedValue>;
     fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool>;
 }
 
-impl ValueResolve for AstElement<Value> {
-    fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a BuiltinValue> {
+impl ValueResolve for AstElement<TypedValue> {
+    fn resolve<'a>(&'a self, context: &'a Context) -> Result<ResolvedValue> {
         let mut valref = self;
+        let mut tag = self.element.resolved_type.tag.as_ref();
         loop {
-            match &valref.element {
-                Value::BuiltinValue(value) => return Ok(value),
-                Value::Reference(ident) => {
-                    valref = &context
+            match &valref.element.value {
+                ValueReference::BuiltinValue(value) => {
+                    let resolved_type = valref.element.resolved_type.clone();
+                    return Ok(ResolvedValue {
+                        ty: ResolvedType {
+                            tag: tag.cloned(),
+                            ty: resolved_type.ty,
+                            constraint: resolved_type.constraint,
+                        },
+                        value: value.clone(),
+                    });
+                }
+                ValueReference::Reference(ident) => {
+                    let deref = &context
                         .lookup_value(ident)
                         .ok_or_else(|| Error {
                             kind: ErrorKind::Ast(format!(
@@ -104,15 +187,50 @@ impl ValueResolve for AstElement<Value> {
                             loc: valref.loc,
                         })?
                         .value;
+                    if deref.element.resolved_type.ty != valref.element.resolved_type.ty
+                        && deref
+                            .element
+                            .resolved_type
+                            .tag
+                            .as_ref()
+                            .map(|tag| (&tag.class, &tag.num))
+                            != valref
+                                .element
+                                .resolved_type
+                                .tag
+                                .as_ref()
+                                .map(|tag| (&tag.class, &tag.num))
+                    {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "valuereference '{}' of type {} cannot reference a value of type {}",
+                                ident,
+                                valref.element.resolved_type.ty,
+                                deref.element.resolved_type.ty,
+                            )),
+                            loc: valref.loc,
+                        });
+                    }
+                    valref = deref;
+                    tag = tag.or(valref.element.resolved_type.tag.as_ref());
                 }
             }
         }
     }
 
     fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool> {
+        // fast path: if comparing two identical valuereferences, we know the underlying values are the same
+        if let (ValueReference::Reference(ref1), ValueReference::Reference(ref2)) =
+            (&self.element.value, &rhs.element.value)
+        {
+            if ref1 == ref2 {
+                return Ok(true);
+            }
+        }
+
         let lhs = self.resolve(context)?;
         let rhs = rhs.resolve(context)?;
-        Ok(match (lhs, rhs) {
+        Ok(match (&lhs.value, &rhs.value) {
             (BuiltinValue::Boolean(lhs), BuiltinValue::Boolean(rhs)) => lhs == rhs,
             (BuiltinValue::Integer(lhs), BuiltinValue::Integer(rhs)) => lhs == rhs,
             (BuiltinValue::BitString(lhs), BuiltinValue::BitString(rhs)) => lhs == rhs,
@@ -135,13 +253,37 @@ impl ValueResolve for AstElement<Value> {
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
                         "cannot compare values of types {} and {}",
-                        lhs.tag_type(context)?,
-                        rhs.tag_type(context)?
+                        lhs.value.tag_type(context)?,
+                        rhs.value.tag_type(context)?
                     )),
                     loc: self.loc,
                 })
             }
         })
+    }
+}
+
+pub fn resolve_untyped(
+    context: &Context,
+    valref: AstElement<&QualifiedIdentifier>,
+) -> Result<BuiltinValue> {
+    let mut ident = valref;
+    loop {
+        let deref = &context
+            .lookup_value(ident.element)
+            .ok_or_else(|| Error {
+                kind: ErrorKind::Ast(format!("undefined reference to value '{}'", ident.element)),
+                loc: ident.loc,
+            })?
+            .value;
+        match &deref.element.value {
+            ValueReference::BuiltinValue(value) => {
+                return Ok(value.clone());
+            }
+            ValueReference::Reference(valref) => {
+                ident = AstElement::new(valref, deref.loc);
+            }
+        }
     }
 }
 
@@ -213,5 +355,9 @@ mod test {
     json_test!(
         test_encode_named_bit_string,
         "../../test-data/encode/NamedBitTest"
+    );
+    json_test!(
+        test_type_identifier,
+        "../../test-data/encode/classes/TypeIdentifierTest"
     );
 }

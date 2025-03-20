@@ -25,7 +25,7 @@ impl CodeBuilder {
 
     pub fn substring(&self, start: usize, end: usize) -> String {
         self.buf[start..end].to_string()
-    } 
+    }
 
     pub fn into_string(self) -> String {
         self.buf
@@ -163,7 +163,9 @@ impl CodeBuilder {
             self.write(", ParseContext::new(context.tokens));\n");
         }
 
-        self.write_indented("ParseResult::Fail(Error{kind: ErrorKind::VariantUnmatched { variant: \"");
+        self.write_indented(
+            "ParseResult::Fail(Error{kind: ErrorKind::VariantUnmatched { variant: \"",
+        );
         self.write(enum_name);
         self.write("\".to_string(), }, loc: context.loc(), })\n");
 
