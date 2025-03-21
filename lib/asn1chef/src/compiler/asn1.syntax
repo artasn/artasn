@@ -306,7 +306,7 @@ rule ParameterizedReference {
 
 variant Reference = TypeReference | ValueReference;
 
-variant Assignment = ObjectClassSetAssignment | TypeAssignment | ValueAssignment;
+variant Assignment = ObjectSetAssignment | TypeAssignment | ValueAssignment;
 
 rule ParameterDeclList {
     captures {
@@ -412,7 +412,7 @@ rule SubtypeElementSet {
     return elements
 }
 
-variant SubtypeElement = TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
+variant SubtypeElement = UserDefinedConstraint | TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -465,6 +465,14 @@ variant ContentsConstraint = EncodedBy {
     ty = Type
     return ty
 };
+
+rule UserDefinedConstraint {
+    keyword CONSTRAINED
+    persist
+    keyword BY
+    operator {
+    operator }
+}
 
 rule SizeConstraint {
     captures {
@@ -685,6 +693,7 @@ rule Structure {
     captures {
         kind = StructureKind
         components = repeated: StructureComponent
+        extensible = bool
     }
     kind = StructureKind
     operator {
@@ -695,6 +704,11 @@ rule Structure {
     optional repeated {
         operator ,
         components = StructureComponent
+    }
+    optional {
+        operator ,
+        operator ...
+        extensible = true
     }
     operator }
 }
@@ -975,42 +989,44 @@ rule ValueAssignment {
     value = Value
 }
 
-rule ObjectClassSetAssignment {
+rule ObjectSetAssignment {
     captures {
         name = TypeReference
         ty = UppercaseReference
-        subject = ObjectClassSetAssignmentSubject
+        subject = ObjectSetAssignmentSubject
     }
     name = TypeReference
     ty = UppercaseReference
     operator ::=
-    operator {
-    subject = ObjectClassSetAssignmentSubject
-    persist
-    operator }
+    subject = ObjectSetAssignmentSubject
 }
 
-variant ObjectClassSetAssignmentSubject = EmptyExtensible {
+variant ObjectSetAssignmentSubject = EmptyExtensible {
+    operator {
     operator ...
+    persist
+    operator }
 } | ObjectSet {
     captures {
-        elements = repeated: ObjectClassSetElement
+        elements = repeated: ObjectSetElement
         extensible = bool
     }
-    elements = ObjectClassSetElement
+    operator {
+    elements = ObjectSetElement
     persist
     optional repeated {
         operator |
-        elements = ObjectClassSetElement
+        elements = ObjectSetElement
     }
     optional {
         operator ,
         operator ...
         extensible = true
     }
+    operator }
 };
 
-variant ObjectClassSetElement = ValueReference | BracedTokenStream;
+variant ObjectSetElement = ValueReference | BracedTokenStream;
 
 rule NamedBitStringValue {
     captures {
@@ -1088,7 +1104,7 @@ rule OpenTypeValue {
     value = Value
 }
 
-variant OpenTypeValueTypeReference = ObjectClassValueFieldReference | Type;
+variant OpenTypeValueTypeReference = ObjectValueFieldReference | Type;
 
 rule Negative {
     operator -
@@ -1144,7 +1160,7 @@ rule ContainingValue {
     return value
 }
 
-variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectClassValueFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
+variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectValueFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
 
 variant Value = BuiltinValue | ValueReference;
 variant IntegerValueReference = IntegerValue | ValueReference;
@@ -1168,7 +1184,7 @@ rule InformationObjectClass {
     syntax = SyntaxList
 }
 
-variant ObjectClassField = TypeField | ValueField;
+variant ObjectClassField = ObjectField | ObjectSetField | TypeField | ValueField;
 
 rule TypeField {
     captures {
@@ -1181,6 +1197,34 @@ rule TypeField {
         keyword OPTIONAL
         optional = true
     }
+}
+
+rule ObjectField {
+    captures {
+        name = ValueFieldReference
+        class = UppercaseReference
+        optional = bool
+    }
+    name = ValueFieldReference
+    class = UppercaseReference
+    optional {
+        keyword OPTIONAL
+        optional = true
+    }   
+}
+
+rule ObjectSetField {
+    captures {
+        name = TypeFieldReference
+        class = UppercaseReference
+        optional = bool
+    }
+    name = TypeFieldReference
+    class = UppercaseReference
+    optional {
+        keyword OPTIONAL
+        optional = true
+    }   
 }
 
 rule ValueField {
@@ -1261,12 +1305,12 @@ variant SyntaxListElement = OptionalSyntaxElement {
 
 variant SyntaxItem = FieldReference | SyntaxTokenLiteral;
 
-rule ObjectClassValueFieldReference {
+rule ObjectValueFieldReference {
     captures {
-        class_value_name = ValueReference
+        object_name = ValueReference
         field_ref = FieldReference
     }
-    class_value_name = ValueReference
+    object_name = ValueReference
     operator .
     persist
     field_ref = FieldReference

@@ -1,0 +1,10 @@
+{
+    "module": "ObjectFieldTest",
+    "tests": ["Encode"],
+    "values": [
+        {
+            "name": "common-name",
+            "der": "3035A01EA00C81048B092F648204726F6F7481058B092F640082077375626A65637481068B092F640000820B636F6D6D6F6E2D6E616D65"
+        }
+    ]
+}

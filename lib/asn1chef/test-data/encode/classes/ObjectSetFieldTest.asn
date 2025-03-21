@@ -1,0 +1,52 @@
+ObjectSetFieldTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+ATTRIBUTE ::= CLASS {
+    &id     OBJECT IDENTIFIER UNIQUE,
+    &name   UTF8String,
+    &Children ATTRIBUTE OPTIONAL
+} WITH SYNTAX {
+    ID             &id
+    WITH NAME      &name
+    [WITH CHILDREN &Children]
+}
+
+id-root         OBJECT IDENTIFIER ::= { joint-iso-itu-t asn1chef(1337) test(47) attribute(100) }
+id-subject      OBJECT IDENTIFIER ::= { id-root subject(0) }
+id-extensions   OBJECT IDENTIFIER ::= { id-root extension(1) }
+id-ext-metadata OBJECT IDENTIFIER ::= { id-extensions metadata(0) }
+
+attr-ext-metadata ATTRIBUTE ::= { ID id-ext-metadata WITH NAME "metadata" }
+attr-extensions   ATTRIBUTE ::= { ID id-extensions WITH NAME "extensions" WITH CHILDREN {attr-ext-metadata} }
+attr-subject      ATTRIBUTE ::= { ID id-subject WITH NAME "subject" }
+attr-root         ATTRIBUTE ::= { ID id-root WITH NAME "root" WITH CHILDREN {attr-subject | attr-extensions} }
+
+Attributes ATTRIBUTE ::= { attr-root | attr-subject | attr-extensions | attr-ext-metadata, ... }
+
+Attribute ::= SEQUENCE {
+    id     ATTRIBUTE.&id   ({Attributes}),
+    name   ATTRIBUTE.&name ({Attributes}{@id}),
+    children SEQUENCE OF Attribute OPTIONAL
+}
+
+root Attribute ::= {
+    id   attr-root.&id,
+    name attr-root.&name,
+    children {
+        {
+            id   attr-subject.&id,
+            name attr-subject.&name
+        },
+        {
+            id   attr-extensions.&id,
+            name attr-extensions.&name,
+            children {
+                {
+                    id   attr-ext-metadata.&id,
+                    name attr-ext-metadata.&name
+                }
+            }
+        }
+    }
+}
+
+END

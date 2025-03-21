@@ -2,7 +2,7 @@ use crate::{
     compiler::{ast::constraints, parser::*},
     module::QualifiedIdentifier,
     types::*,
-    values::{InformationObjectClassValue, ObjectClassReference, ObjectClassValueField},
+    values::{InformationObject, InformationObjectReference, ObjectField},
 };
 
 use super::{
@@ -75,6 +75,32 @@ fn parse_fields(
                     }),
                 ));
             }
+            AstObjectClassField::ObjectField(object) => {
+                fields.push((
+                    object
+                        .element
+                        .name
+                        .as_ref()
+                        .map(|name| name.0.element.0.clone()),
+                    ObjectClassField::Object(ObjectClassFieldObject {
+                        class: object.element.class.as_ref().map(|class| class.0.clone()),
+                        optional: object.element.optional,
+                    }),
+                ));
+            }
+            AstObjectClassField::ObjectSetField(object) => {
+                fields.push((
+                    object
+                        .element
+                        .name
+                        .as_ref()
+                        .map(|name| name.0.element.0.clone()),
+                    ObjectClassField::ObjectSet(ObjectClassFieldObject {
+                        class: object.element.class.as_ref().map(|class| class.0.clone()),
+                        optional: object.element.optional,
+                    }),
+                ));
+            }
         }
     }
     Ok(fields)
@@ -141,65 +167,89 @@ fn parse_next_syntax_node(
     class: &InformationObjectClass,
     token_stream: &mut TokenStream,
     item: &ObjectClassSyntaxNode,
-    fields: &mut Vec<(String, ObjectClassValueField)>,
+    fields: &mut Vec<(String, ObjectField)>,
 ) -> Result<()> {
-    match item.kind {
-        ObjectClassSyntaxNodeKind::TypeField => {
-            let ast_type = try_parse!(ParseContext::new(token_stream), AstType::parse);
-            let ty = types::parse_type(parser, &ast_type, &[], TypeContext::Contextless)?;
-            fields.push((
-                item.associated_data.clone(),
-                ObjectClassValueField::Type(ty),
-            ));
+    if item.kind == ObjectClassSyntaxNodeKind::TokenLiteral {
+        let ast_literal = try_parse!(
+            ParseContext::new(token_stream),
+            AstSyntaxTokenLiteral::parse
+        );
+        if ast_literal.element.token != item.associated_data {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "expecting syntax literal '{}', but found '{}'",
+                    item.associated_data, ast_literal.element.token
+                )),
+                loc: ast_literal.loc,
+            });
         }
-        ObjectClassSyntaxNodeKind::ValueField => {
-            let (_, field) = class
-                .fields
-                .iter()
-                .find(|(name, _)| name.element == item.associated_data)
-                .expect("syntax refers to a value that does not exist in the CLASS body");
-            let field_type = match field {
-                ObjectClassField::Value(value) => value.field_type.resolve(parser.context)?,
-                ObjectClassField::OpenType(_) => unreachable!(),
-            };
 
-            let ast_value = try_parse!(ParseContext::new(token_stream), AstValue::parse);
-            let value = values::parse_value(
-                parser,
-                ParseValueAssignmentStage::NormalValues,
-                &ast_value,
-                &field_type,
-            )?;
+        return Ok(());
+    }
+
+    let (_, field) = class
+        .fields
+        .iter()
+        .find(|(name, _)| name.element == item.associated_data)
+        .expect("syntax refers to a value that does not exist in the CLASS body");
+    match field {
+        ObjectClassField::Object(_) => {
+            let ast_object = try_parse!(ParseContext::new(token_stream), AstValueReference::parse);
+            let valref = values::resolve_valuereference(parser, &ast_object);
             fields.push((
                 item.associated_data.clone(),
-                ObjectClassValueField::Value(value),
+                ObjectField::Object(InformationObjectReference::Reference(valref)),
             ));
+
+            return Ok(());
         }
-        ObjectClassSyntaxNodeKind::TokenLiteral => {
-            let ast_literal = try_parse!(
-                ParseContext::new(token_stream),
-                AstSyntaxTokenLiteral::parse
-            );
-            if ast_literal.element.token != item.associated_data {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!(
-                        "expecting '{}', but found '{}'",
-                        item.associated_data, ast_literal.element.token
-                    )),
-                    loc: ast_literal.loc,
-                });
+        ObjectClassField::ObjectSet(field) => {
+            println!("ObjectSet {:#?}", field);
+            let class_ref = field
+                .class
+                .as_ref()
+                .map(|class| AstTypeReference(class.clone()));
+            let ast_set = try_parse!(ParseContext::new(token_stream), AstObjectSet::parse);
+            println!("{:#?}", ast_set);
+            let set = parse_object_set(parser, &class_ref, &ast_set)?;
+
+            fields.push((item.associated_data.clone(), ObjectField::ObjectSet(set)));
+
+            return Ok(());
+        }
+        _ => match item.kind {
+            ObjectClassSyntaxNodeKind::TypeField => {
+                let ast_type = try_parse!(ParseContext::new(token_stream), AstType::parse);
+                let ty = types::parse_type(parser, &ast_type, &[], TypeContext::Contextless)?;
+                fields.push((item.associated_data.clone(), ObjectField::Type(ty)));
             }
-        }
+            ObjectClassSyntaxNodeKind::ValueField => {
+                let field_type = match field {
+                    ObjectClassField::Value(value) => value.field_type.resolve(parser.context)?,
+                    _ => unreachable!(),
+                };
+
+                let ast_value = try_parse!(ParseContext::new(token_stream), AstValue::parse);
+                let value = values::parse_value(
+                    parser,
+                    ParseValueAssignmentStage::NormalValues,
+                    &ast_value,
+                    &field_type,
+                )?;
+                fields.push((item.associated_data.clone(), ObjectField::Value(value)));
+            }
+            ObjectClassSyntaxNodeKind::TokenLiteral => unreachable!(),
+        },
     }
 
     Ok(())
 }
 
-pub(crate) fn parse_information_object_class_value(
+pub(crate) fn parse_information_object(
     parser: &AstParser<'_>,
     tokens: &AstElement<AstBracedTokenStream>,
     class: &InformationObjectClass,
-) -> Result<InformationObjectClassValue> {
+) -> Result<InformationObject> {
     let mut token_stream = TokenStream::from_tokens(tokens.element.0.clone());
     try_parse!(ParseContext::new(&mut token_stream), |ctx| {
         Operator::match_operator(Operator::OpenBrace, ctx)
@@ -212,6 +262,7 @@ pub(crate) fn parse_information_object_class_value(
                 parse_next_syntax_node(parser, class, &mut token_stream, item, &mut fields)?
             }
             ObjectClassSyntaxNodeGroup::Optional(items) => {
+                let cursor = token_stream.cursor();
                 match parse_next_syntax_node(
                     parser,
                     class,
@@ -230,7 +281,10 @@ pub(crate) fn parse_information_object_class_value(
                             )?
                         }
                     }
-                    Err(_) => continue,
+                    Err(_) => {
+                        token_stream.set_cursor(cursor);
+                        continue;
+                    }
                 }
             }
         }
@@ -240,57 +294,64 @@ pub(crate) fn parse_information_object_class_value(
         Operator::match_operator(Operator::CloseBrace, ctx)
     });
 
-    Ok(InformationObjectClassValue { fields })
+    Ok(InformationObject { fields })
 }
 
-pub(crate) fn parse_object_class_set_assignment(
+fn parse_object_set(
     parser: &AstParser<'_>,
-    ast_set: &AstElement<AstObjectClassSetAssignment>,
-) -> Result<(QualifiedIdentifier, Vec<ObjectClassReference>)> {
+    class_ref: &AstElement<AstTypeReference>,
+    set: &AstElement<AstObjectSet>,
+) -> Result<Vec<InformationObjectReference>> {
+    let class = parser
+        .context
+        .lookup_information_object_class(&types::resolve_typereference(parser, class_ref).element);
+    let class = class.ok_or_else(|| Error {
+        kind: ErrorKind::Ast(format!(
+            "undefined reference to information object class '{}'",
+            class_ref.element.0,
+        )),
+        loc: class_ref.loc,
+    })?;
+
+    let mut classes = Vec::new();
+    for ast_element in &set.element.elements {
+        match &ast_element.element {
+            AstObjectSetElement::BracedTokenStream(tokens) => {
+                classes.push(InformationObjectReference::Value(parse_information_object(
+                    parser, tokens, class,
+                )?));
+            }
+            AstObjectSetElement::ValueReference(valref) => {
+                classes.push(InformationObjectReference::Reference(
+                    values::resolve_valuereference(parser, valref),
+                ));
+            }
+        }
+    }
+
+    Ok(classes)
+}
+
+pub(crate) fn parse_object_set_assignment(
+    parser: &AstParser<'_>,
+    ast_set: &AstElement<AstObjectSetAssignment>,
+) -> Result<(QualifiedIdentifier, Vec<InformationObjectReference>)> {
     let ast_name = &ast_set.element.name;
     let name = ast_name.element.0.clone();
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
 
-    let mut classes = Vec::new();
-    match &ast_set.element.subject.element {
-        AstObjectClassSetAssignmentSubject::EmptyExtensible(_) => {
-
-        }
-        AstObjectClassSetAssignmentSubject::ObjectSet(set) => {
-            for ast_element in &set.element.elements {
-                match &ast_element.element {
-                    AstObjectClassSetElement::BracedTokenStream(tokens) => {
-                        let class = parser.context.lookup_information_object_class(
-                            &types::resolve_typereference(
-                                parser,
-                                &ast_set
-                                    .element
-                                    .ty
-                                    .as_ref()
-                                    .map(|name| AstTypeReference(name.0.clone())),
-                            )
-                            .element,
-                        );
-                        let class = class.ok_or_else(|| Error {
-                            kind: ErrorKind::Ast(format!(
-                                "undefined reference to information object class '{}'",
-                                ast_set.element.ty.element.0
-                            )),
-                            loc: ast_set.element.ty.loc,
-                        })?;
-                        classes.push(ObjectClassReference::Value(
-                            parse_information_object_class_value(parser, tokens, class)?,
-                        ));
-                    }
-                    AstObjectClassSetElement::ValueReference(valref) => {
-                        classes.push(ObjectClassReference::Reference(
-                            values::resolve_valuereference(parser, valref),
-                        ));
-                    }
-                }
-            }
-        }
-    }
+    let classes = match &ast_set.element.subject.element {
+        AstObjectSetAssignmentSubject::EmptyExtensible(_) => Vec::new(),
+        AstObjectSetAssignmentSubject::ObjectSet(set) => parse_object_set(
+            parser,
+            &ast_set
+                .element
+                .ty
+                .as_ref()
+                .map(|class| AstTypeReference(class.0.clone())),
+            set,
+        )?,
+    };
 
     Ok((ident, classes))
 }

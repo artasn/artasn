@@ -153,6 +153,7 @@ fn parse_subtype_element(
             }
             SubtypeElement::Table(parse_table_constraint(table, parameters)?)
         }
+        AstSubtypeElement::UserDefinedConstraint(_) => SubtypeElement::UserDefined,
     })
 }
 

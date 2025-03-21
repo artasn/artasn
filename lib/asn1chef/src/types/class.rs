@@ -12,6 +12,8 @@ pub struct InformationObjectClass {
 pub enum ObjectClassField {
     Value(ObjectClassFieldValue),
     OpenType(ObjectClassFieldType),
+    Object(ObjectClassFieldObject),
+    ObjectSet(ObjectClassFieldObject),
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,12 @@ pub enum ObjectClassFieldValueOption {
 
 #[derive(Debug, Clone)]
 pub struct ObjectClassFieldType {
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectClassFieldObject {
+    pub class: AstElement<String>,
     pub optional: bool,
 }
 

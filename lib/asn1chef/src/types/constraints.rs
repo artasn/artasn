@@ -70,6 +70,7 @@ pub enum SubtypeElement {
     InnerType(InnerTypeConstraints),
     Contents(ContentsConstraint),
     Table(TableConstraint),
+    UserDefined,
 }
 
 #[derive(Debug, Clone)]

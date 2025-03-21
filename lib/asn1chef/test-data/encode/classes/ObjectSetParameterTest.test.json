@@ -1,5 +1,5 @@
 {
-    "module": "ClassSetParameterTest",
+    "module": "ObjectSetParameterTest",
     "tests": ["Encode"],
     "values": [
         {

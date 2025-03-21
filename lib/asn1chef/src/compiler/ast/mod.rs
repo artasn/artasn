@@ -296,7 +296,7 @@ pub fn register_all_types(
 }
 
 // Stage 4: register all declared information object class sets.
-pub fn register_all_information_object_class_sets(
+pub fn register_all_information_object_sets(
     context: &mut Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
@@ -304,12 +304,10 @@ pub fn register_all_information_object_class_sets(
     match run_parser(context, config, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
-            if let AstAssignment::ObjectClassSetAssignment(class_set_assignment) =
-                &assignment.element
-            {
-                results.push(class::parse_object_class_set_assignment(
+            if let AstAssignment::ObjectSetAssignment(object_set_assignment) = &assignment.element {
+                results.push(class::parse_object_set_assignment(
                     &parser,
-                    class_set_assignment,
+                    object_set_assignment,
                 ));
             }
         }
@@ -317,7 +315,7 @@ pub fn register_all_information_object_class_sets(
     }) {
         Ok(types) => {
             for (ident, decl) in types {
-                context.register_information_object_class_set(ident, decl);
+                context.register_information_object_set(ident, decl);
             }
             Vec::new()
         }
@@ -326,7 +324,7 @@ pub fn register_all_information_object_class_sets(
 }
 
 // Stage 5: register all declared information object class values.
-pub fn register_all_information_object_class_values(
+pub fn register_all_information_objects(
     context: &mut Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
@@ -353,7 +351,7 @@ pub fn register_all_information_object_class_values(
                 match parsed {
                     ParsedValueAssignment::Value(_) => unreachable!(),
                     ParsedValueAssignment::Class(class) => {
-                        context.register_information_object_class_value(ident, class)
+                        context.register_information_object(ident, class)
                     }
                 };
             }

@@ -10,31 +10,33 @@ use crate::{
 use super::TypedValue;
 
 #[derive(Debug, Clone)]
-pub struct InformationObjectClassValue {
-    pub fields: Vec<(String, ObjectClassValueField)>,
+pub struct InformationObject {
+    pub fields: Vec<(String, ObjectField)>,
 }
 
 #[derive(Debug, Clone)]
-pub enum ObjectClassValueField {
+pub enum ObjectField {
     Type(TaggedType),
     Value(AstElement<TypedValue>),
+    Object(InformationObjectReference),
+    ObjectSet(Vec<InformationObjectReference>),
 }
 
 #[derive(Debug, Clone)]
-pub enum ObjectClassReference {
-    Value(InformationObjectClassValue),
+pub enum InformationObjectReference {
+    Value(InformationObject),
     Reference(AstElement<QualifiedIdentifier>),
 }
 
-impl ObjectClassReference {
-    pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObjectClassValue> {
+impl InformationObjectReference {
+    pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObject> {
         let mut classref = self;
         loop {
             match classref {
                 Self::Value(value) => return Ok(value),
                 Self::Reference(ident) => {
                     classref = context
-                        .lookup_information_object_class_value(&ident.element)
+                        .lookup_information_object(&ident.element)
                         .ok_or_else(|| Error {
                             kind: ErrorKind::Ast(format!(
                                 "undefined reference to information object class value '{}'",

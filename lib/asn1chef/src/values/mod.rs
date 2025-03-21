@@ -361,7 +361,15 @@ mod test {
         "../../test-data/encode/classes/TypeIdentifierTest"
     );
     json_test!(
-        test_class_set_parameter,
-        "../../test-data/encode/classes/ClassSetParameterTest"
+        test_object_set_parameter,
+        "../../test-data/encode/classes/ObjectSetParameterTest"
+    );
+    json_test!(
+        test_object_class_with_object_field,
+        "../../test-data/encode/classes/ObjectFieldTest"
+    );
+    json_test!(
+        test_object_class_with_object_set_field,
+        "../../test-data/encode/classes/ObjectSetFieldTest"
     );
 }

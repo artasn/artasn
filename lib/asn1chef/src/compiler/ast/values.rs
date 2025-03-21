@@ -141,7 +141,7 @@ fn parse_object_class_field_reference(
         parse_object_class_field(parser, struct_component, &ocf.class_type, &ocf.field)?;
     let set = parser
         .context
-        .lookup_information_object_class_set(
+        .lookup_information_object_set(
             &parser
                 .resolve_symbol(&table_constraint.set_name.as_ref())
                 .element,
@@ -207,7 +207,7 @@ fn parse_object_class_field_reference(
                 });
                 if let Some(class_field) = value_field {
                     match class_field {
-                        ObjectClassValueField::Value(value) => {
+                        ObjectField::Value(value) => {
                             if component_value.value.try_eq(parser.context, value)? {
                                 let type_field = object_class.fields.iter().find_map(|(name, field)| if name == &ocf.field.element {
                                     Some(field)
@@ -216,7 +216,7 @@ fn parse_object_class_field_reference(
                                 });
                                 if let Some(type_field) = type_field {
                                     match type_field {
-                                        ObjectClassValueField::Type(tagged_type) => {
+                                        ObjectField::Type(tagged_type) => {
                                             let inner_type = tagged_type.resolve(parser.context)?;
                                             if let Some(mut outer_tag) = struct_component.component_type.tag.clone() {
                                                 match &mut outer_tag.kind {
@@ -240,7 +240,7 @@ fn parse_object_class_field_reference(
                                                 return Ok(inner_type);
                                             }
                                         }
-                                        ObjectClassValueField::Value(_) => unreachable!(),
+                                        _ => unreachable!(),
                                     }
                                 } else {
                                     return Err(Error {
@@ -256,7 +256,9 @@ fn parse_object_class_field_reference(
                                 }
                             }
                         }
-                        ObjectClassValueField::Type(_) => todo!("open types referencing open types is not supported; should it be?"),
+                        ObjectField::Type(_) => todo!("open types referencing open types are not supported; should they be?"),
+                        ObjectField::Object(_) => todo!("open types referencing objects are not supported; should they be?"),
+                        ObjectField::ObjectSet(_) => todo!("open types referencing object sets are not supported; should they be?"),
                     }
                 }
             }
@@ -576,13 +578,13 @@ fn parse_braced_value<T: Parseable>(
     }
 }
 
-fn resolve_information_object_class_value<'a>(
+fn resolve_information_object<'a>(
     parser: &'a AstParser<'_>,
     ident: &AstElement<QualifiedIdentifier>,
-) -> Result<&'a InformationObjectClassValue> {
+) -> Result<&'a InformationObject> {
     parser
         .context
-        .lookup_information_object_class_value(&ident.element)
+        .lookup_information_object(&ident.element)
         .ok_or_else(|| Error {
             kind: ErrorKind::Ast(format!(
                 "undefined reference to information object class value '{}'",
@@ -831,30 +833,29 @@ pub fn parse_value(
                             types::parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
                         tagged_type.resolve(parser.context)?
                     }
-                    AstOpenTypeValueTypeReference::ObjectClassValueFieldReference(field_ref) => {
+                    AstOpenTypeValueTypeReference::ObjectValueFieldReference(field_ref) => {
                         if stage != ParseValueAssignmentStage::ClassReferenceValues {
                             return Err(Error::break_parser());
                         }
 
-                        let class_value_ref =
-                            resolve_valuereference(parser, &field_ref.element.class_value_name);
-                        let class_value =
-                            resolve_information_object_class_value(parser, &class_value_ref)?;
+                        let object_ref =
+                            resolve_valuereference(parser, &field_ref.element.object_name);
+                        let object = resolve_information_object(parser, &object_ref)?;
 
                         match &field_ref.element.field_ref.element {
                             AstFieldReference::TypeFieldReference(field_ref) => {
                                 let field_name = &field_ref.element.0.element.0;
-                                let field_type = class_value.fields.iter().find_map(|(name, field)| {
+                                let field_type = object.fields.iter().find_map(|(name, field)| {
                                     if name == field_name {
                                         Some(match field {
-                                            ObjectClassValueField::Type(tagged_type) => tagged_type,
-                                            ObjectClassValueField::Value(_) => unreachable!(),
+                                            ObjectField::Type(tagged_type) => tagged_type,
+                                            _ => unreachable!(),
                                         })
                                     } else {
                                         None
                                     }
                                 }).ok_or_else(|| Error {
-                                    kind: ErrorKind::Ast(format!("no such open type field '{}' in information object class value '{}'", field_name, class_value_ref.element)),
+                                    kind: ErrorKind::Ast(format!("no such open type field '{}' in information object class value '{}'", field_name, object_ref.element)),
                                     loc: field_ref.loc,
                                 })?;
                                 field_type.resolve(parser.context)?
@@ -879,16 +880,16 @@ pub fn parse_value(
                 }
                 return parse_value(parser, stage, &otv.element.value, target_type);
             }
-            AstBuiltinValue::ObjectClassValueFieldReference(class_value_field_ref) => {
+            AstBuiltinValue::ObjectValueFieldReference(object_field_ref) => {
                 if stage != ParseValueAssignmentStage::ClassReferenceValues {
                     return Err(Error::break_parser());
                 }
 
-                let class_value_name = &class_value_field_ref.element.class_value_name;
-                let ident = resolve_valuereference(parser, class_value_name);
-                let class_value = resolve_information_object_class_value(parser, &ident)?;
+                let object_name = &object_field_ref.element.object_name;
+                let ident = resolve_valuereference(parser, object_name);
+                let object = resolve_information_object(parser, &ident)?;
 
-                let name = match &class_value_field_ref.element.field_ref.element {
+                let name = match &object_field_ref.element.field_ref.element {
                     AstFieldReference::ValueFieldReference(valref) => {
                         &valref.element.0.as_ref().map(|name| &name.0)
                     }
@@ -901,14 +902,14 @@ pub fn parse_value(
                     }),
                 };
 
-                let value = class_value
+                let value = object
                     .fields
                     .iter()
                     .find_map(|(field_name, field)| {
                         if field_name == name.element {
                             Some(match field {
-                                ObjectClassValueField::Value(value) => value,
-                                ObjectClassValueField::Type(_) => unreachable!(),
+                                ObjectField::Value(value) => value,
+                                _ => unreachable!(),
                             })
                         } else {
                             None
@@ -983,7 +984,7 @@ pub(crate) fn resolve_valuereference(
 
 pub enum ParsedValueAssignment {
     Value(DeclaredValue),
-    Class(ObjectClassReference),
+    Class(InformationObjectReference),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1013,14 +1014,12 @@ pub fn parse_value_assignment(
                             return Ok(Some(match &value_assignment.element.value.element {
                                 AstValue::BuiltinValue(builtin) => match &builtin.element {
                                     AstBuiltinValue::BracedTokenStream(tokens) => {
-                                        let class_value =
-                                            class::parse_information_object_class_value(
-                                                parser, tokens, class,
-                                            )?;
+                                        let object =
+                                            class::parse_information_object(parser, tokens, class)?;
                                         (
                                             ident,
                                             ParsedValueAssignment::Class(
-                                                ObjectClassReference::Value(class_value),
+                                                InformationObjectReference::Value(object),
                                             ),
                                         )
                                     }
@@ -1036,9 +1035,11 @@ pub fn parse_value_assignment(
                                 },
                                 AstValue::ValueReference(valref) => (
                                     ident,
-                                    ParsedValueAssignment::Class(ObjectClassReference::Reference(
-                                        resolve_valuereference(parser, valref),
-                                    )),
+                                    ParsedValueAssignment::Class(
+                                        InformationObjectReference::Reference(
+                                            resolve_valuereference(parser, valref),
+                                        ),
+                                    ),
                                 ),
                             }));
                         }
