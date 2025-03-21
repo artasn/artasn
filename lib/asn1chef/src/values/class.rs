@@ -14,12 +14,41 @@ pub struct InformationObject {
     pub fields: Vec<(String, ObjectField)>,
 }
 
+impl InformationObject {
+    pub fn find_field<'a>(&'a self, field_ref: &AstElement<String>) -> Result<&'a ObjectField> {
+        Ok(self
+            .fields
+            .iter()
+            .find_map(|(name, field)| {
+                if name == &field_ref.element {
+                    Some(field)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error {
+                kind: ErrorKind::Ast(format!(
+                    "no such field '{}' in information object",
+                    field_ref.element
+                )),
+                loc: field_ref.loc,
+            })?)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ObjectField {
     Type(TaggedType),
     Value(AstElement<TypedValue>),
+    ObjectFieldReference(ObjectFieldReference),
     Object(InformationObjectReference),
     ObjectSet(Vec<InformationObjectReference>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectFieldReference {
+    pub object_ref: AstElement<QualifiedIdentifier>,
+    pub field: AstElement<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -4,13 +4,38 @@ use crate::{
     values::TypedValue,
 };
 
-use super::TaggedType;
+use super::{ObjectClassFieldReference, TaggedType};
 
 #[derive(Debug, Clone)]
 pub struct InformationObjectClass {
     pub name: AstElement<String>,
     pub fields: Vec<(AstElement<String>, ObjectClassField)>,
     pub syntax: Vec<ObjectClassSyntaxNodeGroup>,
+}
+
+impl InformationObjectClass {
+    pub fn find_field<'a>(
+        &'a self,
+        field_ref: &AstElement<String>,
+    ) -> Result<&'a ObjectClassField> {
+        Ok(self
+            .fields
+            .iter()
+            .find_map(|(name, field)| {
+                if name.element == field_ref.element {
+                    Some(field)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error {
+                kind: ErrorKind::Ast(format!(
+                    "no such field '{}' in information object class type '{}'",
+                    field_ref.element, self.name.element,
+                )),
+                loc: field_ref.loc,
+            })?)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +55,7 @@ pub struct ObjectClassFieldValue {
 #[derive(Debug, Clone)]
 pub enum ObjectClassFieldValueType {
     TaggedType(TaggedType),
+    ObjectClassFieldReference(ObjectClassFieldReference),
     OpenTypeReference(AstElement<String>),
 }
 
@@ -103,23 +129,35 @@ pub enum InformationObjectClassReference {
 }
 
 impl InformationObjectClassReference {
-    pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObjectClass> {
-        let mut classref = self;
+    pub fn resolve_reference<'a>(
+        &self,
+        context: &'a Context,
+    ) -> Result<&'a InformationObjectClass> {
+        let mut classref = match self {
+            Self::Class(_) => panic!("resolve_reference on Class"),
+            Self::Reference(ident) => ident,
+        };
         loop {
-            match classref {
+            let resolved = context
+                .lookup_information_object_class(&classref.element)
+                .ok_or_else(|| Error {
+                    kind: ErrorKind::Ast(format!(
+                        "undefined reference to information object class '{}'",
+                        classref.element
+                    )),
+                    loc: classref.loc,
+                })?;
+            match resolved {
                 Self::Class(class) => return Ok(class),
-                Self::Reference(ident) => {
-                    classref = context
-                        .lookup_information_object_class(&ident.element)
-                        .ok_or_else(|| Error {
-                            kind: ErrorKind::Ast(format!(
-                                "undefined reference to information object class '{}'",
-                                ident.element
-                            )),
-                            loc: ident.loc,
-                        })?;
-                }
+                Self::Reference(ident) => classref = ident,
             }
+        }
+    }
+
+    pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObjectClass> {
+        match self {
+            Self::Class(class) => return Ok(class),
+            Self::Reference(_) => self.resolve_reference(context),
         }
     }
 }

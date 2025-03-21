@@ -78,7 +78,7 @@ pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<RealLite
 fn parse_object_class_field<'a, 'b>(
     parser: &'a AstParser<'_>,
     ty_component: &'b StructureComponent,
-    class_type: &AstElement<String>,
+    class_type: &AstElement<QualifiedIdentifier>,
     field: &AstElement<String>,
 ) -> Result<(&'a ObjectClassField, &'b TableConstraint)> {
     let table_constraint = ty_component
@@ -96,32 +96,10 @@ fn parse_object_class_field<'a, 'b>(
         None => todo!("information object class field references without table constraints are currently unsupported: {}.&{}\n{:#?}", class_type.element, field.element, ty_component.component_type.constraint),
     };
 
-    let class = class::resolve_information_object_class(
-        parser,
-        &parser.resolve_symbol(&class_type.as_ref()),
-    )?
-    .resolve(parser.context)?;
+    let class =
+        class::resolve_information_object_class(parser, class_type)?.resolve(parser.context)?;
 
-    Ok((
-        class
-            .fields
-            .iter()
-            .find_map(|(name, class_field)| {
-                if name.element == field.element {
-                    Some(class_field)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| Error {
-                kind: ErrorKind::Ast(format!(
-                    "no such field '{}' in information object class type '{}'",
-                    field.element, class_type.element,
-                )),
-                loc: field.loc,
-            })?,
-        table_constraint,
-    ))
+    Ok((class.find_field(field)?, table_constraint))
 }
 
 fn parse_object_class_field_reference(
@@ -153,7 +131,8 @@ fn parse_object_class_field_reference(
         (ObjectClassField::Value(value_field), ObjectClassFieldReferenceKind::Value) => {
             let mut value_type = match &value_field.field_type {
                 ObjectClassFieldValueType::TaggedType(tagged_type) => tagged_type.resolve(parser.context)?,
-                ObjectClassFieldValueType::OpenTypeReference(_) => todo!("value fields referencing open type fields are not yet supported")
+                ObjectClassFieldValueType::OpenTypeReference(_) => todo!("value fields referencing open type fields are not yet supported"),
+                ObjectClassFieldValueType::ObjectClassFieldReference(_) => todo!("value fields referencing other object class value fields are not (yet?) supported"),
             };
             value_type.tag = struct_component.component_type.tag.clone().or(value_type.tag);
             Ok(value_type)
@@ -204,59 +183,75 @@ fn parse_object_class_field_reference(
                     None
                 });
                 if let Some(class_field) = value_field {
-                    match class_field {
-                        ObjectField::Value(value) => {
-                            if component_value.value.try_eq(parser.context, value)? {
-                                let type_field = object_class.fields.iter().find_map(|(name, field)| if name == &ocf.field.element {
-                                    Some(field)
-                                } else {
-                                    None
-                                });
-                                if let Some(type_field) = type_field {
-                                    match type_field {
-                                        ObjectField::Type(tagged_type) => {
-                                            let inner_type = tagged_type.resolve(parser.context)?;
-                                            if let Some(mut outer_tag) = struct_component.component_type.tag.clone() {
-                                                match &mut outer_tag.kind {
-                                                    TagKind::Explicit(inner_tag) => {
-                                                        *inner_tag = inner_type.tag.clone().map(|tag| (tag.class, tag.num));
-                                                        return Ok(ResolvedType {
-                                                            tag: Some(outer_tag),
-                                                            ty: inner_type.ty,
-                                                            constraint: inner_type.constraint,
-                                                        });
-                                                    }
-                                                    TagKind::Implicit => {
-                                                        return Ok(ResolvedType {
-                                                            tag: struct_component.component_type.tag.clone(),
-                                                            ty: inner_type.ty,
-                                                            constraint: inner_type.constraint,
-                                                        });
-                                                    }
-                                                }
-                                            } else {
-                                                return Ok(inner_type);
-                                            }
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                } else {
+                    let value = match class_field {
+                        ObjectField::Value(value) => value,
+                        ObjectField::ObjectFieldReference(ofr) => {
+                            let object =
+                                resolve_information_object(parser, &ofr.object_ref)?;
+
+                            match object.find_field(&ofr.field)? {
+                                ObjectField::Value(value) => value,
+                                _ => {
                                     return Err(Error {
                                         kind: ErrorKind::Ast(format!(
-                                            "class in set '{}' with field '{}' equal to {} does not define the field '{}'",
-                                            table_constraint.set_name.element,
-                                            component_ref_type.field.element,
-                                            component_value.value.resolve(parser.context)?.value,
-                                            struct_component.name.element,
+                                            "field '{}' is not a value field",
+                                            ofr.field.element
                                         )),
-                                        loc: val_component.loc,
-                                    });
+                                        loc: ofr.field.loc,
+                                    })
                                 }
                             }
                         }
                         ObjectField::Type(_) => todo!("open types referencing open types are not supported; should they be?"),
                         ObjectField::Object(_) => todo!("open types referencing objects are not supported; should they be?"),
                         ObjectField::ObjectSet(_) => todo!("open types referencing object sets are not supported; should they be?"),
+                    };
+                    if component_value.value.try_eq(parser.context, value)? {
+                        let type_field = object_class.fields.iter().find_map(|(name, field)| if name == &ocf.field.element {
+                            Some(field)
+                        } else {
+                            None
+                        });
+                        if let Some(type_field) = type_field {
+                            match type_field {
+                                ObjectField::Type(tagged_type) => {
+                                    let inner_type = tagged_type.resolve(parser.context)?;
+                                    if let Some(mut outer_tag) = struct_component.component_type.tag.clone() {
+                                        match &mut outer_tag.kind {
+                                            TagKind::Explicit(inner_tag) => {
+                                                *inner_tag = inner_type.tag.clone().map(|tag| (tag.class, tag.num));
+                                                return Ok(ResolvedType {
+                                                    tag: Some(outer_tag),
+                                                    ty: inner_type.ty,
+                                                    constraint: inner_type.constraint,
+                                                });
+                                            }
+                                            TagKind::Implicit => {
+                                                return Ok(ResolvedType {
+                                                    tag: struct_component.component_type.tag.clone(),
+                                                    ty: inner_type.ty,
+                                                    constraint: inner_type.constraint,
+                                                });
+                                            }
+                                        }
+                                    } else {
+                                        return Ok(inner_type);
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "class in set '{}' with field '{}' equal to {} does not define the field '{}'",
+                                    table_constraint.set_name.element,
+                                    component_ref_type.field.element,
+                                    component_value.value.resolve(parser.context)?.value,
+                                    struct_component.name.element,
+                                )),
+                                loc: val_component.loc,
+                            });
+                        }
                     }
                 }
             }
@@ -335,7 +330,13 @@ fn parse_structure_value(
                     false,
                 )
             } else if let Some(default_value) = &ty_component.default_value {
-                ((**default_value).clone(), true)
+                (
+                    default_value.parse(
+                        parser,
+                        &ty_component.component_type.resolve(parser.context)?,
+                    )?,
+                    true,
+                )
             } else {
                 if ty_component.optional {
                     continue;
@@ -585,7 +586,7 @@ fn resolve_information_object<'a>(
         .lookup_information_object(&ident.element)
         .ok_or_else(|| Error {
             kind: ErrorKind::Ast(format!(
-                "undefined reference to information object class value '{}'",
+                "undefined reference to information object '{}'",
                 ident.element
             )),
             loc: ident.loc,
@@ -831,7 +832,7 @@ pub fn parse_value(
                             types::parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
                         tagged_type.resolve(parser.context)?
                     }
-                    AstOpenTypeValueTypeReference::ObjectValueFieldReference(field_ref) => {
+                    AstOpenTypeValueTypeReference::ObjectFieldReference(field_ref) => {
                         if stage != ParseValueAssignmentStage::ClassReferenceValues {
                             return Err(Error::break_parser());
                         }
@@ -842,20 +843,20 @@ pub fn parse_value(
 
                         match &field_ref.element.field_ref.element {
                             AstFieldReference::TypeFieldReference(field_ref) => {
-                                let field_name = &field_ref.element.0.element.0;
-                                let field_type = object.fields.iter().find_map(|(name, field)| {
-                                    if name == field_name {
-                                        Some(match field {
-                                            ObjectField::Type(tagged_type) => tagged_type,
-                                            _ => unreachable!(),
+                                let field_name =
+                                    field_ref.element.0.as_ref().map(|name| name.0.clone());
+                                let field_type = match object.find_field(&field_name)? {
+                                    ObjectField::Type(ty) => ty,
+                                    _ => {
+                                        return Err(Error {
+                                            kind: ErrorKind::Ast(format!(
+                                                "field '{}' is not an open type field",
+                                                field_name.element
+                                            )),
+                                            loc: field_name.loc,
                                         })
-                                    } else {
-                                        None
                                     }
-                                }).ok_or_else(|| Error {
-                                    kind: ErrorKind::Ast(format!("no such open type field '{}' in information object class value '{}'", field_name, object_ref.element)),
-                                    loc: field_ref.loc,
-                                })?;
+                                };
                                 field_type.resolve(parser.context)?
                             }
                             AstFieldReference::ValueFieldReference(field_ref) => {
@@ -878,7 +879,7 @@ pub fn parse_value(
                 }
                 return parse_value(parser, stage, &otv.element.value, target_type);
             }
-            AstBuiltinValue::ObjectValueFieldReference(object_field_ref) => {
+            AstBuiltinValue::ObjectFieldReference(object_field_ref) => {
                 if stage != ParseValueAssignmentStage::ClassReferenceValues {
                     return Err(Error::break_parser());
                 }
@@ -1027,8 +1028,7 @@ pub fn parse_value_assignment(
                                     _ => {
                                         return Err(Error {
                                             kind: ErrorKind::Ast(
-                                                "expecting an information object class value"
-                                                    .to_string(),
+                                                "expecting an information object".to_string(),
                                             ),
                                             loc: builtin.loc,
                                         })

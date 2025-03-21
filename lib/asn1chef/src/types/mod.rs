@@ -249,13 +249,34 @@ impl TaggedType {
                     tag = tag.or(tagged_ty.tag.as_ref());
                 }
                 UntaggedType::ObjectClassField(ocf) => {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "expecting type, but found information object class field reference '{}'",
-                            ocf
-                        )),
-                        loc: ocf.class_type.loc,
-                    });
+                    let class_ref =
+                        InformationObjectClassReference::Reference(ocf.class_type.clone());
+                    let class = class_ref.resolve_reference(context)?;
+                    let field = class.find_field(&ocf.field)?;
+                    match field {
+                        ObjectClassField::Value(value) => {
+                            match &value.field_type {
+                                ObjectClassFieldValueType::TaggedType(tagged_type) => {
+                                    tagged_ty = tagged_type;
+                                    tag = tag.or(tagged_ty.tag.as_ref());
+                                }
+                                _ => return Err(Error {
+                                    kind: ErrorKind::Ast(format!(
+                                        "expecting type, but found information object class field reference '{}'",
+                                        ocf
+                                    )),
+                                    loc: ocf.class_type.loc,
+                                })
+                            }
+                        }
+                        _ => return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting type, but found information object class field reference '{}'",
+                                ocf
+                            )),
+                            loc: ocf.class_type.loc,
+                        })
+                    }
                 }
             }
         }

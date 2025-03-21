@@ -1,4 +1,5 @@
 use super::{
+    util::LazyParse,
     values::{self, ParseValueAssignmentStage},
     AstParser,
 };
@@ -26,6 +27,22 @@ lazy_static::lazy_static! {
         ModuleIdentifier::with_name(String::from("CharacterString")),
         String::from("CharacterString"),
     );
+}
+
+pub type LazyParsedDefaultValue =
+    LazyParse<ResolvedType, AstElement<AstValue>, Result<AstElement<TypedValue>>>;
+
+fn default_value_lazy_parser(
+    parser: &AstParser<'_>,
+    resolved_type: &ResolvedType,
+    default: &AstElement<AstValue>,
+) -> Result<AstElement<TypedValue>> {
+    Ok(values::parse_value(
+        parser,
+        ParseValueAssignmentStage::NormalValues,
+        default,
+        resolved_type,
+    )?)
 }
 
 fn parse_structure_components(
@@ -71,7 +88,7 @@ fn parse_structure_components(
 
             Ok(StructureComponent {
                 name: component.element.name.as_ref().map(|name| name.0.clone()),
-                default_value: match component.element.default.as_ref().map(|default| {
+                default_value: component.element.default.as_ref().map(|default| {
                     if let AstValue::ValueReference(valref) = &default.element {
                         let val_param =
                             parameters
@@ -87,23 +104,12 @@ fn parse_structure_components(
                                     _ => None,
                                 });
                         if let Some((_, value)) = val_param {
-                            return Ok(Box::new(value.clone()));
+                            return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
                         }
                     }
 
-                    // TODO: deferred execution of resolve() until after register_all_types finishes
-                    let resolved_ty = ty.resolve(parser.context)?;
-
-                    Ok(Box::new(values::parse_value(
-                        parser,
-                        ParseValueAssignmentStage::NormalValues,
-                        default,
-                        &resolved_ty,
-                    )?))
-                }) {
-                    Some(result) => Some(result?),
-                    None => None,
-                },
+                    LazyParsedDefaultValue::new(default.clone(), default_value_lazy_parser)
+                }),
                 optional: component.element.optional,
                 component_type: Box::new(ty),
             })
@@ -478,11 +484,13 @@ fn parse_untagged_type(
             }
         }
         AstUntaggedType::ObjectClassFieldType(ast_ocf) => {
-            let class_type = ast_ocf
-                .element
-                .class_type
-                .as_ref()
-                .map(|class_type| class_type.0.clone());
+            let class_type = parser.resolve_symbol(
+                &ast_ocf
+                    .element
+                    .class_type
+                    .as_ref()
+                    .map(|class_type| &class_type.0),
+            );
             let (kind, field) = match &ast_ocf.element.field.element {
                 AstFieldReference::TypeFieldReference(type_field) => (
                     ObjectClassFieldReferenceKind::OpenType,

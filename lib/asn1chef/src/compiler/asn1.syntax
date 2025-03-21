@@ -1117,7 +1117,7 @@ rule OpenTypeValue {
     value = Value
 }
 
-variant OpenTypeValueTypeReference = ObjectValueFieldReference | Type;
+variant OpenTypeValueTypeReference = ObjectFieldReference | Type;
 
 rule Negative {
     operator -
@@ -1173,7 +1173,7 @@ rule ContainingValue {
     return value
 }
 
-variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectValueFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
+variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
 
 variant Value = BuiltinValue | ValueReference;
 variant IntegerValueReference = IntegerValue | ValueReference;
@@ -1312,7 +1312,7 @@ variant SyntaxListElement = OptionalSyntaxElement {
 
 variant SyntaxItem = FieldReference | SyntaxTokenLiteral;
 
-rule ObjectValueFieldReference {
+rule ObjectFieldReference {
     captures {
         object_name = ValueReference
         field_ref = FieldReference

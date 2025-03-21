@@ -1,9 +1,10 @@
-mod class;
+pub(crate) mod class;
 pub(crate) mod constraints;
-mod object_id;
+pub(crate) mod object_id;
 pub(crate) mod types;
-mod values;
-mod verify;
+pub(crate) mod util;
+pub(crate) mod values;
+pub(crate) mod verify;
 
 use class::ObjectClassAssignmentParseMode;
 use types::TypeAssignmentParseMode;
@@ -15,6 +16,7 @@ use crate::compiler::options::EmptyExportBehavior;
 use crate::module::ModuleIdentifier;
 use crate::module::*;
 
+#[derive(Debug)]
 pub struct AstParser<'a> {
     pub context: &'a Context,
     pub config: &'a CompilerConfig,
@@ -291,7 +293,7 @@ pub fn register_all_types(
     }
 }
 
-/// Stage 4: register all declared infoormation object classes.
+/// Stage 4: register all declared information object classes.
 pub fn register_all_information_object_classes(
     context: &mut Context,
     config: &CompilerConfig,

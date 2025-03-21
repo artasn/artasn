@@ -4,7 +4,7 @@ fn enabled() -> bool {
     true
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Asn1Edition {
     #[serde(rename = "X.208")]
     X208,
@@ -18,7 +18,7 @@ impl Default for Asn1Edition {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum EmptyExportBehavior {
     ExportNone,
     ExportAll,
@@ -30,7 +30,7 @@ impl Default for EmptyExportBehavior {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CompilerConfig {
     #[serde(default)]
     pub edition: Asn1Edition,
