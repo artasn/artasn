@@ -30,16 +30,16 @@ pub enum InformationObjectReference {
 
 impl InformationObjectReference {
     pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObject> {
-        let mut classref = self;
+        let mut objectref = self;
         loop {
-            match classref {
+            match objectref {
                 Self::Value(value) => return Ok(value),
                 Self::Reference(ident) => {
-                    classref = context
+                    objectref = context
                         .lookup_information_object(&ident.element)
                         .ok_or_else(|| Error {
                             kind: ErrorKind::Ast(format!(
-                                "undefined reference to information object class value '{}'",
+                                "undefined reference to information object '{}'",
                                 ident.element
                             )),
                             loc: ident.loc,

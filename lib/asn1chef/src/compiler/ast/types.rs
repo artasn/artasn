@@ -3,7 +3,7 @@ use super::{
     AstParser,
 };
 use crate::{
-    compiler::{ast::class, context::DeclaredType, parser::*},
+    compiler::{context::DeclaredType, parser::*},
     module::*,
     types::*,
     values::{BuiltinValue, TypedValue, ValueReference},
@@ -25,14 +25,6 @@ lazy_static::lazy_static! {
     static ref CHARACTER_STRING_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
         ModuleIdentifier::with_name(String::from("CharacterString")),
         String::from("CharacterString"),
-    );
-    static ref TYPE_IDENTIFIER_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
-        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
-        String::from("CLASS-TYPE-IDENTIFIER"),
-    );
-    static ref ABSTRACT_SYNTAX_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
-        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
-        String::from("CLASS-ABSTRACT-SYNTAX"),
     );
 }
 
@@ -465,18 +457,6 @@ fn parse_untagged_type(
                 &TypeAssignmentParseMode::Parameterized { parameters },
             )?
             .expect("parse_type_assignment for parameterized type returned None");
-            let decl = match decl {
-                ParsedTypeAssignment::DeclaredType(decl) => decl,
-                ParsedTypeAssignment::InformationObjectClass(_) => {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(
-                            "parameterized type cannot resolve to an information object class"
-                                .to_string(),
-                        ),
-                        loc: ty.loc,
-                    })
-                }
-            };
             let resolved = decl.ty.resolve(parser.context)?;
 
             UntaggedType::BuiltinType(resolved.ty)
@@ -797,16 +777,11 @@ pub enum TypeAssignmentParseMode {
     Parameterized { parameters: Vec<Parameter> },
 }
 
-pub enum ParsedTypeAssignment {
-    DeclaredType(DeclaredType),
-    InformationObjectClass(InformationObjectClass),
-}
-
 pub fn parse_type_assignment(
     parser: &AstParser<'_>,
     type_assignment: &AstElement<AstTypeAssignment>,
     mode: &TypeAssignmentParseMode,
-) -> Result<Option<(QualifiedIdentifier, ParsedTypeAssignment)>> {
+) -> Result<Option<(QualifiedIdentifier, DeclaredType)>> {
     let ast_name = &type_assignment.element.name;
     let name = ast_name.element.0.clone();
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);
@@ -826,10 +801,7 @@ pub fn parse_type_assignment(
                     } else {
                         let ty = parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
 
-                        Ok(Some((
-                            ident,
-                            ParsedTypeAssignment::DeclaredType(DeclaredType { ty }),
-                        )))
+                        Ok(Some((ident, DeclaredType { ty })))
                     }
                 }
                 TypeAssignmentParseMode::Parameterized { parameters } => match parameter_names {
@@ -858,10 +830,7 @@ pub fn parse_type_assignment(
                             TypeContext::Contextless,
                         )?;
 
-                        Ok(Some((
-                            ident,
-                            ParsedTypeAssignment::DeclaredType(DeclaredType { ty }),
-                        )))
+                        Ok(Some((ident, DeclaredType { ty })))
                     }
                     None => panic!(
                         "type '{}' is not parameterized, but the parse mode is Parameterized",
@@ -870,38 +839,8 @@ pub fn parse_type_assignment(
                 },
             }
         }
-        AstTypeAssignmentSubject::AbstractSyntax(_) => {
-            // clone ABSTRACT-SYNTAX instead of being a reference to it
-            // in the future, this should somehow be a distinct type
-            // maybe assign a unique ID?
-            let class = parser
-                .context
-                .lookup_information_object_class(&ABSTRACT_SYNTAX_IDENT)
-                .expect("missing definition of ABSTRACT-SYNTAX");
-            Ok(Some((
-                ident,
-                ParsedTypeAssignment::InformationObjectClass(class.clone()),
-            )))
-        }
-        AstTypeAssignmentSubject::TypeIdentifier(_) => {
-            // clone TYPE-IDENTIFIER instead of being a reference to it
-            // in the future, this should somehow be a distinct type
-            // maybe assign a unique ID?
-            let class = parser
-                .context
-                .lookup_information_object_class(&TYPE_IDENTIFIER_IDENT)
-                .expect("missing definition of TYPE-IDENTIFIER");
-            Ok(Some((
-                ident,
-                ParsedTypeAssignment::InformationObjectClass(class.clone()),
-            )))
-        }
-        AstTypeAssignmentSubject::InformationObjectClass(ioc) => {
-            let class = class::parse_information_object_class(parser, ioc)?;
-            Ok(Some((
-                ident,
-                ParsedTypeAssignment::InformationObjectClass(class),
-            )))
-        }
+        AstTypeAssignmentSubject::AbstractSyntax(_)
+        | AstTypeAssignmentSubject::TypeIdentifier(_)
+        | AstTypeAssignmentSubject::InformationObjectClass(_) => Ok(None),
     }
 }

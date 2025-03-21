@@ -96,16 +96,11 @@ fn parse_object_class_field<'a, 'b>(
         None => todo!("information object class field references without table constraints are currently unsupported: {}.&{}\n{:#?}", class_type.element, field.element, ty_component.component_type.constraint),
     };
 
-    let class = parser
-        .context
-        .lookup_information_object_class(&parser.resolve_symbol(&class_type.as_ref()).element)
-        .ok_or_else(|| Error {
-            kind: ErrorKind::Ast(format!(
-                "undefined reference to information object class '{}'",
-                class_type.element,
-            )),
-            loc: class_type.loc,
-        })?;
+    let class = class::resolve_information_object_class(
+        parser,
+        &parser.resolve_symbol(&class_type.as_ref()),
+    )?
+    .resolve(parser.context)?;
 
     Ok((
         class
@@ -1014,8 +1009,11 @@ pub fn parse_value_assignment(
                             return Ok(Some(match &value_assignment.element.value.element {
                                 AstValue::BuiltinValue(builtin) => match &builtin.element {
                                     AstBuiltinValue::BracedTokenStream(tokens) => {
-                                        let object =
-                                            class::parse_information_object(parser, tokens, class)?;
+                                        let object = class::parse_information_object(
+                                            parser,
+                                            tokens,
+                                            class.resolve(parser.context)?,
+                                        )?;
                                         (
                                             ident,
                                             ParsedValueAssignment::Class(

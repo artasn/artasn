@@ -405,11 +405,7 @@ impl Constraint {
 mod test {
     use crate::{
         compiler::{
-            ast::{
-                self,
-                types::{ParsedTypeAssignment, TypeAssignmentParseMode},
-                AstParser,
-            },
+            ast::{self, types::TypeAssignmentParseMode, AstParser},
             options::CompilerConfig,
             parser::*,
             Context,
@@ -464,12 +460,6 @@ mod test {
                     )
                     .unwrap()
                     .unwrap();
-                    let tagged_type = match tagged_type {
-                        ParsedTypeAssignment::DeclaredType(decl) => decl,
-                        ParsedTypeAssignment::InformationObjectClass(_) => {
-                            panic!("unexpected CLASS")
-                        }
-                    };
                     context.register_type(ident.clone(), tagged_type);
                     ident
                 };

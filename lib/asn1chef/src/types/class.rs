@@ -1,9 +1,14 @@
-use crate::{compiler::parser::AstElement, values::TypedValue};
+use crate::{
+    compiler::{parser::*, Context},
+    module::QualifiedIdentifier,
+    values::TypedValue,
+};
 
 use super::TaggedType;
 
 #[derive(Debug, Clone)]
 pub struct InformationObjectClass {
+    pub name: AstElement<String>,
     pub fields: Vec<(AstElement<String>, ObjectClassField)>,
     pub syntax: Vec<ObjectClassSyntaxNodeGroup>,
 }
@@ -36,7 +41,7 @@ pub struct ObjectClassFieldType {
 
 #[derive(Debug, Clone)]
 pub struct ObjectClassFieldObject {
-    pub class: AstElement<String>,
+    pub class: AstElement<QualifiedIdentifier>,
     pub optional: bool,
 }
 
@@ -83,4 +88,32 @@ pub enum ObjectClassSyntaxNodeKind {
     TypeField,
     ValueField,
     TokenLiteral,
+}
+
+#[derive(Debug, Clone)]
+pub enum InformationObjectClassReference {
+    Class(InformationObjectClass),
+    Reference(AstElement<QualifiedIdentifier>),
+}
+
+impl InformationObjectClassReference {
+    pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObjectClass> {
+        let mut classref = self;
+        loop {
+            match classref {
+                Self::Class(class) => return Ok(class),
+                Self::Reference(ident) => {
+                    classref = context
+                        .lookup_information_object_class(&ident.element)
+                        .ok_or_else(|| Error {
+                            kind: ErrorKind::Ast(format!(
+                                "undefined reference to information object class '{}'",
+                                ident.element
+                            )),
+                            loc: ident.loc,
+                        })?;
+                }
+            }
+        }
+    }
 }

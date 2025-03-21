@@ -5,7 +5,8 @@ pub(crate) mod types;
 mod values;
 mod verify;
 
-use types::{ParsedTypeAssignment, TypeAssignmentParseMode};
+use class::ObjectClassAssignmentParseMode;
+use types::TypeAssignmentParseMode;
 use values::{ParseValueAssignmentStage, ParsedValueAssignment};
 
 use super::options::CompilerConfig;
@@ -240,7 +241,7 @@ pub fn register_all_parameterized_types(
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
                 match types::parse_parameterized_type_assignment(&parser, type_assignment) {
                     Ok(Some(decl)) => results.push(Ok(decl)),
-                    Err(decl) => results.push(Err(decl)),
+                    Err(err) => results.push(Err(err)),
                     _ => (),
                 }
             }
@@ -257,7 +258,7 @@ pub fn register_all_parameterized_types(
     }
 }
 
-/// Stage 3: register all declared types and information object class types.
+/// Stage 3: register all declared types.
 pub fn register_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -273,7 +274,7 @@ pub fn register_all_types(
                     &TypeAssignmentParseMode::Normal,
                 ) {
                     Ok(Some(decl)) => results.push(Ok(decl)),
-                    Err(decl) => results.push(Err(decl)),
+                    Err(err) => results.push(Err(err)),
                     _ => (),
                 }
             }
@@ -282,12 +283,7 @@ pub fn register_all_types(
     }) {
         Ok(types) => {
             for (ident, decl) in types {
-                match decl {
-                    ParsedTypeAssignment::DeclaredType(decl) => context.register_type(ident, decl),
-                    ParsedTypeAssignment::InformationObjectClass(decl) => {
-                        context.register_information_object_class(ident, decl)
-                    }
-                }
+                context.register_type(ident, decl);
             }
             Vec::new()
         }
@@ -295,7 +291,74 @@ pub fn register_all_types(
     }
 }
 
-// Stage 4: register all declared information object class sets.
+/// Stage 4: register all declared infoormation object classes.
+pub fn register_all_information_object_classes(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    // the parser needs to know whether a given typereference refers to a classes or a type
+    // this is necessary in order to create the parser for the WITH SYNTAX definitions;
+    // it must be known ahead of time whether to parse class(reference) tokens or type(reference) tokens
+    // in order to achieve this, we first find the qualified identifiers for every class in a first pass,
+    // and then we pass those qualified identifiers to the second pass
+
+    // first pass
+    let class_idents = match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
+                match class::parse_information_object_class_assignment(
+                    &parser,
+                    type_assignment,
+                    ObjectClassAssignmentParseMode::NameOnly,
+                ) {
+                    Ok(Some((ident, _))) => results.push(Ok(ident)),
+                    Err(err) => results.push(Err(err)),
+                    _ => (),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(idents) => idents,
+        Err(errors) => return errors,
+    };
+
+    // second pass
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
+                match class::parse_information_object_class_assignment(
+                    &parser,
+                    type_assignment,
+                    ObjectClassAssignmentParseMode::Class {
+                        class_idents: &class_idents,
+                    },
+                ) {
+                    Ok(Some(decl)) => results.push(Ok(decl)),
+                    Err(err) => results.push(Err(err)),
+                    _ => (),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(types) => {
+            for (ident, decl) in types {
+                context.register_information_object_class(
+                    ident,
+                    decl.expect("parse mode is Class, but parser returned name only"),
+                );
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+// Stage 5: register all declared information object sets.
 pub fn register_all_information_object_sets(
     context: &mut Context,
     config: &CompilerConfig,
@@ -323,7 +386,7 @@ pub fn register_all_information_object_sets(
     }
 }
 
-// Stage 5: register all declared information object class values.
+// Stage 6: register all declared information objects.
 pub fn register_all_information_objects(
     context: &mut Context,
     config: &CompilerConfig,
@@ -361,7 +424,7 @@ pub fn register_all_information_objects(
     }
 }
 
-/// Stage 6: register the constraints for all types.
+/// Stage 7: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
     config: &CompilerConfig,
@@ -373,7 +436,7 @@ pub fn register_all_constraints(
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
                 match constraints::parse_type_assignment_constraint(&parser, type_assignment) {
                     Ok(Some(decl)) => results.push(Ok(decl)),
-                    Err(decl) => results.push(Err(decl)),
+                    Err(err) => results.push(Err(err)),
                     _ => (),
                 }
             }
@@ -391,7 +454,7 @@ pub fn register_all_constraints(
     }
 }
 
-/// Stage 7: register all declared values that do not contain references
+/// Stage 8: register all declared values that do not contain references
 /// to information object class fields.
 pub fn register_all_normal_values(
     context: &mut Context,
@@ -428,7 +491,7 @@ pub fn register_all_normal_values(
     }
 }
 
-/// Stage 8: register all values that contain references to information object class fields.
+/// Stage 9: register all values that contain references to information object class fields.
 pub fn register_all_class_reference_values(
     context: &mut Context,
     config: &CompilerConfig,
@@ -467,7 +530,7 @@ pub fn register_all_class_reference_values(
     }
 }
 
-/// Stage 9: verify all types.
+/// Stage 10: verify all types.
 pub fn verify_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -491,7 +554,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Stage 10: verify all declared values.
+/// Stage 11: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     config: &CompilerConfig,

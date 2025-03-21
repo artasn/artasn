@@ -652,6 +652,7 @@ rule EnumerationItem {
 rule Enumerated {
     captures {
         items = repeated: EnumerationItem
+        extensible = bool
     }
     keyword ENUMERATED
     persist
@@ -660,6 +661,11 @@ rule Enumerated {
     optional repeated {
         operator ,
         items = EnumerationItem
+    }
+    optional {
+        operator ,
+        operator ...
+        extensible = true
     }
     operator }
     return items
@@ -764,6 +770,7 @@ rule ObjectClassFieldType {
 rule Choice {
     captures {
         alternatives = repeated: ChoiceAlternative
+        extensible = bool
     }
     keyword CHOICE
     persist
@@ -772,6 +779,11 @@ rule Choice {
     optional repeated {
         operator ,
         alternatives = ChoiceAlternative
+    }
+    optional {
+        operator ,
+        operator ...
+        extensible = true
     }
     operator }
     return alternatives
@@ -914,6 +926,7 @@ variant ConstrainedType = Suffixed {
         constraint = optional: Constraint
     }
     ty = UntaggedType
+    persist
     optional {
         constraint = Constraint
     }
@@ -1184,7 +1197,7 @@ rule InformationObjectClass {
     syntax = SyntaxList
 }
 
-variant ObjectClassField = ObjectField | ObjectSetField | TypeField | ValueField;
+variant ObjectClassField = ValueField | ObjectSetField | TypeField;
 
 rule TypeField {
     captures {
@@ -1197,20 +1210,6 @@ rule TypeField {
         keyword OPTIONAL
         optional = true
     }
-}
-
-rule ObjectField {
-    captures {
-        name = ValueFieldReference
-        class = UppercaseReference
-        optional = bool
-    }
-    name = ValueFieldReference
-    class = UppercaseReference
-    optional {
-        keyword OPTIONAL
-        optional = true
-    }   
 }
 
 rule ObjectSetField {

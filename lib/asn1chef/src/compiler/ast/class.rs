@@ -1,6 +1,6 @@
 use crate::{
     compiler::{ast::constraints, parser::*},
-    module::QualifiedIdentifier,
+    module::{ModuleIdentifier, QualifiedIdentifier},
     types::*,
     values::{InformationObject, InformationObjectReference, ObjectField},
 };
@@ -11,8 +11,20 @@ use super::{
     AstParser,
 };
 
+lazy_static::lazy_static! {
+    static ref TYPE_IDENTIFIER_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        String::from("CLASS-TYPE-IDENTIFIER"),
+    );
+    static ref ABSTRACT_SYNTAX_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        String::from("CLASS-ABSTRACT-SYNTAX"),
+    );
+}
+
 fn parse_fields(
     parser: &AstParser<'_>,
+    class_idents: &[QualifiedIdentifier],
     ast_fields: &[AstElement<AstObjectClassField>],
 ) -> Result<Vec<(AstElement<String>, ObjectClassField)>> {
     let mut fields = Vec::new();
@@ -22,15 +34,47 @@ fn parse_fields(
                 let mut field_type =
                     types::parse_type(parser, &value.element.ty, &[], TypeContext::Contextless)?;
 
-                // TODO: should we just move this entire stage to be after we parse all types?
-                let target_type = field_type.resolve(parser.context)?;
-                let constraint = constraints::parse_type_constraint(
-                    parser,
-                    &value.element.ty,
-                    &target_type,
-                    &[],
-                )?;
-                constraints::apply_pending_constraint(&mut field_type, constraint);
+                let field = match is_type_class(class_idents, &field_type) {
+                    Some(class) => ObjectClassField::Object(ObjectClassFieldObject {
+                        class,
+                        optional: value.element.optional,
+                    }),
+                    None => {
+                        // TODO: should we just move this entire stage to be after we parse all types?
+                        let target_type = field_type.resolve(parser.context)?;
+                        let constraint = constraints::parse_type_constraint(
+                            parser,
+                            &value.element.ty,
+                            &target_type,
+                            &[],
+                        )?;
+                        constraints::apply_pending_constraint(&mut field_type, constraint);
+
+                        ObjectClassField::Value(ObjectClassFieldValue {
+                            option: match (
+                                value.element.unique,
+                                value.element.optional,
+                                &value.element.default,
+                            ) {
+                                (true, false, None) => Some(ObjectClassFieldValueOption::Unique),
+                                (false, true, None) => Some(ObjectClassFieldValueOption::Optional),
+                                (false, false, Some(default)) => {
+                                    Some(ObjectClassFieldValueOption::Default(values::parse_value(
+                                        parser,
+                                        ParseValueAssignmentStage::NormalValues,
+                                        default,
+                                        &target_type,
+                                    )?))
+                                }
+                                (false, false, None) => None,
+                                _ => {
+                                    todo!()
+                                }
+                            },
+                            field_type,
+                        })
+                    }
+                };
 
                 fields.push((
                     value
@@ -38,29 +82,7 @@ fn parse_fields(
                         .name
                         .as_ref()
                         .map(|name| name.0.element.0.clone()),
-                    ObjectClassField::Value(ObjectClassFieldValue {
-                        option: match (
-                            value.element.unique,
-                            value.element.optional,
-                            &value.element.default,
-                        ) {
-                            (true, false, None) => Some(ObjectClassFieldValueOption::Unique),
-                            (false, true, None) => Some(ObjectClassFieldValueOption::Optional),
-                            (false, false, Some(default)) => {
-                                Some(ObjectClassFieldValueOption::Default(values::parse_value(
-                                    parser,
-                                    ParseValueAssignmentStage::NormalValues,
-                                    default,
-                                    &target_type,
-                                )?))
-                            }
-                            (false, false, None) => None,
-                            _ => {
-                                todo!()
-                            }
-                        },
-                        field_type,
-                    }),
+                    field,
                 ));
             }
             AstObjectClassField::TypeField(open_type) => {
@@ -75,19 +97,6 @@ fn parse_fields(
                     }),
                 ));
             }
-            AstObjectClassField::ObjectField(object) => {
-                fields.push((
-                    object
-                        .element
-                        .name
-                        .as_ref()
-                        .map(|name| name.0.element.0.clone()),
-                    ObjectClassField::Object(ObjectClassFieldObject {
-                        class: object.element.class.as_ref().map(|class| class.0.clone()),
-                        optional: object.element.optional,
-                    }),
-                ));
-            }
             AstObjectClassField::ObjectSetField(object) => {
                 fields.push((
                     object
@@ -96,7 +105,8 @@ fn parse_fields(
                         .as_ref()
                         .map(|name| name.0.element.0.clone()),
                     ObjectClassField::ObjectSet(ObjectClassFieldObject {
-                        class: object.element.class.as_ref().map(|class| class.0.clone()),
+                        class: parser
+                            .resolve_symbol(&object.element.class.as_ref().map(|class| &class.0)),
                         optional: object.element.optional,
                     }),
                 ));
@@ -162,6 +172,22 @@ macro_rules! try_parse {
     }};
 }
 
+fn is_type_class<'a>(
+    class_idents: &[QualifiedIdentifier],
+    tagged_type: &TaggedType,
+) -> Option<AstElement<QualifiedIdentifier>> {
+    match &tagged_type.ty {
+        UntaggedType::Reference(typeref) => {
+            if class_idents.contains(&typeref.element) {
+                Some(typeref.clone())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 fn parse_next_syntax_node(
     parser: &AstParser<'_>,
     class: &InformationObjectClass,
@@ -193,25 +219,11 @@ fn parse_next_syntax_node(
         .find(|(name, _)| name.element == item.associated_data)
         .expect("syntax refers to a value that does not exist in the CLASS body");
     match field {
-        ObjectClassField::Object(_) => {
-            let ast_object = try_parse!(ParseContext::new(token_stream), AstValueReference::parse);
-            let valref = values::resolve_valuereference(parser, &ast_object);
-            fields.push((
-                item.associated_data.clone(),
-                ObjectField::Object(InformationObjectReference::Reference(valref)),
-            ));
-
-            return Ok(());
-        }
         ObjectClassField::ObjectSet(field) => {
-            println!("ObjectSet {:#?}", field);
-            let class_ref = field
-                .class
-                .as_ref()
-                .map(|class| AstTypeReference(class.clone()));
+            let class =
+                resolve_information_object_class(parser, &field.class)?.resolve(parser.context)?;
             let ast_set = try_parse!(ParseContext::new(token_stream), AstObjectSet::parse);
-            println!("{:#?}", ast_set);
-            let set = parse_object_set(parser, &class_ref, &ast_set)?;
+            let set = parse_object_set(parser, class, &ast_set)?;
 
             fields.push((item.associated_data.clone(), ObjectField::ObjectSet(set)));
 
@@ -224,8 +236,23 @@ fn parse_next_syntax_node(
                 fields.push((item.associated_data.clone(), ObjectField::Type(ty)));
             }
             ObjectClassSyntaxNodeKind::ValueField => {
+                // TODO: if value.field_type == CLASS, return ObjectField::Object
+                println!("field = {}\ninfo = {:#?}", item.associated_data, field);
+
                 let field_type = match field {
                     ObjectClassField::Value(value) => value.field_type.resolve(parser.context)?,
+                    ObjectClassField::Object(_) => {
+                        let valref =
+                            try_parse!(ParseContext::new(token_stream), AstValueReference::parse);
+
+                        fields.push((
+                            item.associated_data.clone(),
+                            ObjectField::Object(InformationObjectReference::Reference(
+                                values::resolve_valuereference(parser, &valref),
+                            )),
+                        ));
+                        return Ok(());
+                    }
                     _ => unreachable!(),
                 };
 
@@ -297,22 +324,27 @@ pub(crate) fn parse_information_object(
     Ok(InformationObject { fields })
 }
 
-fn parse_object_set(
-    parser: &AstParser<'_>,
-    class_ref: &AstElement<AstTypeReference>,
-    set: &AstElement<AstObjectSet>,
-) -> Result<Vec<InformationObjectReference>> {
+pub(crate) fn resolve_information_object_class<'a>(
+    parser: &'a AstParser<'_>,
+    class_ident: &AstElement<QualifiedIdentifier>,
+) -> Result<&'a InformationObjectClassReference> {
     let class = parser
         .context
-        .lookup_information_object_class(&types::resolve_typereference(parser, class_ref).element);
-    let class = class.ok_or_else(|| Error {
+        .lookup_information_object_class(&class_ident.element);
+    class.ok_or_else(|| Error {
         kind: ErrorKind::Ast(format!(
             "undefined reference to information object class '{}'",
-            class_ref.element.0,
+            class_ident.element,
         )),
-        loc: class_ref.loc,
-    })?;
+        loc: class_ident.loc,
+    })
+}
 
+fn parse_object_set(
+    parser: &AstParser<'_>,
+    class: &InformationObjectClass,
+    set: &AstElement<AstObjectSet>,
+) -> Result<Vec<InformationObjectReference>> {
     let mut classes = Vec::new();
     for ast_element in &set.element.elements {
         match &ast_element.element {
@@ -342,26 +374,94 @@ pub(crate) fn parse_object_set_assignment(
 
     let classes = match &ast_set.element.subject.element {
         AstObjectSetAssignmentSubject::EmptyExtensible(_) => Vec::new(),
-        AstObjectSetAssignmentSubject::ObjectSet(set) => parse_object_set(
-            parser,
-            &ast_set
-                .element
-                .ty
-                .as_ref()
-                .map(|class| AstTypeReference(class.0.clone())),
-            set,
-        )?,
+        AstObjectSetAssignmentSubject::ObjectSet(set) => {
+            let class_ref = ast_set.element.ty.as_ref().map(|class| &class.0);
+            let class =
+                resolve_information_object_class(parser, &parser.resolve_symbol(&class_ref))?
+                    .resolve(parser.context)?;
+
+            parse_object_set(parser, class, set)?
+        }
     };
 
     Ok((ident, classes))
 }
 
-pub(crate) fn parse_information_object_class(
+fn parse_information_object_class(
     parser: &AstParser<'_>,
+    class_idents: &[QualifiedIdentifier],
+    name: &AstElement<String>,
     ioc: &AstElement<AstInformationObjectClass>,
 ) -> Result<InformationObjectClass> {
-    let fields = parse_fields(parser, &ioc.element.fields)?;
+    let fields = parse_fields(parser, class_idents, &ioc.element.fields)?;
     let syntax = parse_syntax(&ioc.element.syntax);
 
-    Ok(InformationObjectClass { fields, syntax })
+    Ok(InformationObjectClass {
+        name: name.clone(),
+        fields,
+        syntax,
+    })
+}
+
+pub enum ObjectClassAssignmentParseMode<'a> {
+    NameOnly,
+    Class {
+        class_idents: &'a [QualifiedIdentifier],
+    },
+}
+
+pub fn parse_information_object_class_assignment(
+    parser: &AstParser<'_>,
+    type_assignment: &AstElement<AstTypeAssignment>,
+    mode: ObjectClassAssignmentParseMode,
+) -> Result<Option<(QualifiedIdentifier, Option<InformationObjectClassReference>)>> {
+    let ast_name = &type_assignment.element.name;
+    let name = ast_name.element.0.clone();
+    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+
+    match &type_assignment.element.subject.element {
+        AstTypeAssignmentSubject::Type(_) => Ok(None),
+        ast_class_assignment => match mode {
+            ObjectClassAssignmentParseMode::NameOnly => Ok(Some((ident, None))),
+            ObjectClassAssignmentParseMode::Class { class_idents } => match ast_class_assignment {
+                AstTypeAssignmentSubject::Type(_) => unreachable!(),
+                AstTypeAssignmentSubject::AbstractSyntax(token) => {
+                    // clone ABSTRACT-SYNTAX instead of being a reference to it
+                    // in the future, this should somehow be a distinct type
+                    // maybe assign a unique ID?
+
+                    Ok(Some((
+                        ident,
+                        Some(InformationObjectClassReference::Reference(
+                            token
+                                .as_ref()
+                                .map(|_| ABSTRACT_SYNTAX_IDENT.clone())
+                                .clone(),
+                        )),
+                    )))
+                }
+                AstTypeAssignmentSubject::TypeIdentifier(token) => Ok(Some((
+                    ident,
+                    Some(InformationObjectClassReference::Reference(
+                        token
+                            .as_ref()
+                            .map(|_| TYPE_IDENTIFIER_IDENT.clone())
+                            .clone(),
+                    )),
+                ))),
+                AstTypeAssignmentSubject::InformationObjectClass(ioc) => {
+                    let class = parse_information_object_class(
+                        parser,
+                        class_idents,
+                        &ast_name.as_ref().map(|name| name.0.clone()),
+                        ioc,
+                    )?;
+                    Ok(Some((
+                        ident,
+                        Some(InformationObjectClassReference::Class(class)),
+                    )))
+                }
+            },
+        },
+    }
 }
