@@ -151,7 +151,10 @@ fn parse_object_class_field_reference(
 
     match (field, &ocf.kind) {
         (ObjectClassField::Value(value_field), ObjectClassFieldReferenceKind::Value) => {
-            let mut value_type = value_field.field_type.resolve(parser.context)?;
+            let mut value_type = match &value_field.field_type {
+                ObjectClassFieldValueType::TaggedType(tagged_type) => tagged_type.resolve(parser.context)?,
+                ObjectClassFieldValueType::OpenTypeReference(_) => todo!("value fields referencing open type fields are not yet supported")
+            };
             value_type.tag = struct_component.component_type.tag.clone().or(value_type.tag);
             Ok(value_type)
         }

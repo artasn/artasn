@@ -23,8 +23,14 @@ pub enum ObjectClassField {
 
 #[derive(Debug, Clone)]
 pub struct ObjectClassFieldValue {
-    pub field_type: TaggedType,
+    pub field_type: ObjectClassFieldValueType,
     pub option: Option<ObjectClassFieldValueOption>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ObjectClassFieldValueType {
+    TaggedType(TaggedType),
+    OpenTypeReference(AstElement<String>),
 }
 
 #[derive(Debug, Clone)]

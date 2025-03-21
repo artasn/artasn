@@ -67,13 +67,13 @@ impl CodeBuilder {
             self.write("pub struct ");
             self.write(&data.rule_name);
             self.write("(pub ");
-            let returh_variable_type = &data
+            let return_variable_type = &data
                 .variables
                 .iter()
                 .find(|var| &var.name == return_variable)
                 .unwrap()
                 .ty;
-            self.write(returh_variable_type);
+            self.write(return_variable_type);
             self.write(");\n\n");
         } else {
             self.write("pub struct ");
