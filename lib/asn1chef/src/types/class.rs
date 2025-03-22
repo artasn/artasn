@@ -11,6 +11,9 @@ pub struct InformationObjectClass {
     pub name: AstElement<String>,
     pub fields: Vec<(AstElement<String>, ObjectClassField)>,
     pub syntax: Vec<ObjectClassSyntaxNodeGroup>,
+    /// True if ast::register_all_information_object_classes has finished.
+    /// Otherwise false (i.e. ast::register_all_information_object_class_names has finished, but ast::register_all_information_object_classes has not yet been called.)
+    pub parsed: bool,
 }
 
 impl InformationObjectClass {
@@ -18,7 +21,7 @@ impl InformationObjectClass {
         &'a self,
         field_ref: &AstElement<String>,
     ) -> Result<&'a ObjectClassField> {
-        Ok(self
+        self
             .fields
             .iter()
             .find_map(|(name, field)| {
@@ -34,7 +37,7 @@ impl InformationObjectClass {
                     field_ref.element, self.name.element,
                 )),
                 loc: field_ref.loc,
-            })?)
+            })
     }
 }
 
@@ -80,7 +83,7 @@ pub struct ObjectClassFieldObject {
 #[derive(Debug, Clone)]
 pub enum ObjectClassSyntaxNodeGroup {
     Required(ObjectClassSyntaxNode),
-    Optional(Vec<ObjectClassSyntaxNode>),
+    Optional(Vec<ObjectClassSyntaxNodeGroup>),
 }
 
 #[derive(Debug, Clone)]
@@ -156,7 +159,7 @@ impl InformationObjectClassReference {
 
     pub fn resolve<'a>(&'a self, context: &'a Context) -> Result<&'a InformationObjectClass> {
         match self {
-            Self::Class(class) => return Ok(class),
+            Self::Class(class) => Ok(class),
             Self::Reference(_) => self.resolve_reference(context),
         }
     }

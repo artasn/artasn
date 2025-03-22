@@ -27,6 +27,10 @@ lazy_static::lazy_static! {
         ModuleIdentifier::with_name(String::from("CharacterString")),
         String::from("CharacterString"),
     );
+    static ref INSTANCE_OF_IDENT: QualifiedIdentifier = QualifiedIdentifier::new(
+        ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
+        String::from("InstanceOf"),
+    );
 }
 
 pub type LazyParsedDefaultValue =
@@ -37,12 +41,12 @@ fn default_value_lazy_parser(
     resolved_type: &ResolvedType,
     default: &AstElement<AstValue>,
 ) -> Result<AstElement<TypedValue>> {
-    Ok(values::parse_value(
+    values::parse_value(
         parser,
         ParseValueAssignmentStage::NormalValues,
         default,
         resolved_type,
-    )?)
+    )
 }
 
 fn parse_structure_components(
@@ -326,6 +330,7 @@ fn parse_builtin_type(
         AstBuiltinType::TimeOfDay(_) => BuiltinType::TimeOfDay,
         AstBuiltinType::DateTime(_) => BuiltinType::DateTime,
         AstBuiltinType::Duration(_) => BuiltinType::Duration,
+        AstBuiltinType::InstanceOf(_) => unreachable!(),
     }))
 }
 
@@ -346,10 +351,23 @@ pub enum Parameter {
         value_type: TaggedType,
         value: AstElement<TypedValue>,
     },
-    ObjectSet {
-        // class_name: AstElement<String>,
-        set_name: AstElement<String>,
+    ObjectClass {
+        class_ref: AstElement<QualifiedIdentifier>,
     },
+    ObjectSet {
+        set_ref: AstElement<QualifiedIdentifier>,
+    },
+}
+
+impl Parameter {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            Parameter::Type { .. } => "type",
+            Parameter::Value { .. } => "value",
+            Parameter::ObjectClass { .. } => "information object class",
+            Parameter::ObjectSet { .. } => "information object set",
+        }
+    }
 }
 
 pub(crate) fn resolve_parameterized_type_reference<'a>(
@@ -417,8 +435,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                     AstParameter::ObjectSetParameter(ast),
                     AstParameterDecl::ObjectSetParameterDecl(_decl),
                 ) => Parameter::ObjectSet {
-                    // class_name: decl.element.class_type.as_ref().map(|name| name.0.clone()),
-                    set_name: ast.element.0.as_ref().map(|name| name.0.clone()),
+                    set_ref: resolve_typereference(parser, &ast.element.0),
                 },
                 (param, decl) => {
                     return Err(Error {
@@ -453,7 +470,31 @@ fn parse_untagged_type(
     parameters: &[(&String, &Parameter)],
 ) -> Result<TaggedType> {
     let untagged = match &ty.element {
-        AstUntaggedType::BuiltinType(builtin) => parse_builtin_type(parser, builtin, parameters)?,
+        AstUntaggedType::BuiltinType(builtin) => match &builtin.element {
+            AstBuiltinType::InstanceOf(instance_of) => {
+                let class_type = &instance_of.element.class_type;
+                let class_ref = parser.resolve_symbol(&class_type.as_ref().map(|name| &name.0));
+
+                let ast_instance_of_type = parser
+                    .context
+                    .lookup_parameterized_type(&INSTANCE_OF_IDENT)
+                    .expect("INSTANCE OF implementation not found");
+
+                return parse_type(
+                    parser,
+                    match &ast_instance_of_type.element.subject.element {
+                        AstTypeAssignmentSubject::Type(ast_type) => ast_type,
+                        _ => unreachable!(),
+                    },
+                    &[(
+                        &String::from("CLASS-TYPE"),
+                        &Parameter::ObjectClass { class_ref },
+                    )],
+                    TypeContext::Contextless,
+                );
+            }
+            _ => parse_builtin_type(parser, builtin, parameters)?,
+        },
         AstUntaggedType::ParameterizedTypeReference(typeref) => {
             let (parameterized_ast, parameters) =
                 resolve_parameterized_type_reference(parser, typeref, parameters)?;
@@ -484,13 +525,33 @@ fn parse_untagged_type(
             }
         }
         AstUntaggedType::ObjectClassFieldType(ast_ocf) => {
-            let class_type = parser.resolve_symbol(
-                &ast_ocf
-                    .element
-                    .class_type
-                    .as_ref()
-                    .map(|class_type| &class_type.0),
-            );
+            let class_ref = ast_ocf
+                .element
+                .class_type
+                .as_ref()
+                .map(|class_type| &class_type.0);
+            let param = parameters.iter().find_map(|(name, param)| {
+                if *name == class_ref.element {
+                    Some(*param)
+                } else {
+                    None
+                }
+            });
+            let class_type = match param {
+                Some(param) => match param {
+                    Parameter::ObjectClass { class_ref } => class_ref.clone(),
+                    other => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting '{}' to be an information object class parameter, but found {}",
+                                class_ref.element, other.get_name()
+                            )),
+                            loc: class_ref.loc,
+                        })
+                    }
+                }
+                None => parser.resolve_symbol(&class_ref),
+            };
             let (kind, field) = match &ast_ocf.element.field.element {
                 AstFieldReference::TypeFieldReference(type_field) => (
                     ObjectClassFieldReferenceKind::OpenType,

@@ -5,6 +5,7 @@ use crate::{
         parser::{AstElement, Error, ErrorKind, Result},
         Context,
     },
+    module::QualifiedIdentifier,
     values::{BuiltinValue, TypedValue, ValueResolve},
 };
 
@@ -75,7 +76,7 @@ pub enum SubtypeElement {
 
 #[derive(Debug, Clone)]
 pub struct TableConstraint {
-    pub set_name: AstElement<String>,
+    pub set_ref: AstElement<QualifiedIdentifier>,
     pub field_ref: Option<AstElement<String>>,
 }
 

@@ -223,10 +223,12 @@ fn parse_syntax_item(item: &AstElement<AstSyntaxItem>) -> ObjectClassSyntaxNode 
     }
 }
 
-fn parse_syntax(syntax: &AstElement<AstSyntaxList>) -> Vec<ObjectClassSyntaxNodeGroup> {
+fn parse_syntax_elements(
+    elements: &[AstElement<AstSyntaxListElement>],
+) -> Vec<ObjectClassSyntaxNodeGroup> {
     let mut groups = Vec::new();
 
-    for ast_element in &syntax.element.elements {
+    for ast_element in elements {
         match &ast_element.element {
             AstSyntaxListElement::RequiredSyntaxElement(required) => {
                 groups.push(ObjectClassSyntaxNodeGroup::Required(parse_syntax_item(
@@ -234,10 +236,7 @@ fn parse_syntax(syntax: &AstElement<AstSyntaxList>) -> Vec<ObjectClassSyntaxNode
                 )));
             }
             AstSyntaxListElement::OptionalSyntaxElement(optional) => {
-                let mut optional_group = Vec::new();
-                for item in &optional.element.0 {
-                    optional_group.push(parse_syntax_item(item));
-                }
+                let optional_group = parse_syntax_elements(&optional.element.0);
                 groups.push(ObjectClassSyntaxNodeGroup::Optional(optional_group));
             }
         }
@@ -337,7 +336,27 @@ fn parse_next_syntax_node(
                                 ParseContext::new(token_stream),
                                 AstObjectFieldReference::parse
                             );
-                            // ast_field_ref.element.
+
+                            let ast_field = match &ast_field_ref.element.field_ref.element {
+                                AstFieldReference::ValueFieldReference(field) => {
+                                    field.element.0.as_ref().map(|field| field.0.clone())
+                                }
+                                AstFieldReference::TypeFieldReference(field) => {
+                                    return Err(Error {
+                                        kind: ErrorKind::Ast("expecting value field reference, found type field reference".to_string()),
+                                        loc: field.loc
+                                    })
+                                }
+                            };
+                            if ast_field.element != field_ref.field.element {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(format!(
+                                        "expecting object field '{}', found '{}'",
+                                        field_ref.field.element, ast_field.element
+                                    )),
+                                    loc: ast_field.loc,
+                                });
+                            }
 
                             fields.push((
                                 item.associated_data.clone(),
@@ -346,17 +365,7 @@ fn parse_next_syntax_node(
                                         parser,
                                         &ast_field_ref.element.object_name,
                                     ),
-                                    field: match &ast_field_ref.element.field_ref.element {
-                                        AstFieldReference::ValueFieldReference(field) => {
-                                            field.element.0.as_ref().map(|field| field.0.clone())
-                                        }
-                                        AstFieldReference::TypeFieldReference(field) => {
-                                            return Err(Error {
-                                                kind: ErrorKind::Ast("expecting value field reference, found type field reference".to_string()),
-                                                loc: field.loc
-                                            })
-                                        }
-                                    },
+                                    field: ast_field,
                                 }),
                             ));
                             return Ok(());
@@ -393,11 +402,56 @@ fn parse_next_syntax_node(
     Ok(())
 }
 
+fn parse_token_stream_from_syntax_node_group(
+    parser: &AstParser<'_>,
+    class: &InformationObjectClass,
+    token_stream: &mut TokenStream,
+    syntax_group: &ObjectClassSyntaxNodeGroup,
+    fields: &mut Vec<(String, ObjectField)>,
+) -> Result<()> {
+    match syntax_group {
+        ObjectClassSyntaxNodeGroup::Required(item) => {
+            parse_next_syntax_node(parser, class, token_stream, item, fields)?
+        }
+        ObjectClassSyntaxNodeGroup::Optional(groups) => {
+            let cursor = token_stream.cursor();
+            match parse_token_stream_from_syntax_node_group(
+                parser,
+                class,
+                token_stream,
+                &groups[0],
+                fields,
+            ) {
+                Ok(()) => {
+                    for group in groups.iter().skip(1) {
+                        parse_token_stream_from_syntax_node_group(
+                            parser,
+                            class,
+                            token_stream,
+                            group,
+                            fields,
+                        )?
+                    }
+                }
+                Err(_) => {
+                    token_stream.set_cursor(cursor);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub(crate) fn parse_information_object(
     parser: &AstParser<'_>,
     tokens: &AstElement<AstBracedTokenStream>,
     class: &InformationObjectClass,
 ) -> Result<InformationObject> {
+    if !class.parsed {
+        panic!("parse_information_object on unparsed class");
+    }
+
     let mut token_stream = TokenStream::from_tokens(tokens.element.0.clone());
     try_parse!(ParseContext::new(&mut token_stream), |ctx| {
         Operator::match_operator(Operator::OpenBrace, ctx)
@@ -405,37 +459,13 @@ pub(crate) fn parse_information_object(
 
     let mut fields = Vec::new();
     for syntax_group in &class.syntax {
-        match syntax_group {
-            ObjectClassSyntaxNodeGroup::Required(item) => {
-                parse_next_syntax_node(parser, class, &mut token_stream, item, &mut fields)?
-            }
-            ObjectClassSyntaxNodeGroup::Optional(items) => {
-                let cursor = token_stream.cursor();
-                match parse_next_syntax_node(
-                    parser,
-                    class,
-                    &mut token_stream,
-                    &items[0],
-                    &mut fields,
-                ) {
-                    Ok(()) => {
-                        for item in items.iter().skip(1) {
-                            parse_next_syntax_node(
-                                parser,
-                                class,
-                                &mut token_stream,
-                                item,
-                                &mut fields,
-                            )?
-                        }
-                    }
-                    Err(_) => {
-                        token_stream.set_cursor(cursor);
-                        continue;
-                    }
-                }
-            }
-        }
+        parse_token_stream_from_syntax_node_group(
+            parser,
+            class,
+            &mut token_stream,
+            syntax_group,
+            &mut fields,
+        )?;
     }
 
     try_parse!(ParseContext::new(&mut token_stream), |ctx| {
@@ -515,12 +545,13 @@ fn parse_information_object_class(
     ioc: &AstElement<AstInformationObjectClass>,
 ) -> Result<InformationObjectClass> {
     let fields = parse_fields(parser, class_idents, &ioc.element.fields)?;
-    let syntax = parse_syntax(&ioc.element.syntax);
+    let syntax = parse_syntax_elements(&ioc.element.syntax.element.elements);
 
     Ok(InformationObjectClass {
         name: name.clone(),
         fields,
         syntax,
+        parsed: true,
     })
 }
 

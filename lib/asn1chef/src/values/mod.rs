@@ -187,7 +187,11 @@ impl ValueResolve for AstElement<TypedValue> {
                             loc: valref.loc,
                         })?
                         .value;
-                    if deref.element.resolved_type.ty != valref.element.resolved_type.ty
+                    if !deref
+                        .element
+                        .resolved_type
+                        .ty
+                        .is_assignable_to(&valref.element.resolved_type.ty)
                         && deref
                             .element
                             .resolved_type
@@ -371,5 +375,9 @@ mod test {
     json_test!(
         test_object_class_with_object_set_field,
         "../../test-data/encode/classes/ObjectSetFieldTest"
+    );
+    json_test!(
+        test_instance_of,
+        "../../test-data/encode/classes/InstanceOfTest"
     );
 }

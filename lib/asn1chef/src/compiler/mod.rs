@@ -212,6 +212,7 @@ impl Compiler {
         }
 
         stage!(register_all_modules);
+        stage!(register_all_information_object_class_names);
         stage!(register_all_parameterized_types);
         stage!(register_all_types);
         stage!(register_all_information_object_classes);

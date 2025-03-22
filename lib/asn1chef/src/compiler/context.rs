@@ -66,6 +66,10 @@ impl Context {
         self.modules.values().collect()
     }
 
+    pub fn list_class_idents(&self) -> Vec<&QualifiedIdentifier> {
+        self.classes.keys().collect()
+    }
+
     pub fn list_types(&self) -> Vec<(QualifiedIdentifier, &DeclaredType)> {
         self.types
             .iter()

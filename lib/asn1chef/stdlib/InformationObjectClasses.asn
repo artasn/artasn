@@ -17,10 +17,16 @@ CLASS-ABSTRACT-SYNTAX ::= CLASS {
    &Type IDENTIFIED BY &id [HAS PROPERTY &property]
 }
 
--- INSTANCE OF
--- InstanceOf{DefinedObjectClass} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
---     type-id DefinedObjectClass.&id,
---     value [0] DefinedObjectClass.&Type
--- }
+-- INSTANCE OF CLASS-TYPE
+InstanceOf{CLASS-TYPE} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
+    type-id   CLASS-TYPE.&id,
+    value [0] CLASS-TYPE.&Type
+}
+
+-- INSTANCE OF CLASS-TYPE ({ClassTypeSet})
+ConstrainedInstanceOf{CLASS-TYPE, CLASS-TYPE:ClassTypeSet} ::= [UNIVERSAL 8] IMPLICIT SEQUENCE {
+    type-id   CLASS-TYPE.&id   ({ClassTypeSet}),
+    value [0] CLASS-TYPE.&Type ({ClassTypeSet}{@type-id})
+}
 
 END

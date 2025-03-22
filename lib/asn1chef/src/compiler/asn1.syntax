@@ -868,10 +868,20 @@ rule Duration {
     keyword DURATION
 }
 
+rule InstanceOf {
+    captures {
+        class_type = UppercaseReference
+    }
+    keyword INSTANCE
+    persist
+    keyword OF
+    class_type = UppercaseReference
+}
+
 variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
     Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Structure | Choice | NumericString | PrintableString |
     TeletexString | VideotexString | IA5String | UTCTime |  GeneralizedTime | GraphicString | VisibleString | GeneralString |
-    UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration;
+    UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration | InstanceOf;
 
 variant Class = Universal {
     keyword UNIVERSAL
@@ -1293,15 +1303,15 @@ rule SyntaxList {
 
 variant SyntaxListElement = OptionalSyntaxElement {
     captures {
-        items = repeated: SyntaxItem
+        elements = repeated: SyntaxListElement
     }
     operator [
     persist
     repeated {
-        items = SyntaxItem
+        elements = SyntaxListElement
     }
     operator ]
-    return items
+    return elements
 } | RequiredSyntaxElement {
     captures {
         item = SyntaxItem

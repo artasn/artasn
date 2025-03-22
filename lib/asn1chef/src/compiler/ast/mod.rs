@@ -15,6 +15,7 @@ use super::{parser::*, Context};
 use crate::compiler::options::EmptyExportBehavior;
 use crate::module::ModuleIdentifier;
 use crate::module::*;
+use crate::types::{InformationObjectClass, InformationObjectClassReference};
 
 #[derive(Debug)]
 pub struct AstParser<'a> {
@@ -230,7 +231,64 @@ pub fn register_all_modules(
     }
 }
 
-// Stage 2: register all parameterized types.
+/// Stage 2: register the names, but not the fields or syntax, of all declared information object classes.
+///
+/// This happens for two reasons:
+///
+/// 1. The class parser (register_all_information_object_classes) needs to know whether
+///    a given typereference refers to a class or a type.
+///    This is necessary in order to create the parser for the WITH SYNTAX definitions;
+///    it must be known ahead of time whether to parse class(reference) tokens or type(reference) tokens.
+///    In order to achieve this, we first find the qualified identifiers for every class in a first pass,
+///    and then we pass those qualified identifiers to the second pass.
+///
+/// 2. The type parser (register_all_types) needs to kn ow whether
+///    a given typereference refers to a class of a type.
+///    This is necessary in order to know whether a parameter passed to a parameterized type definition
+///    is that of a class type or that of a normal type.
+pub fn register_all_information_object_class_names(
+    context: &mut Context,
+    config: &CompilerConfig,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    // first pass
+    match run_parser(context, config, program, |parser| {
+        let mut results = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
+                match class::parse_information_object_class_assignment(
+                    &parser,
+                    type_assignment,
+                    ObjectClassAssignmentParseMode::NameOnly,
+                ) {
+                    Ok(Some((ident, _))) => results.push(Ok(ident)),
+                    Err(err) => results.push(Err(err)),
+                    _ => (),
+                }
+            }
+        }
+        results
+    }) {
+        Ok(idents) => {
+            for ident in idents {
+                let class = InformationObjectClass {
+                    name: AstElement::new(ident.name.clone(), Loc::default()),
+                    fields: Vec::new(),
+                    syntax: Vec::new(),
+                    parsed: false,
+                };
+                context.register_information_object_class(
+                    ident,
+                    InformationObjectClassReference::Class(class),
+                );
+            }
+            Vec::new()
+        }
+        Err(errors) => errors,
+    }
+}
+
+// Stage 3: register all parameterized types.
 // This stores their ASTs in the Context so that they can be parsed with the substituted types later.
 pub fn register_all_parameterized_types(
     context: &mut Context,
@@ -260,7 +318,7 @@ pub fn register_all_parameterized_types(
     }
 }
 
-/// Stage 3: register all declared types.
+/// Stage 4: register all declared types.
 pub fn register_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -293,39 +351,17 @@ pub fn register_all_types(
     }
 }
 
-/// Stage 4: register all declared information object classes.
+/// Stage 5: register all declared information object classes.
 pub fn register_all_information_object_classes(
     context: &mut Context,
     config: &CompilerConfig,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    // the parser needs to know whether a given typereference refers to a classes or a type
-    // this is necessary in order to create the parser for the WITH SYNTAX definitions;
-    // it must be known ahead of time whether to parse class(reference) tokens or type(reference) tokens
-    // in order to achieve this, we first find the qualified identifiers for every class in a first pass,
-    // and then we pass those qualified identifiers to the second pass
-
-    // first pass
-    let class_idents = match run_parser(context, config, program, |parser| {
-        let mut results = Vec::new();
-        for assignment in &parser.ast_module.element.body.element.0 {
-            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
-                match class::parse_information_object_class_assignment(
-                    &parser,
-                    type_assignment,
-                    ObjectClassAssignmentParseMode::NameOnly,
-                ) {
-                    Ok(Some((ident, _))) => results.push(Ok(ident)),
-                    Err(err) => results.push(Err(err)),
-                    _ => (),
-                }
-            }
-        }
-        results
-    }) {
-        Ok(idents) => idents,
-        Err(errors) => return errors,
-    };
+    let class_idents = context
+        .list_class_idents()
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
 
     // second pass
     match run_parser(context, config, program, |parser| {
@@ -360,7 +396,7 @@ pub fn register_all_information_object_classes(
     }
 }
 
-// Stage 5: register all declared information object sets.
+// Stage 6: register all declared information object sets.
 pub fn register_all_information_object_sets(
     context: &mut Context,
     config: &CompilerConfig,
@@ -388,7 +424,7 @@ pub fn register_all_information_object_sets(
     }
 }
 
-// Stage 6: register all declared information objects.
+// Stage 7: register all declared information objects.
 pub fn register_all_information_objects(
     context: &mut Context,
     config: &CompilerConfig,
@@ -426,7 +462,7 @@ pub fn register_all_information_objects(
     }
 }
 
-/// Stage 7: register the constraints for all types.
+/// Stage 8: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
     config: &CompilerConfig,
@@ -456,7 +492,7 @@ pub fn register_all_constraints(
     }
 }
 
-/// Stage 8: register all declared values that do not contain references
+/// Stage 9: register all declared values that do not contain references
 /// to information object class fields.
 pub fn register_all_normal_values(
     context: &mut Context,
@@ -493,7 +529,7 @@ pub fn register_all_normal_values(
     }
 }
 
-/// Stage 9: register all values that contain references to information object class fields.
+/// Stage 10: register all values that contain references to information object class fields.
 pub fn register_all_class_reference_values(
     context: &mut Context,
     config: &CompilerConfig,
@@ -532,7 +568,7 @@ pub fn register_all_class_reference_values(
     }
 }
 
-/// Stage 10: verify all types.
+/// Stage 11: verify all types.
 pub fn verify_all_types(
     context: &mut Context,
     config: &CompilerConfig,
@@ -556,7 +592,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Stage 11: verify all declared values.
+/// Stage 12: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     config: &CompilerConfig,

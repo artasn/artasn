@@ -42,6 +42,7 @@ Functionality includes:
     - [ ] CUPER (Canonical Unaligned Packed Encoding Rules)
   - [ ] OER (Octet Encoding Rules)
   - [ ] XER (XML Encoding Rules)
+- [ ] Encoding Control Notation (ECN)
 - [x] Decoding arbitrary encoded bytes into types defined in ASN.1 modules
   - [ ] Editing parsed data directly in the UI
   - [ ] Converting data between ASN.1 encodings

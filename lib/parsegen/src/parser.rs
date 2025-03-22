@@ -45,9 +45,17 @@ impl TokenStream {
     pub fn try_parse_token_literal(&mut self) -> Result<Token> {
         let token = self.tokenizer.tokenize_next()?;
         match token.kind {
-            TokenKind::TypeReference | TokenKind::ValueReference | TokenKind::Keyword => {
-                return Ok(token);
+            TokenKind::TypeReference => {
+                let name = match token.data.as_ref().unwrap() {
+                    TokenData::Named(name) => name,
+                    _ => unreachable!(),
+                };
+
+                if name.chars().all(|ch| ch.is_ascii_uppercase() || ch != '-') {
+                    return Ok(token);
+                }
             }
+            TokenKind::Keyword => return Ok(token),
             TokenKind::Operator => match token.data.as_ref().unwrap() {
                 TokenData::Operator(op) => {
                     if *op == Operator::Comma {
@@ -167,19 +175,17 @@ impl Parseable for AstUppercaseReference {
                     TokenData::Named(name) => name,
                     _ => unreachable!(),
                 };
-                for ch in name.chars() {
-                    if !ch.is_ascii_uppercase() && ch != '-' {
-                        return ParseResult::Fail(Error {
-                            loc: token.loc,
-                            kind: ErrorKind::ExpectingOther {
-                                expecting: vec![(
-                                    TokenKind::UppercaseReference,
-                                    Some(TokenData::Named(name.clone())),
-                                )],
-                                found: token,
-                            },
-                        });
-                    }
+                if name.chars().any(|ch| !ch.is_ascii_uppercase() && ch != '-') {
+                    return ParseResult::Fail(Error {
+                        loc: token.loc,
+                        kind: ErrorKind::ExpectingOther {
+                            expecting: vec![(
+                                TokenKind::UppercaseReference,
+                                Some(TokenData::Named(name.clone())),
+                            )],
+                            found: token,
+                        },
+                    });
                 }
                 ParseResult::Ok(AstElement {
                     element: AstUppercaseReference(match token.data.unwrap() {

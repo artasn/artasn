@@ -1,0 +1,14 @@
+{
+    "module": "InstanceOfTest",
+    "tests": ["Encode"],
+    "values": [
+        {
+            "name": "other-name-utf8",
+            "der": "A01806058B092F0000A00F0C0D48656C6C6F2C20776F726C6421"
+        },
+        {
+            "name": "other-name-numeric",
+            "der": "A01506058B092F0001A00C120A30313233343536373839"
+        }
+    ]
+}

@@ -29,10 +29,7 @@ impl<Input, Data: Clone, Output: Clone> LazyParse<Input, Data, Output> {
     pub fn parse(&self, parser: &AstParser<'_>, input: &Input) -> Output {
         {
             let borrow = self.loaded_output.borrow().clone();
-            match borrow {
-                Some(loaded_output) => return loaded_output,
-                None => (),
-            }
+            if let Some(loaded_output) = borrow { return loaded_output }
         }
 
         let output = (self.loader.unwrap())(parser, input, self.data.as_ref().unwrap());

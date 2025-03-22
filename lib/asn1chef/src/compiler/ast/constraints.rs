@@ -151,13 +151,14 @@ fn parse_subtype_element(
                     })
                 }
             }
-            SubtypeElement::Table(parse_table_constraint(table, parameters)?)
+            SubtypeElement::Table(parse_table_constraint(parser, table, parameters)?)
         }
         AstSubtypeElement::UserDefinedConstraint(_) => SubtypeElement::UserDefined,
     })
 }
 
 fn parse_table_constraint(
+    parser: &AstParser<'_>,
     table: &AstElement<AstTableConstraint>,
     parameters: &[(&String, &Parameter)],
 ) -> Result<TableConstraint> {
@@ -169,25 +170,24 @@ fn parse_table_constraint(
             None
         }
     });
-    let set_name = match set_parameter {
+    let set_ref = match set_parameter {
         Some(param) => match param {
-            Parameter::ObjectSet {
-                set_name,
-                ..
-            } => set_name.clone(),
-            other => return Err(Error {
-                kind: ErrorKind::Ast(format!("expecting {} to be an information object class set parameter, but found a {} parameter", set_name.element, match other {
-                    Parameter::Type { .. } => "type",
-                    Parameter::Value { .. } => "value",
-                    Parameter::ObjectSet { .. } => unreachable!(),
-                })),
-                loc: set_name.loc,
-            }),
+            Parameter::ObjectSet { set_ref, .. } => set_ref.clone(),
+            other => {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                    "expecting {} to be an information object class set parameter, but found {}",
+                    set_name.element,
+                    other.get_name()
+                )),
+                    loc: set_name.loc,
+                })
+            }
         },
-        None => set_name,
+        None => parser.resolve_symbol(&set_name.as_ref()),
     };
     Ok(TableConstraint {
-        set_name,
+        set_ref,
         field_ref: table
             .element
             .field_ref

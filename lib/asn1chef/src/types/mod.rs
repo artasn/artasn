@@ -561,6 +561,13 @@ impl BuiltinType {
 
         Ok(())
     }
+
+    pub fn is_assignable_to(&self, to: &BuiltinType) -> bool {
+        match (self, to) {
+            (_, BuiltinType::Any) => true,
+            _ => self.tag_type() == to.tag_type(),
+        }
+    }
 }
 
 impl Display for BuiltinType {
@@ -569,11 +576,5 @@ impl Display for BuiltinType {
             Self::Choice(_) => f.write_str("CHOICE"),
             other => other.tag_type().unwrap().fmt(f),
         }
-    }
-}
-
-impl PartialEq for BuiltinType {
-    fn eq(&self, other: &Self) -> bool {
-        self.tag_type() == other.tag_type()
     }
 }

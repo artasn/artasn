@@ -16,7 +16,7 @@ pub struct InformationObject {
 
 impl InformationObject {
     pub fn find_field<'a>(&'a self, field_ref: &AstElement<String>) -> Result<&'a ObjectField> {
-        Ok(self
+        self
             .fields
             .iter()
             .find_map(|(name, field)| {
@@ -32,7 +32,7 @@ impl InformationObject {
                     field_ref.element
                 )),
                 loc: field_ref.loc,
-            })?)
+            })
     }
 }
 

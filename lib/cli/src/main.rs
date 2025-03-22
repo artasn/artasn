@@ -6,7 +6,7 @@ use asn1chef::{
     module::QualifiedIdentifier,
     values::ValueResolve,
 };
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, ValueEnum};
 
 #[derive(Debug, Parser)]
 #[command(name = "asn1chef")]
@@ -16,30 +16,18 @@ struct Cli {
     /// Path to the config JSON file
     #[arg(long, short = 'c')]
     config: Option<String>,
-    /// ASN.1 module files to compile
-    #[arg(long, short = 'f', required = true)]
-    files: Vec<String>,
     /// Prevents information like time elapsed from being printed.
     #[arg(long, short = 's')]
     silent: bool,
-    #[clap(subcommand)]
-    command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-enum Command {
-    /// Only print compiler errors and warnings
-    Validate,
-    /// Encode an ASN.1 value definition
-    Encode {
-        /// The name of the value, in the format "ModuleName.valueName"
-        #[clap(long, short = 'v')]
-        value: String,
-
-        /// The transfer syntax to encode the value into
-        #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER)]
-        transfer_syntax: TransferSyntaxName,
-    },
+    /// Encode an ASN.1 value definition in the format "ModuleName.valueName"
+    #[arg(long, group = "encode")]
+    encode: Option<String>,
+    /// The transfer syntax to encode the value into
+    #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER, requires = "encode")]
+    transfer_syntax: TransferSyntaxName,
+    /// ASN.1 module files to compile
+    #[arg(required = true, num_args = 1..)]
+    files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -170,55 +158,48 @@ fn main() {
     }
     let start = Instant::now();
 
-    match args.command {
-        Command::Validate => (),
-        Command::Encode {
-            value,
-            transfer_syntax,
-        } => {
-            let ts = TransferSyntax::get_by_name(transfer_syntax.to_string().as_str())
-                .expect("invalid transfer syntax (this should be prevented by clap)");
-            let encoder = match ts.get_codec().encoder {
-                Some(encoder) => encoder,
-                None => exit_with_error(format_args!(
-                    "encoding with the {} transfer syntax is not yet implemented",
-                    transfer_syntax
-                )),
-            };
+    if let Some(value) = args.encode {
+        let transfer_syntax = args.transfer_syntax;
+        let ts = TransferSyntax::get_by_name(transfer_syntax.to_string().as_str())
+            .expect("invalid transfer syntax (this should be prevented by clap)");
+        let encoder = match ts.get_codec().encoder {
+            Some(encoder) => encoder,
+            None => exit_with_error(format_args!(
+                "encoding with the {} transfer syntax is not yet implemented",
+                transfer_syntax
+            )),
+        };
 
-            let dot_count = value.chars().filter(|ch| *ch == '.').count();
-            if dot_count == 0 {
-                exit_with_error(format_args!(
-                    "value '{}' is missing module name; use the format 'ModuleName.{}'",
-                    value, value
-                ));
-            } else if dot_count > 1 {
-                exit_with_error(format_args!(
-                    "value '{}' is malformed; use the format 'ModuleName.valueName'",
-                    value
-                ))
-            }
+        let dot_count = value.chars().filter(|ch| *ch == '.').count();
+        if dot_count == 0 {
+            exit_with_error(format_args!(
+                "value '{}' is missing module name; use the format 'ModuleName.{}'",
+                value, value
+            ));
+        } else if dot_count > 1 {
+            exit_with_error(format_args!(
+                "value '{}' is malformed; use the format 'ModuleName.valueName'",
+                value
+            ))
+        }
 
-            let split = value.split(".").collect::<Vec<&str>>();
-            let module_name = split[0].trim();
-            let value_name = split[1].trim();
+        let split = value.split(".").collect::<Vec<&str>>();
+        let module_name = split[0].trim();
+        let value_name = split[1].trim();
 
-            if module_name.is_empty() {
-                exit_with_error(format_args!("module name cannot be empty"));
-            }
-            if value_name.is_empty() {
-                exit_with_error(format_args!("value name cannot be empty"));
-            }
+        if module_name.is_empty() {
+            exit_with_error(format_args!("module name cannot be empty"));
+        }
+        if value_name.is_empty() {
+            exit_with_error(format_args!("value name cannot be empty"));
+        }
 
-            let module = match context.lookup_module_by_name(module_name) {
-                Some(module) => module.ident.clone(),
-                None => {
-                    exit_with_error(format_args!("module '{}' could not be found", module_name))
-                }
-            };
-            let declared_value = match context
-                .lookup_value(&QualifiedIdentifier::new(module, value_name.to_string()))
-            {
+        let module = match context.lookup_module_by_name(module_name) {
+            Some(module) => module.ident.clone(),
+            None => exit_with_error(format_args!("module '{}' could not be found", module_name)),
+        };
+        let declared_value =
+            match context.lookup_value(&QualifiedIdentifier::new(module, value_name.to_string())) {
                 Some(value) => value,
                 None => exit_with_error(format_args!(
                     "value '{}' could not be found in module '{}'",
@@ -226,27 +207,26 @@ fn main() {
                 )),
             };
 
-            let value = match declared_value.value.resolve(&context) {
-                Ok(value) => value,
-                Err(err) => exit_with_error(format_args!(
-                    "failed to resolve value: {}",
-                    err.kind.message()
-                )),
-            };
+        let value = match declared_value.value.resolve(&context) {
+            Ok(value) => value,
+            Err(err) => exit_with_error(format_args!(
+                "failed to resolve value: {}",
+                err.kind.message()
+            )),
+        };
 
-            let mut buf = Vec::with_capacity(64 * 1024);
-            match encoder(ts, &mut buf, &context, &value) {
-                Ok(()) => (),
-                Err(err) => exit_with_error(format_args!(
-                    "failed to encode value: {}",
-                    err.kind.message()
-                )),
-            }
-            let hex = hex::encode_upper(buf.into_iter().rev().collect::<Vec<u8>>());
-            if !args.silent {
-                println!("encoded in {}\n", elapsed_to_string(&start));
-            }
-            println!("{}", hex);
+        let mut buf = Vec::with_capacity(64 * 1024);
+        match encoder(ts, &mut buf, &context, &value) {
+            Ok(()) => (),
+            Err(err) => exit_with_error(format_args!(
+                "failed to encode value: {}",
+                err.kind.message()
+            )),
         }
+        let hex = hex::encode_upper(buf.into_iter().rev().collect::<Vec<u8>>());
+        if !args.silent {
+            println!("encoded in {}\n", elapsed_to_string(&start));
+        }
+        println!("{}", hex);
     }
 }
