@@ -1,4 +1,5 @@
 use super::{
+    class,
     util::LazyParse,
     values::{self, ParseValueAssignmentStage},
     AstParser,
@@ -51,7 +52,7 @@ fn default_value_lazy_parser(
 
 fn parse_structure_components(
     parser: &AstParser<'_>,
-    components: &[AstElement<AstStructureComponent>],
+    components: &[&AstElement<AstStructureComponent>],
     parameters: &[(&String, &Parameter)],
 ) -> Result<Vec<StructureComponent>> {
     let has_tags = components
@@ -93,22 +94,24 @@ fn parse_structure_components(
             Ok(StructureComponent {
                 name: component.element.name.as_ref().map(|name| name.0.clone()),
                 default_value: component.element.default.as_ref().map(|default| {
-                    if let AstValue::ValueReference(valref) = &default.element {
-                        let val_param =
-                            parameters
-                                .iter()
-                                .find_map(|(name, parameter)| match parameter {
-                                    Parameter::Value { value_type, value } => {
-                                        if *name == &valref.element.0 {
-                                            Some((value_type, value))
-                                        } else {
-                                            None
+                    if let AstValue::DefinedValue(valref) = &default.element {
+                        if valref.element.external_module.is_none() {
+                            let val_param =
+                                parameters
+                                    .iter()
+                                    .find_map(|(name, parameter)| match parameter {
+                                        Parameter::Value { value_type, value } => {
+                                            if *name == &valref.element.value.element.0 {
+                                                Some((value_type, value))
+                                            } else {
+                                                None
+                                            }
                                         }
-                                    }
-                                    _ => None,
-                                });
-                        if let Some((_, value)) = val_param {
-                            return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                                        _ => None,
+                                    });
+                            if let Some((_, value)) = val_param {
+                                return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                            }
                         }
                     }
 
@@ -121,17 +124,37 @@ fn parse_structure_components(
         .collect::<Result<Vec<StructureComponent>>>()
 }
 
+// TODO: in the future, versioning should matter; but for now, pretend like the versioning does not exist
+pub(crate) fn flatten_structure_components(
+    structure: &AstElement<AstStructure>,
+) -> Vec<&AstElement<AstStructureComponent>> {
+    structure
+        .element
+        .component_groups
+        .iter()
+        .filter_map(|component_group| match &component_group.element {
+            AstStructureComponentGroup::Extensible(_) => None,
+            AstStructureComponentGroup::StructureComponent(component) => Some(vec![component]),
+            AstStructureComponentGroup::VersionedComponentGroup(group) => {
+                Some(group.element.components.iter().collect())
+            }
+        })
+        .flatten()
+        .collect()
+}
+
 fn parse_structure_type(
     parser: &AstParser<'_>,
     structure: &AstElement<AstStructure>,
     parameters: &[(&String, &Parameter)],
 ) -> Result<BuiltinType> {
+    let components = flatten_structure_components(structure);
     Ok(BuiltinType::Structure(Structure {
         ty: match structure.element.kind.element {
             AstStructureKind::Sequence(_) => TagType::Sequence,
             AstStructureKind::Set(_) => TagType::Set,
         },
-        components: parse_structure_components(parser, &structure.element.components, parameters)?,
+        components: parse_structure_components(parser, &components, parameters)?,
     }))
 }
 
@@ -245,8 +268,8 @@ fn parse_named_numbers(
                 },
                 int.loc,
             ),
-            AstIntegerValueReference::ValueReference(valref) => {
-                values::parse_valuereference(parser, valref).map(|valref| TypedValue {
+            AstIntegerValueReference::DefinedValue(valref) => {
+                values::resolve_defined_value(parser, valref)?.map(|valref| TypedValue {
                     resolved_type: ResolvedType::universal(TagType::Integer),
                     value: ValueReference::Reference(valref),
                 })
@@ -334,11 +357,55 @@ fn parse_builtin_type(
     }))
 }
 
-pub(crate) fn resolve_typereference(
+pub(crate) fn resolve_defined_type(
     parser: &AstParser<'_>,
-    typeref: &AstElement<AstTypeReference>,
-) -> AstElement<QualifiedIdentifier> {
-    parser.resolve_symbol(&typeref.as_ref().map(|typeref| &typeref.0))
+    defined_type: &AstElement<AstDefinedType>,
+) -> Result<AstElement<QualifiedIdentifier>> {
+    match &defined_type.element.external_module {
+        Some(external_module) => {
+            let header = parser
+                .context
+                .lookup_module(&parser.module)
+                .expect("lookup_module");
+            let mut imported_module = header
+                .imports
+                .iter()
+                .find_map(|import| {
+                    if import.module.name == external_module.element.0.element.0 {
+                        Some(import.module.clone())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| Error {
+                    kind: ErrorKind::Ast(format!(
+                        "no such imported module '{}'",
+                        external_module.element.0.element.0
+                    )),
+                    loc: external_module.loc,
+                })?;
+            // if the module was imported by name only, see if it was declared with an OID
+            // if so, apply the module's declared OID to the DeclaredValue's identifier
+            match &mut imported_module.oid {
+                Some(_) => (),
+                oid @ None => {
+                    let lookup_module = parser
+                        .context
+                        .lookup_module_by_name(&imported_module.name)
+                        .expect("lookup_module_by_name");
+                    if let Some(lookup_oid) = &lookup_module.ident.oid {
+                        *oid = Some(lookup_oid.clone());
+                    }
+                }
+            }
+            Ok(defined_type.as_ref().map(|_| {
+                QualifiedIdentifier::new(imported_module, defined_type.element.ty.element.0.clone())
+            }))
+        }
+        None => {
+            Ok(parser.resolve_symbol(&defined_type.element.ty.as_ref().map(|valref| &valref.0)))
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -372,10 +439,10 @@ impl Parameter {
 
 pub(crate) fn resolve_parameterized_type_reference<'a>(
     parser: &'a AstParser<'_>,
-    typeref: &AstElement<AstParameterizedTypeReference>,
+    typeref: &AstElement<AstParameterizedDefinedType>,
     parameters: &[(&String, &Parameter)],
 ) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<Parameter>)> {
-    let name = resolve_typereference(parser, &typeref.element.name);
+    let name = resolve_defined_type(parser, &typeref.element.name)?;
     let parameterized_ast = parser
         .context
         .lookup_parameterized_type(&name.element)
@@ -404,14 +471,22 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
         .map(|(parameter, decl)| {
             Ok(match (&parameter.element, &decl.element) {
                 (AstParameter::TypeParameter(ast), AstParameterDecl::TypeParameterDecl(_)) => {
+                    let tagged_type =
+                        parse_type(parser, &ast.element.0, parameters, TypeContext::Contextless)?;
+                    if let UntaggedType::Reference(typeref) = &tagged_type.ty {
+                        if typeref
+                            .element
+                            .name
+                            .chars()
+                            .all(|ch| ch.is_ascii_uppercase() || ch == '-') && class::resolve_information_object_class(parser, typeref).is_ok() {
+                            return Ok(Parameter::ObjectClass {
+                                class_ref: typeref.clone(),
+                            });
+                        }
+                    }
                     Parameter::Type {
                         ast: ast.element.0.clone(),
-                        tagged_type: parse_type(
-                            parser,
-                            &ast.element.0,
-                            parameters,
-                            TypeContext::Contextless,
-                        )?,
+                        tagged_type,
                     }
                 }
                 (AstParameter::ValueParameter(ast), AstParameterDecl::ValueParameterDecl(decl)) => {
@@ -435,7 +510,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                     AstParameter::ObjectSetParameter(ast),
                     AstParameterDecl::ObjectSetParameterDecl(_decl),
                 ) => Parameter::ObjectSet {
-                    set_ref: resolve_typereference(parser, &ast.element.0),
+                    set_ref: resolve_defined_type(parser, &ast.element.0)?,
                 },
                 (param, decl) => {
                     return Err(Error {
@@ -491,38 +566,50 @@ fn parse_untagged_type(
                         &Parameter::ObjectClass { class_ref },
                     )],
                     TypeContext::Contextless,
-                );
+                )
+                .map_err(|err| err.into_foreign(INSTANCE_OF_IDENT.module.to_foreign_string()));
             }
             _ => parse_builtin_type(parser, builtin, parameters)?,
         },
-        AstUntaggedType::ParameterizedTypeReference(typeref) => {
+        AstUntaggedType::ParameterizedDefinedType(typeref) => {
             let (parameterized_ast, parameters) =
                 resolve_parameterized_type_reference(parser, typeref, parameters)?;
-            let (_, decl) = parse_type_assignment(
+            let decl = match parse_type_assignment(
                 parser,
                 parameterized_ast,
                 &TypeAssignmentParseMode::Parameterized { parameters },
-            )?
-            .expect("parse_type_assignment for parameterized type returned None");
+            ) {
+                Ok(Some((_, decl))) => decl,
+                Ok(None) => panic!("parse_type_assignment for parameterized type returned None"),
+                Err(err) => {
+                    return Err(err.into_foreign(
+                        resolve_defined_type(parser, &typeref.element.name)?
+                            .element
+                            .module
+                            .to_foreign_string(),
+                    ))
+                }
+            };
             let resolved = decl.ty.resolve(parser.context)?;
 
             UntaggedType::BuiltinType(resolved.ty)
         }
-        AstUntaggedType::TypeReference(typeref) => {
-            if let Some(parameter) = parameters.iter().find_map(|(name, param)| match param {
-                Parameter::Type { tagged_type, .. } => {
-                    if *name == &typeref.element.0 {
-                        Some(tagged_type)
-                    } else {
-                        None
+        AstUntaggedType::DefinedType(typeref) => {
+            if typeref.element.external_module.is_none() {
+                if let Some(parameter) = parameters.iter().find_map(|(name, param)| match param {
+                    Parameter::Type { tagged_type, .. } => {
+                        if *name == &typeref.element.ty.element.0 {
+                            Some(tagged_type)
+                        } else {
+                            None
+                        }
                     }
+                    _ => None,
+                }) {
+                    return Ok(parameter.clone());
                 }
-                _ => None,
-            }) {
-                return Ok(parameter.clone());
-            } else {
-                UntaggedType::Reference(resolve_typereference(parser, typeref))
             }
+            UntaggedType::Reference(resolve_defined_type(parser, typeref)?)
         }
         AstUntaggedType::ObjectClassFieldType(ast_ocf) => {
             let class_ref = ast_ocf
@@ -826,7 +913,7 @@ pub fn parse_parameterized_type_assignment(
 
 pub(crate) fn ast_type_as_parameterized_type_reference(
     ast: &AstElement<AstType>,
-) -> Option<&AstElement<AstParameterizedTypeReference>> {
+) -> Option<&AstElement<AstParameterizedDefinedType>> {
     let constrained: &AstElement<AstConstrainedType> = match &ast.element {
         AstType::TaggedType(tagged) => &tagged.element.ty,
         AstType::ConstrainedType(constrained) => constrained,
@@ -836,7 +923,7 @@ pub(crate) fn ast_type_as_parameterized_type_reference(
         AstConstrainedType::TypeWithConstraint(_) => return None,
     };
     match &untagged.element {
-        AstUntaggedType::ParameterizedTypeReference(typeref) => Some(typeref),
+        AstUntaggedType::ParameterizedDefinedType(typeref) => Some(typeref),
         _ => None,
     }
 }

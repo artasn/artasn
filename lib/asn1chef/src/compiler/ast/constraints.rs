@@ -162,14 +162,18 @@ fn parse_table_constraint(
     table: &AstElement<AstTableConstraint>,
     parameters: &[(&String, &Parameter)],
 ) -> Result<TableConstraint> {
-    let set_name = table.element.set_name.as_ref().map(|name| name.0.clone());
-    let set_parameter = parameters.iter().find_map(|(name, parameter)| {
-        if *name == &set_name.element {
-            Some(*parameter)
-        } else {
-            None
-        }
-    });
+    let set_ref = types::resolve_defined_type(parser, &table.element.set_name)?;
+    let set_parameter = if table.element.set_name.element.external_module.is_none() {
+        parameters.iter().find_map(|(name, parameter)| {
+            if *name == &set_ref.element.name {
+                Some(*parameter)
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
     let set_ref = match set_parameter {
         Some(param) => match param {
             Parameter::ObjectSet { set_ref, .. } => set_ref.clone(),
@@ -177,14 +181,14 @@ fn parse_table_constraint(
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
                     "expecting {} to be an information object class set parameter, but found {}",
-                    set_name.element,
+                    set_ref.element.name,
                     other.get_name()
                 )),
-                    loc: set_name.loc,
+                    loc: set_ref.loc,
                 })
             }
         },
-        None => parser.resolve_symbol(&set_name.as_ref()),
+        None => set_ref,
     };
     Ok(TableConstraint {
         set_ref,
@@ -384,20 +388,24 @@ fn parse_constrained_type(
         )?),
         None => match &ast_constrained_type.element {
             AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
-                AstUntaggedType::TypeReference(typeref) => {
-                    let param = parameters.iter().find_map(|(name, param)| match param {
-                        Parameter::Type { tagged_type, .. } => {
-                            if *name == &typeref.element.0 {
-                                Some(tagged_type)
-                            } else {
-                                None
+                AstUntaggedType::DefinedType(typeref) => {
+                    if typeref.element.external_module.is_none() {
+                        let param = parameters.iter().find_map(|(name, param)| match param {
+                            Parameter::Type { tagged_type, .. } => {
+                                if *name == &typeref.element.ty.element.0 {
+                                    Some(tagged_type)
+                                } else {
+                                    None
+                                }
                             }
+                            _ => None,
+                        });
+                        match param {
+                            Some(param) => param.constraint.clone(),
+                            None => None,
                         }
-                        _ => None,
-                    });
-                    match param {
-                        Some(param) => param.constraint.clone(),
-                        None => None,
+                    } else {
+                        None
                     }
                 }
                 _ => None,
@@ -414,9 +422,9 @@ fn parse_constrained_type(
                         _ => unreachable!(),
                     };
 
-                    let mut component_constraints =
-                        Vec::with_capacity(structure.element.components.len());
-                    for component in &structure.element.components {
+                    let components = types::flatten_structure_components(structure);
+                    let mut component_constraints = Vec::with_capacity(components.len());
+                    for component in components {
                         let resolved_component = resolved_components
                             .iter()
                             .find(|resolved_component| {
@@ -532,7 +540,7 @@ pub(crate) fn parse_type_constraint(
 
 pub(crate) fn resolve_type_assignment_from_parameterized_type_reference<'a>(
     parser: &'a AstParser<'_>,
-    typeref: &AstElement<AstParameterizedTypeReference>,
+    typeref: &AstElement<AstParameterizedDefinedType>,
     parameters: Vec<(&String, &Parameter)>,
 ) -> Result<(&'a AstElement<AstTypeAssignment>, Vec<(String, Parameter)>)> {
     let (ast, parameters) = types::resolve_parameterized_type_reference(
@@ -583,7 +591,7 @@ fn resolve_type_assignment<'a>(
     };
     Ok(match &constrained.element {
         AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
-            AstUntaggedType::ParameterizedTypeReference(typeref) => {
+            AstUntaggedType::ParameterizedDefinedType(typeref) => {
                 // recursively resolve the AST until we reach the root type
                 // e.g:
                 //

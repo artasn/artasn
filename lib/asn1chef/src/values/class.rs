@@ -16,8 +16,7 @@ pub struct InformationObject {
 
 impl InformationObject {
     pub fn find_field<'a>(&'a self, field_ref: &AstElement<String>) -> Result<&'a ObjectField> {
-        self
-            .fields
+        self.fields
             .iter()
             .find_map(|(name, field)| {
                 if name == &field_ref.element {
@@ -36,13 +35,21 @@ impl InformationObject {
     }
 }
 
+pub type InformationObjectSet = Vec<ObjectSetElement>;
+
+#[derive(Debug, Clone)]
+pub enum ObjectSetElement {
+    Object(InformationObjectReference),
+    ObjectSet(AstElement<QualifiedIdentifier>),
+}
+
 #[derive(Debug, Clone)]
 pub enum ObjectField {
     Type(TaggedType),
     Value(AstElement<TypedValue>),
     ObjectFieldReference(ObjectFieldReference),
     Object(InformationObjectReference),
-    ObjectSet(Vec<InformationObjectReference>),
+    ObjectSet(InformationObjectSet),
 }
 
 #[derive(Debug, Clone)]

@@ -306,6 +306,16 @@ impl Error {
         let (line, col) = self.pos(module_source);
         format!("{} at {}:{}", self.kind.message(), line, col)
     }
+
+    pub fn into_foreign(self, source: String) -> Error {
+        Error {
+            kind: ErrorKind::Foreign {
+                source,
+                error: Box::new(self.kind),
+            },
+            loc: self.loc,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,6 +348,9 @@ pub enum ErrorKind {
     VariantUnmatched {
         variant: String,
     },
+    VariantUnmatchedMessage {
+        message: String,
+    },
     UnterminatedString,
     ExpectingNegative,
     IllegalTokenLiteral {
@@ -345,6 +358,10 @@ pub enum ErrorKind {
     },
     Ast(String),
     BreakParser,
+    Foreign {
+        source: String,
+        error: Box<ErrorKind>,
+    },
 }
 
 impl ErrorKind {
@@ -428,6 +445,7 @@ impl ErrorKind {
             ErrorKind::VariantUnmatched { variant } => {
                 format!("unmatched variant '{}'", variant)
             }
+            ErrorKind::VariantUnmatchedMessage { message } => message.clone(),
             ErrorKind::ExpectingNegative => {
                 "expecting provided token not to be present".to_string()
             }
@@ -436,6 +454,7 @@ impl ErrorKind {
             }
             ErrorKind::Ast(message) => message.clone(),
             ErrorKind::BreakParser => "break parser".to_string(),
+            ErrorKind::Foreign { error, .. } => error.message(),
         }
     }
 }

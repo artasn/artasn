@@ -33,10 +33,10 @@ fn named_number_to_u64(named_num: &AstElement<AstNamedNumber>) -> Result<u64> {
 
             Ok(big_uint_to_u64(&int.element.value)?)
         }
-        AstIntegerValueReference::ValueReference(valref) => Err(Error {
+        AstIntegerValueReference::DefinedValue(valref) => Err(Error {
             kind: ErrorKind::Ast(format!(
                 "expecting INTEGER literal, but found identifier '{}'",
-                valref.element.0
+                valref.element,
             )),
             loc: valref.loc,
         }),
@@ -80,21 +80,28 @@ pub fn name_and_oid_to_module_ident(
 
 fn parse_object_identifier_component_valref(
     parser: &AstParser<'_>,
-    value: &AstElement<AstValueReference>,
+    valref: &AstElement<AstDefinedValue>,
     ty: TagType,
-) -> ObjectIdentifierComponent {
+) -> Result<ObjectIdentifierComponent> {
+    let resolved_value = values::resolve_defined_value(parser, valref)?;
+    if valref.element.external_module.is_some() {
+        return Ok(ObjectIdentifierComponent::ValueReference(resolved_value));
+    }
+
+    let name = &valref.element.value;
     let base = match ty {
-        TagType::ObjectIdentifier => lookup_root_oid_component_str(&value.element.0),
+        TagType::ObjectIdentifier => lookup_root_oid_component_str(&name.element.0),
         TagType::RelativeOid => None,
         _ => unreachable!(),
     };
-    base.map_or_else(
-        || ObjectIdentifierComponent::ValueReference(values::parse_valuereference(parser, value)),
+
+    Ok(base.map_or_else(
+        || ObjectIdentifierComponent::ValueReference(resolved_value),
         |lit| ObjectIdentifierComponent::IntegerLiteral {
-            name: Some(value.as_ref().map(|name| name.0.clone())),
-            int: AstElement::new(lit.node, value.loc),
+            name: Some(name.as_ref().map(|name| name.0.clone())),
+            int: AstElement::new(lit.node, valref.loc),
         },
-    )
+    ))
 }
 
 pub fn parse_object_identifier(
@@ -125,15 +132,8 @@ pub fn parse_object_identifier(
                             ),
                         }
                     }
-                    AstObjectIdentifierComponent::ValueReference(val_ref) => {
-                        parse_object_identifier_component_valref(parser, val_ref, ty)
-                    }
-                    AstObjectIdentifierComponent::DefinedValue(defined_val) => {
-                        parse_object_identifier_component_valref(
-                            parser,
-                            &defined_val.element.value,
-                            ty,
-                        )
+                    AstObjectIdentifierComponent::DefinedValue(val_ref) => {
+                        parse_object_identifier_component_valref(parser, val_ref, ty)?
                     }
                 })
             })

@@ -2,7 +2,10 @@ use crate::{
     compiler::{ast::constraints, parser::*},
     module::{ModuleIdentifier, QualifiedIdentifier},
     types::*,
-    values::{InformationObject, InformationObjectReference, ObjectField, ObjectFieldReference},
+    values::{
+        InformationObject, InformationObjectReference, InformationObjectSet, ObjectField,
+        ObjectFieldReference, ObjectSetElement,
+    },
 };
 
 use super::{
@@ -361,10 +364,10 @@ fn parse_next_syntax_node(
                             fields.push((
                                 item.associated_data.clone(),
                                 ObjectField::ObjectFieldReference(ObjectFieldReference {
-                                    object_ref: values::resolve_valuereference(
+                                    object_ref: values::resolve_defined_value(
                                         parser,
                                         &ast_field_ref.element.object_name,
-                                    ),
+                                    )?,
                                     field: ast_field,
                                 }),
                             ));
@@ -491,34 +494,73 @@ pub(crate) fn resolve_information_object_class<'a>(
     })
 }
 
+pub(crate) fn resolve_information_object_set<'a>(
+    parser: &'a AstParser<'_>,
+    set_ident: &AstElement<QualifiedIdentifier>,
+) -> Result<&'a InformationObjectSet> {
+    let set = parser
+        .context
+        .lookup_information_object_set(&set_ident.element);
+    set.ok_or_else(|| Error {
+        kind: ErrorKind::Ast(format!(
+            "undefined reference to information object set '{}'",
+            set_ident.element,
+        )),
+        loc: set_ident.loc,
+    })
+}
+
 fn parse_object_set(
     parser: &AstParser<'_>,
     class: &InformationObjectClass,
     set: &AstElement<AstObjectSet>,
-) -> Result<Vec<InformationObjectReference>> {
-    let mut classes = Vec::new();
-    for ast_element in &set.element.elements {
+) -> Result<InformationObjectSet> {
+    let mut set_elements = Vec::new();
+
+    let ast_elements: Vec<&AstElement<AstObjectSetElement>> = set
+        .element
+        .element_groups
+        .iter()
+        .filter_map(|group| match &group.element {
+            AstObjectSetElementGroup::Extensible(_) => None,
+            AstObjectSetElementGroup::ObjectSetElements(elements) => {
+                Some(elements.element.0.iter().collect::<Vec<_>>())
+            }
+        })
+        .flatten()
+        .collect();
+
+    for ast_element in ast_elements {
         match &ast_element.element {
             AstObjectSetElement::BracedTokenStream(tokens) => {
-                classes.push(InformationObjectReference::Value(parse_information_object(
-                    parser, tokens, class,
-                )?));
+                set_elements.push(ObjectSetElement::Object(InformationObjectReference::Value(
+                    parse_information_object(parser, tokens, class)?,
+                )));
             }
-            AstObjectSetElement::ValueReference(valref) => {
-                classes.push(InformationObjectReference::Reference(
-                    values::resolve_valuereference(parser, valref),
+            AstObjectSetElement::DefinedValue(defined_value) => {
+                set_elements.push(ObjectSetElement::Object(
+                    InformationObjectReference::Reference(values::resolve_defined_value(
+                        parser,
+                        defined_value,
+                    )?),
                 ));
+            }
+            AstObjectSetElement::DefinedType(defined_type) => {
+                set_elements.push(ObjectSetElement::ObjectSet(types::resolve_defined_type(
+                    parser,
+                    defined_type,
+                )?));
             }
         }
     }
 
-    Ok(classes)
+    Ok(set_elements)
 }
 
 pub(crate) fn parse_object_set_assignment(
     parser: &AstParser<'_>,
     ast_set: &AstElement<AstObjectSetAssignment>,
-) -> Result<(QualifiedIdentifier, Vec<InformationObjectReference>)> {
+) -> Result<(QualifiedIdentifier, InformationObjectSet)> {
     let ast_name = &ast_set.element.name;
     let name = ast_name.element.0.clone();
     let ident = QualifiedIdentifier::new(parser.module.clone(), name);

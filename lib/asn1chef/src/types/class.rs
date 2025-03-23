@@ -21,8 +21,7 @@ impl InformationObjectClass {
         &'a self,
         field_ref: &AstElement<String>,
     ) -> Result<&'a ObjectClassField> {
-        self
-            .fields
+        self.fields
             .iter()
             .find_map(|(name, field)| {
                 if name.element == field_ref.element {

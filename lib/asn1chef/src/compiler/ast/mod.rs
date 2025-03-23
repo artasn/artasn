@@ -112,7 +112,9 @@ fn run_verifier<F: Fn(AstVerifier<'_>) -> Vec<Error>>(
     errors
 }
 
-fn module_ast_to_module_ident(header: &AstElement<AstModuleHeader>) -> Result<ModuleIdentifier> {
+pub(crate) fn module_ast_to_module_ident(
+    header: &AstElement<AstModuleHeader>,
+) -> Result<ModuleIdentifier> {
     object_id::name_and_oid_to_module_ident(
         &header.element.name,
         header.element.oid.as_ref().map(|oid| match &oid.element {
@@ -176,7 +178,7 @@ pub fn register_all_modules(
             },
             None => TagDefault::Explicit,
         };
-        let extensibility_implied = header.element.extension_default.is_some();
+        let extensibility_implied = header.element.extensibility_implied.is_some();
         let exports = match header
             .element
             .exports

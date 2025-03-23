@@ -1,3 +1,4 @@
 [
+    "compile error: undefined reference to type 'WithType FROM ModuleWithOID (2.1337.47.4.100)'",
     "compile error: undefined reference to type 'WithType FROM ModuleWithOID (2.1337.47.4.100)'"
 ]

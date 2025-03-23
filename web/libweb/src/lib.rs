@@ -70,10 +70,7 @@ impl TryInto<module::ModuleIdentifier> for ModuleIdentifier {
         Ok(module::ModuleIdentifier {
             name: self.name,
             oid: match self.oid {
-                Some(oid) => Some(Oid(oid
-                    .split(".")
-                    .map(|node| node.parse::<u64>())
-                    .collect::<Result<Vec<u64>, ParseIntError>>()?)),
+                Some(oid) => Some(Oid::parse_string(oid)?)),
                 None => None,
             },
         })

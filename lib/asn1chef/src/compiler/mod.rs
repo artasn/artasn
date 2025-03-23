@@ -11,6 +11,8 @@ use options::{Asn1Edition, CompilerConfig};
 use parser::*;
 use std::fmt::Display;
 
+use crate::module::ModuleIdentifier;
+
 pub mod oid_tree;
 
 pub mod options;
@@ -189,6 +191,20 @@ impl Compiler {
         }
     }
 
+    fn find_source_by_ident<'a>(&'a self, find_ident: &ModuleIdentifier) -> Option<&'a SourceFile> {
+        for source in &self.sources {
+            for ast_module in &source.program.element.0 {
+                if let Ok(module) = ast::module_ast_to_module_ident(&ast_module.element.header) {
+                    if &module == find_ident {
+                        return Some(source);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn compile(&self, context: &mut Context) -> Vec<CompileError> {
         macro_rules! stage {
             ( $stage:ident ) => {{
@@ -196,11 +212,21 @@ impl Compiler {
                 for source in &self.sources {
                     let source_errors = ast::$stage(context, &self.config, &source.program)
                         .into_iter()
-                        .map(|error| CompileError {
-                            phase: CompilePhase::Walk,
-                            path: source.path.clone(),
-                            source: source.code.clone(),
-                            error,
+                        .map(|error| {
+                            let error_source = match &error.kind {
+                                ErrorKind::Foreign { source, .. } => self
+                                    .find_source_by_ident(&ModuleIdentifier::from_foreign_string(
+                                        &source,
+                                    ))
+                                    .expect("find_source_by_ident failed"),
+                                _ => source,
+                            };
+                            CompileError {
+                                phase: CompilePhase::Walk,
+                                path: error_source.path.clone(),
+                                source: error_source.code.clone(),
+                                error,
+                            }
                         });
                     errors.extend(source_errors);
                 }
@@ -221,8 +247,11 @@ impl Compiler {
         stage!(register_all_constraints);
         stage!(register_all_normal_values);
         stage!(register_all_class_reference_values);
-        stage!(verify_all_types);
-        stage!(verify_all_values);
+
+        if self.config.verify {
+            stage!(verify_all_types);
+            stage!(verify_all_values);
+        }
 
         Vec::new()
     }

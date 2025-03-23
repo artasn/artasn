@@ -337,17 +337,22 @@ fn parse_rule(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) -> RuleData {
 fn parse_variant(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) {
     let mut variants: Vec<String> = Vec::new();
     let name = format!("Ast{}", pairs.next().unwrap().as_str());
+    let mut error_message = None;
     for pair in pairs {
         let rule_name = match pair.as_rule() {
             Rule::named_variant => parse_rule(cb, pair.into_inner()).rule_name,
             Rule::ident => format!("Ast{}", pair.as_str()),
+            Rule::error_definition => {
+                error_message = Some(pair.into_inner().next().unwrap().as_str());
+                continue;
+            }
             _ => unreachable!(),
         };
         variants.push(rule_name);
     }
 
     cb.build_enum(&name, &variants);
-    cb.build_enum_parser(&name, &variants)
+    cb.build_enum_parser(&name, &variants, error_message)
 }
 
 pub fn parse_syntax(

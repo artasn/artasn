@@ -1,4 +1,7 @@
-use std::fmt::{Display, Write};
+use std::{
+    fmt::{Display, Write},
+    num::ParseIntError,
+};
 
 use num::{bigint::Sign, BigInt};
 
@@ -186,6 +189,16 @@ impl Display for ObjectIdentifierComponent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Oid(pub Vec<u64>);
+
+impl Oid {
+    pub fn parse_string(str: &str) -> std::result::Result<Oid, ParseIntError> {
+        Ok(Oid(str
+            .split('.')
+            .map(|node| node.parse::<u64>())
+            .collect::<std::result::Result<Vec<u64>, ParseIntError>>(
+        )?))
+    }
+}
 
 impl Display for Oid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

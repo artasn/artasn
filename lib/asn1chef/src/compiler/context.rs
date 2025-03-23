@@ -4,7 +4,7 @@ use super::parser::{AstElement, AstTypeAssignment};
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
     types::{Class, InformationObjectClassReference, TaggedType},
-    values::{InformationObjectReference, TypedValue},
+    values::{InformationObjectReference, InformationObjectSet, TypedValue},
 };
 
 #[derive(Debug)]
@@ -25,7 +25,7 @@ pub struct Context {
     types: IndexMap<QualifiedIdentifier, DeclaredType>,
     classes: IndexMap<QualifiedIdentifier, InformationObjectClassReference>,
     objects: IndexMap<QualifiedIdentifier, InformationObjectReference>,
-    object_sets: IndexMap<QualifiedIdentifier, Vec<InformationObjectReference>>,
+    object_sets: IndexMap<QualifiedIdentifier, InformationObjectSet>,
     values: IndexMap<QualifiedIdentifier, DeclaredValue>,
 }
 
@@ -111,7 +111,7 @@ impl Context {
     pub fn register_information_object_set(
         &mut self,
         ident: QualifiedIdentifier,
-        decl: Vec<InformationObjectReference>,
+        decl: InformationObjectSet,
     ) {
         self.object_sets.insert(ident, decl);
     }
@@ -164,7 +164,7 @@ impl Context {
     pub fn lookup_information_object_set<'a>(
         &'a self,
         ident: &QualifiedIdentifier,
-    ) -> Option<&'a Vec<InformationObjectReference>> {
+    ) -> Option<&'a InformationObjectSet> {
         self.object_sets.get(ident)
     }
 

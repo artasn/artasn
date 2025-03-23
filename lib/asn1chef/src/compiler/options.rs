@@ -38,6 +38,8 @@ pub struct CompilerConfig {
     pub empty_export_behavior: EmptyExportBehavior,
     #[serde(rename = "permitLowercaseStringIndicator", default = "enabled")]
     pub permit_lowercase_string_indicator: bool,
+    #[serde(default = "enabled")]
+    pub verify: bool,
 }
 
 impl CompilerConfig {

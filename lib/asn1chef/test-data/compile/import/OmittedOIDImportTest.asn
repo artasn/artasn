@@ -4,13 +4,22 @@ IMPORTS
     WithType, withValue FROM ModuleWithOID
     WithoutType, withoutValue FROM ModuleWithoutOID;
 
-S ::= SEQUENCE {
+S1 ::= SEQUENCE {
     with WithType,
     without WithoutType
 }
-s S ::= {
+s1 S1 ::= {
     with withValue,
     without withoutValue
+}
+
+S2 ::= SEQUENCE {
+    with ModuleWithOID.WithType,
+    without ModuleWithoutOID.WithoutType
+}
+s2 S2 ::= {
+    with ModuleWithOID.withValue,
+    without ModuleWithoutOID.withoutValue
 }
 
 END

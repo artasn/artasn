@@ -51,7 +51,7 @@ impl TokenStream {
                     _ => unreachable!(),
                 };
 
-                if name.chars().all(|ch| ch.is_ascii_uppercase() || ch != '-') {
+                if name.chars().all(|ch| ch.is_ascii_uppercase() || ch == '-') {
                     return Ok(token);
                 }
             }

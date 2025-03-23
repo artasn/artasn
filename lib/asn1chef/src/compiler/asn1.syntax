@@ -36,7 +36,7 @@ rule ModuleHeader {
         oid = optional: ModuleIdentifier
         encoding_reference = optional: UppercaseReference
         tag_default = optional: TagDefault
-        extension_default = optional: ExtensionDefault
+        extensibility_implied = optional: ExtensibilityImplied
         exports = optional: Exports
         imports = optional: Imports
     }
@@ -49,7 +49,9 @@ rule ModuleHeader {
         keyword INSTRUCTIONS
     }
     tag_default = optional TagDefault
-    extension_default = optional ExtensionDefault
+    optional {
+        extensibility_implied = ExtensibilityImplied
+    }
     operator ::=
     keyword BEGIN
     exports = optional Exports
@@ -66,7 +68,7 @@ rule ModuleBody {
     return assignments
 }
 
-variant ModuleIdentifier = DefinitiveOidWithIri | DefinitiveOid;
+variant ModuleIdentifier = DefinitiveOidWithIri | DefinitiveOid | error { "expecting module identifier" };
 
 rule DefinitiveOidWithIri {
     captures {
@@ -90,7 +92,7 @@ rule DefinitiveOid {
     return components
 }
 
-variant DefinitiveOidComponent = NamedNumber | ValueReference | Number;
+variant DefinitiveOidComponent = NamedNumber | ValueReference | Number | error { "expecting a named number, number literal, or valuereference" };
 
 rule NamedNumber {
     captures {
@@ -135,12 +137,12 @@ variant TagDefaultKind = TagDefaultExplicit {
     keyword IMPLICIT
 } | TagDefaultAutomatic {
     keyword AUTOMATIC
-};
+} | error { "expecting tag default (AUTOMATIC, IMPLICIT, or EXPLICIT)" };
 
-variant ExtensionDefault = ExtensibilityImplied {
+rule ExtensibilityImplied {
     keyword EXTENSIBILITY
     keyword IMPLIED
-};
+}
 
 rule Exports {
     captures {
@@ -155,7 +157,7 @@ rule Exports {
 
 variant ExportsKind = All {
     keyword ALL
-} | SymbolList;
+} | SymbolList | error { "expecting a symbol list or ALL" };
 
 rule Imports {
     captures {
@@ -199,7 +201,7 @@ variant SelectionOptionKind = Successors {
     keyword SUCCESSORS
 } | Descendants {
     keyword DESCENDANTS
-};
+} | error { "expecting SUCCESSORS or DESCENDANTS" };
 
 variant AssignedIdentifier = DefinitiveOid | ValueIdentifier {
     captures {
@@ -235,7 +237,7 @@ variant AssignedIdentifier = DefinitiveOid | ValueIdentifier {
     // we need to ensure that there is not a FROM after the `id`.
     not keyword FROM
     return value
-};
+} | error { "expecting an object identifier or a valuereference" };
 
 rule GlobalModuleReference {
     captures {
@@ -248,7 +250,7 @@ rule GlobalModuleReference {
     }
 }
 
-variant Oid = ObjectIdentifierValue | DefinedValue;
+variant Oid = ObjectIdentifierValue | DefinedValue | error { "expecting an object identifier or a valuereference" };
 
 rule ObjectIdentifierValue {
     captures {
@@ -263,7 +265,8 @@ rule ObjectIdentifierValue {
     operator }
 }
 
-variant ObjectIdentifierComponent = NamedNumber | DefinedValue | ValueReference | Number;
+variant ObjectIdentifierComponent = NamedNumber | DefinedValue | Number |
+    error { "expecting a named number, number literal, or a valuereference" };
 
 rule DefinedValue {
     captures {
@@ -277,6 +280,25 @@ rule DefinedValue {
     value = ValueReference 
 }
 
+rule DefinedType {
+    captures {
+        external_module = optional: DefinedTypeModule
+        ty = TypeReference
+    }
+    optional {
+        external_module = DefinedTypeModule
+    }
+    ty = TypeReference 
+}
+
+rule DefinedTypeModule {
+    captures {
+        external_module = TypeReference
+    }
+    external_module = TypeReference
+    operator .
+    return external_module
+}
 
 rule SymbolList {
     captures {
@@ -291,7 +313,7 @@ rule SymbolList {
     return symbols
 }
 
-variant Symbol = ParameterizedReference | Reference;
+variant Symbol = ParameterizedReference | Reference | error { "expecting a symbol (reference or parameterized reference)" };
 
 rule ParameterizedReference {
     captures {
@@ -304,9 +326,9 @@ rule ParameterizedReference {
     return reference
 }
 
-variant Reference = TypeReference | ValueReference;
+variant Reference = TypeReference | ValueReference | error { "expecting a typereference or a valuereference" };
 
-variant Assignment = ObjectSetAssignment | TypeAssignment | ValueAssignment;
+variant Assignment = ObjectSetAssignment | TypeAssignment | ValueAssignment | error { "expecting a type, value, or information object set assignment" };
 
 rule ParameterDeclList {
     captures {
@@ -345,7 +367,7 @@ variant ParameterDecl = ObjectSetParameterDecl {
     }
     name = TypeReference
     return name
-};
+} | error { "expecting a type, value, or information object set parameter declaration" };
 
 rule TypeAssignment {
     captures {
@@ -366,7 +388,7 @@ variant TypeAssignmentSubject = TypeIdentifier {
     keyword TYPE-IDENTIFIER
 } | AbstractSyntax {
     keyword ABSTRACT-SYNTAX
-} | InformationObjectClass | Type;
+} | InformationObjectClass | Type | error { "expecting a type or class declaration" };
 
 rule Constraint {
     captures {
@@ -427,16 +449,16 @@ variant SubtypeElement = UserDefinedConstraint | TableConstraint | ContentsConst
     }
     value = Value
     return value
-};
+} | error { "expecting a constraint" };
 
 rule TableConstraint {
     captures {
-        set_name = TypeReference
+        set_name = DefinedType
         field_ref = optional: ValueReference
     }
     operator {
     persist
-    set_name = TypeReference
+    set_name = DefinedType
     operator }
     optional {
         operator {
@@ -464,7 +486,7 @@ variant ContentsConstraint = EncodedBy {
     keyword CONTAINING
     ty = Type
     return ty
-};
+} | error { "expecting 'CONTAINING ...' or 'CONTAINING ... ENCODED BY ...'" };
 
 rule UserDefinedConstraint {
     keyword CONSTRAINED
@@ -493,7 +515,7 @@ variant RangeLowerBound = Min {
     value = Value
     operator <
     return value
-} | Value;
+} | Value | error { "expecting a range lower bound" };
 
 variant RangeUpperBound = Max {
     keyword MAX
@@ -505,7 +527,7 @@ variant RangeUpperBound = Max {
     persist
     value = Value
     return value
-} | Value;
+} | Value | error { "expecting a range upper bound" };
 
 rule InnerTypeConstraints {
     captures {
@@ -538,7 +560,7 @@ variant TypeConstraintSpec = FullSpec {
     constraints = TypeConstraints
     operator }
     return constraints
-};
+} | error { "expecting a type constraint" };
 
 rule TypeConstraints {
     captures {
@@ -570,7 +592,7 @@ variant ComponentConstraint = Constraint | PresenceConstraint | ValuedPresenceCo
     }
     value = Constraint
     presence = PresenceConstraint
-};
+} | error { "expecting a component constraint" };
 
 variant PresenceConstraint = PresencePresent {
     keyword PRESENT
@@ -578,7 +600,7 @@ variant PresenceConstraint = PresencePresent {
     keyword ABSENT
 } | PresenceOptional {
     keyword OPTIONAL
-};
+} | error { "expecting PRESENT, ABSENT, or OPTIONAL" };
 
 rule Boolean {
     keyword BOOLEAN
@@ -693,23 +715,23 @@ variant StructureKind = Sequence {
     keyword SEQUENCE
 } | Set {
     keyword SET
-};
+} | error { "expecting SEQUENCE or SET" };
 
 rule Structure {
     captures {
         kind = StructureKind
-        components = repeated: StructureComponent
+        component_groups = repeated: StructureComponentGroup
         extensible = bool
     }
     kind = StructureKind
     operator {
     persist
     optional {
-        components = StructureComponent
+        component_groups = StructureComponentGroup
     }
     optional repeated {
         operator ,
-        components = StructureComponent
+        component_groups = StructureComponentGroup
     }
     optional {
         operator ,
@@ -719,7 +741,7 @@ rule Structure {
     operator }
 }
 
-variant ConstraintOrSizeConstraint = Constraint | SizeConstraint;
+variant ConstraintOrSizeConstraint = Constraint | SizeConstraint | error { "expecting constraint or SIZE(...)" };
 
 rule StructureOf {
     captures {
@@ -735,6 +757,27 @@ rule StructureOf {
     persist
     ty = Type
 }
+
+rule Extensible {
+    operator ...
+}
+
+variant StructureComponentGroup = Extensible | VersionedComponentGroup {
+    captures {
+        version = Number
+        components = repeated: StructureComponent
+    }
+    operator [[
+    persist
+    version = Number
+    operator :
+    components = StructureComponent
+    optional repeated {
+        operator ,
+        components = StructureComponent
+    }
+    operator ]]
+} | StructureComponent;
 
 rule StructureComponent {
     captures {
@@ -881,7 +924,8 @@ rule InstanceOf {
 variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
     Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Structure | Choice | NumericString | PrintableString |
     TeletexString | VideotexString | IA5String | UTCTime |  GeneralizedTime | GraphicString | VisibleString | GeneralString |
-    UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration | InstanceOf;
+    UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration | InstanceOf | 
+    error { "expecting UNIVERSAL type" };
 
 variant Class = Universal {
     keyword UNIVERSAL
@@ -948,12 +992,12 @@ variant ConstrainedType = Suffixed {
     return ty
 };
 
-rule ParameterizedTypeReference {
+rule ParameterizedDefinedType {
     captures {
-        name = TypeReference
+        name = DefinedType
         parameters = ParameterList
     }
-    name = TypeReference
+    name = DefinedType
     parameters = ParameterList
 }
 
@@ -974,11 +1018,11 @@ rule ParameterList {
 
 variant Parameter = ObjectSetParameter {
     captures {
-        object_set = TypeReference
+        object_set = DefinedType
     }
     operator {
     persist
-    object_set = TypeReference
+    object_set = DefinedType
     operator }
     return object_set
 } | TypeParameter {
@@ -993,11 +1037,11 @@ variant Parameter = ObjectSetParameter {
     }
     value = Value
     return value
-};
+} | error { "expecting type, value, or information object set parameter" };
 
-variant UntaggedType = BuiltinType | ObjectClassFieldType | ParameterizedTypeReference | TypeReference;
+variant UntaggedType = BuiltinType | ObjectClassFieldType | ParameterizedDefinedType | DefinedType | error { "expecting type" };
 
-variant Type = TaggedType | ConstrainedType;
+variant Type = TaggedType | ConstrainedType | error { "expecting tagged or untagged type" };
 
 rule ValueAssignment {
     captures {
@@ -1031,15 +1075,15 @@ variant ObjectSetAssignmentSubject = EmptyExtensible {
     operator }
 } | ObjectSet {
     captures {
-        elements = repeated: ObjectSetElement
+        element_groups = repeated: ObjectSetElementGroup
         extensible = bool
     }
     operator {
-    elements = ObjectSetElement
+    element_groups = ObjectSetElementGroup
     persist
     optional repeated {
-        operator |
-        elements = ObjectSetElement
+        operator ,
+        element_groups = ObjectSetElementGroup
     }
     optional {
         operator ,
@@ -1047,9 +1091,21 @@ variant ObjectSetAssignmentSubject = EmptyExtensible {
         extensible = true
     }
     operator }
-};
+} | error { "expecting object set definition" };
 
-variant ObjectSetElement = ValueReference | BracedTokenStream;
+variant ObjectSetElementGroup = Extensible | ObjectSetElements {
+    captures {
+        elements = repeated: ObjectSetElement
+    }
+    elements = ObjectSetElement
+    optional repeated {
+        operator |
+        elements = ObjectSetElement
+    }
+    return elements
+} | error { "expecting objects or '...'" };
+
+variant ObjectSetElement = DefinedValue | DefinedType | BracedTokenStream | error { "expecting object definition or valuereference" };
 
 rule NamedBitStringValue {
     captures {
@@ -1127,7 +1183,7 @@ rule OpenTypeValue {
     value = Value
 }
 
-variant OpenTypeValueTypeReference = ObjectFieldReference | Type;
+variant OpenTypeValueTypeReference = ObjectFieldReference | Type | error { "expecting type or field reference" };
 
 rule Negative {
     operator -
@@ -1163,7 +1219,7 @@ variant BooleanValue = True {
     keyword TRUE
 } | False {
     keyword FALSE
-};
+} | error { "expecting TRUE or FALSE" };
 
 variant SpecialRealValue = PlusInfinity {
     keyword PLUS-INFINITY
@@ -1171,7 +1227,7 @@ variant SpecialRealValue = PlusInfinity {
     keyword MINUS-INFINITY
 } | NotANumber {
     keyword NOT-A-NUMBER
-};
+} | error { "expecting PLUS-INFINITY, MINUS-INFINITY, or NOT-A-NUMBER" };
 
 rule ContainingValue {
     captures {
@@ -1183,10 +1239,11 @@ rule ContainingValue {
     return value
 }
 
-variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral | DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream;
+variant BuiltinValue = ContainingValue | OpenTypeValue | ObjectFieldReference | Null | BooleanValue | SpecialRealValue | StringLiteral |
+                    DecimalValue | IntegerValue | ChoiceValue | BracedTokenStream | error { "expecting UNIVERSAL value" };
 
-variant Value = BuiltinValue | ValueReference;
-variant IntegerValueReference = IntegerValue | ValueReference;
+variant Value = BuiltinValue | DefinedValue | error { "expecting UNIVERSAL value or valuereference" };
+variant IntegerValueReference = IntegerValue | DefinedValue | error { "expecting INTEGER value or valuereference" };
 
 rule InformationObjectClass {
     captures {
@@ -1207,7 +1264,7 @@ rule InformationObjectClass {
     syntax = SyntaxList
 }
 
-variant ObjectClassField = ValueField | ObjectSetField | TypeField;
+variant ObjectClassField = ValueField | ObjectSetField | TypeField | error { "expecting open type, value, or object set field" };
 
 rule TypeField {
     captures {
@@ -1267,7 +1324,7 @@ variant ValueFieldSubject = OpenTypeReference {
     }
     open_type_ref = TypeFieldReference
     return open_type_ref
-} | Type;
+} | Type | error { "expecting value field" };
 
 rule TypeFieldReference {
     captures {
@@ -1287,7 +1344,7 @@ rule ValueFieldReference {
     return name
 }
 
-variant FieldReference = TypeFieldReference | ValueFieldReference;
+variant FieldReference = TypeFieldReference | ValueFieldReference | error { "expecting field reference" };
 
 rule SyntaxList {
     captures {
@@ -1318,16 +1375,16 @@ variant SyntaxListElement = OptionalSyntaxElement {
     }
     item = SyntaxItem
     return item
-};
+} | error { "expecting syntax list element" };
 
-variant SyntaxItem = FieldReference | SyntaxTokenLiteral;
+variant SyntaxItem = FieldReference | SyntaxTokenLiteral | error { "expecting class field reference or token literal" };
 
 rule ObjectFieldReference {
     captures {
-        object_name = ValueReference
+        object_name = DefinedValue
         field_ref = FieldReference
     }
-    object_name = ValueReference
+    object_name = DefinedValue
     operator .
     persist
     field_ref = FieldReference

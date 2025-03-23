@@ -1,4 +1,7 @@
-use std::{fmt::Display, marker::PhantomData};
+use std::{
+    fmt::{Display, Write},
+    marker::PhantomData,
+};
 
 use crate::{
     compiler::Context,
@@ -21,6 +24,28 @@ impl ModuleIdentifier {
         ModuleIdentifier {
             name,
             oid: Some(oid),
+        }
+    }
+
+    /// Serialize the ModuleIdentifier to a format for use with [`crate::compiler::parser::ErrorKind::Foreign`].
+    pub fn to_foreign_string(&self) -> String {
+        let mut str = String::new();
+        write!(&mut str, "{}", self.name).unwrap();
+        if let Some(oid) = &self.oid {
+            write!(&mut str, "/{}", oid).unwrap();
+        }
+        str
+    }
+
+    /// Deserialize the ModuleIdentifier from a [`crate::compiler::parser::ErrorKind::Foreign`] instance.
+    pub fn from_foreign_string(str: &str) -> ModuleIdentifier {
+        if let Some(index) = str.find('/') {
+            let name = &str[..index];
+            let oid = &str[index + 1..];
+            let oid = Oid::parse_string(oid).expect("malformed oid in foreign string");
+            ModuleIdentifier::with_id(name.to_string(), oid)
+        } else {
+            ModuleIdentifier::with_name(str.to_string())
         }
     }
 }

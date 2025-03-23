@@ -147,7 +147,12 @@ impl CodeBuilder {
         self.write("}\n\n");
     }
 
-    pub fn build_enum_parser(&mut self, enum_name: &str, variants: &[String]) {
+    pub fn build_enum_parser(
+        &mut self,
+        enum_name: &str,
+        variants: &[String],
+        error_message: Option<&str>,
+    ) {
         self.write("impl Parseable for ");
         self.write(enum_name);
         self.write(" {\n");
@@ -163,11 +168,21 @@ impl CodeBuilder {
             self.write(", ParseContext::new(context.tokens));\n");
         }
 
-        self.write_indented(
-            "ParseResult::Fail(Error{kind: ErrorKind::VariantUnmatched { variant: \"",
-        );
-        self.write(enum_name);
-        self.write("\".to_string(), }, loc: context.loc(), })\n");
+        self.write_indented("ParseResult::Fail(Error{kind: ");
+        match error_message {
+            Some(message) => {
+                self.write("ErrorKind::VariantUnmatchedMessage { message: String::from(\"");
+                self.write(message);
+                self.write("\"), }");
+            }
+            None => {
+                self.write("ErrorKind::VariantUnmatched { variant: \"");
+                self.write(enum_name);
+                self.write("\".to_string(), }");
+            }
+        }
+
+        self.write(", loc: context.loc(), })\n");
 
         self.outdent();
         self.write_indented("}\n");

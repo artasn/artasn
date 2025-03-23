@@ -30,19 +30,6 @@ lazy_static::lazy_static! {
     );
 }
 
-pub fn parse_valuereference(
-    parser: &AstParser<'_>,
-    valref: &AstElement<AstValueReference>,
-) -> AstElement<QualifiedIdentifier> {
-    valref.as_ref().map(|valref| {
-        parser
-            .context
-            .lookup_module(&parser.module)
-            .expect("lookup_module")
-            .resolve_symbol(parser.context, &valref.0)
-    })
-}
-
 pub fn parse_integer_value(num: &AstElement<AstIntegerValue>) -> Result<BigInt> {
     let sign = if num.element.sign.is_none() {
         Sign::Plus
@@ -104,14 +91,23 @@ fn parse_object_class_field<'a, 'b>(
 
 fn find_matching_object_in_set<'a>(
     parser: &'a AstParser<'_>,
-    set: &'a [InformationObjectReference],
+    set: &'a InformationObjectSet,
     primary_key: &AstElement<String>,
     primary_key_value: &AstElement<TypedValue>,
 ) -> Result<Option<&'a InformationObject>> {
-    for object_class_ref in set {
-        let object_class = object_class_ref.resolve(parser.context)?;
+    for element in set {
+        let object = match element {
+            ObjectSetElement::Object(object) => object.resolve(parser.context)?,
+            ObjectSetElement::ObjectSet(set) => {
+                let set = class::resolve_information_object_set(parser, set)?;
+                match find_matching_object_in_set(parser, set, primary_key, primary_key_value)? {
+                    Some(object) => return Ok(Some(object)),
+                    None => continue,
+                }
+            }
+        };
 
-        let key_field = object_class.fields.iter().find_map(|(name, field)| {
+        let key_field = object.fields.iter().find_map(|(name, field)| {
             if name == &primary_key.element {
                 Some(field)
             } else {
@@ -148,7 +144,7 @@ fn find_matching_object_in_set<'a>(
                 }
             };
             if primary_key_value.try_eq(parser.context, value)? {
-                return Ok(Some(object_class));
+                return Ok(Some(object));
             }
         }
     }
@@ -192,17 +188,7 @@ fn parse_object_class_field_reference(
                                 })
                             }
 
-                            let set = parser
-                                .context
-                                .lookup_information_object_set(&table_constraint.set_ref.element)
-                                .ok_or_else(|| Error {
-                                    kind: ErrorKind::Ast(format!(
-                                        "undefined reference to information object class set '{}'",
-                                        table_constraint.set_ref.element,
-                                    )),
-                                    loc: table_constraint.set_ref.loc,
-                                })?;
-
+                            let set = class::resolve_information_object_set(parser, &table_constraint.set_ref)?;
                             let component_ref = struct_components
                                 .iter()
                                 .find(|component| component.name.element == field_ref.element)
@@ -870,7 +856,7 @@ pub fn parse_value(
                         }
 
                         let object_ref =
-                            resolve_valuereference(parser, &field_ref.element.object_name);
+                            resolve_defined_value(parser, &field_ref.element.object_name)?;
                         let object = resolve_information_object(parser, &object_ref)?;
 
                         match &field_ref.element.field_ref.element {
@@ -926,7 +912,7 @@ pub fn parse_value(
                 }
 
                 let object_name = &object_field_ref.element.object_name;
-                let ident = resolve_valuereference(parser, object_name);
+                let ident = resolve_defined_value(parser, object_name)?;
                 let object = resolve_information_object(parser, &ident)?;
 
                 let name = match &object_field_ref.element.field_ref.element {
@@ -968,28 +954,30 @@ pub fn parse_value(
                 }));
             }
         },
-        AstValue::ValueReference(valref) => match &target_type.ty {
+        AstValue::DefinedValue(valref) => match &target_type.ty {
             BuiltinType::Enumerated(items) => 'block: {
-                for item in items {
-                    if item.name.element == valref.element.0 {
-                        break 'block BuiltinValue::Enumerated(Box::new(match &item.value {
-                            EnumerationItemValue::Implied(implied) => AstElement::new(
-                                TypedValue {
-                                    resolved_type: ResolvedType::universal(TagType::Integer),
-                                    value: ValueReference::BuiltinValue(BuiltinValue::Integer(
-                                        BigInt::from(*implied),
-                                    )),
-                                },
-                                value.loc,
-                            ),
-                            EnumerationItemValue::Specified(specified) => {
-                                return Ok(specified.clone());
-                            }
-                        }));
+                if valref.element.external_module.is_none() {
+                    for item in items {
+                        if item.name.element == valref.element.value.element.0 {
+                            break 'block BuiltinValue::Enumerated(Box::new(match &item.value {
+                                EnumerationItemValue::Implied(implied) => AstElement::new(
+                                    TypedValue {
+                                        resolved_type: ResolvedType::universal(TagType::Integer),
+                                        value: ValueReference::BuiltinValue(BuiltinValue::Integer(
+                                            BigInt::from(*implied),
+                                        )),
+                                    },
+                                    value.loc,
+                                ),
+                                EnumerationItemValue::Specified(specified) => {
+                                    return Ok(specified.clone());
+                                }
+                            }));
+                        }
                     }
                 }
 
-                return Ok(parse_valuereference(parser, valref)
+                return Ok(resolve_defined_value(parser, valref)?
                     .with_loc(value.loc)
                     .map(|valref| TypedValue {
                         resolved_type: target_type.clone(),
@@ -997,7 +985,7 @@ pub fn parse_value(
                     }));
             }
             _ => {
-                return Ok(parse_valuereference(parser, valref)
+                return Ok(resolve_defined_value(parser, valref)?
                     .with_loc(value.loc)
                     .map(|valref| TypedValue {
                         resolved_type: target_type.clone(),
@@ -1022,6 +1010,60 @@ pub(crate) fn resolve_valuereference(
     parser.resolve_symbol(&valref.as_ref().map(|valref| &valref.0))
 }
 
+pub(crate) fn resolve_defined_value(
+    parser: &AstParser<'_>,
+    defined_value: &AstElement<AstDefinedValue>,
+) -> Result<AstElement<QualifiedIdentifier>> {
+    match &defined_value.element.external_module {
+        Some(external_module) => {
+            let header = parser
+                .context
+                .lookup_module(&parser.module)
+                .expect("lookup_module");
+            let mut imported_module = header
+                .imports
+                .iter()
+                .find_map(|import| {
+                    if import.module.name == external_module.element.0 {
+                        Some(import.module.clone())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| Error {
+                    kind: ErrorKind::Ast(format!(
+                        "no such imported module '{}'",
+                        external_module.element.0
+                    )),
+                    loc: external_module.loc,
+                })?;
+            // if the module was imported by name only, see if it was declared with an OID
+            // if so, apply the module's declared OID to the DeclaredValue's identifier
+            match &mut imported_module.oid {
+                Some(_) => (),
+                oid @ None => {
+                    let lookup_module = parser
+                        .context
+                        .lookup_module_by_name(&imported_module.name)
+                        .expect("lookup_module_by_name");
+                    if let Some(lookup_oid) = &lookup_module.ident.oid {
+                        *oid = Some(lookup_oid.clone());
+                    }
+                }
+            }
+            Ok(defined_value.as_ref().map(|_| {
+                QualifiedIdentifier::new(
+                    imported_module,
+                    defined_value.element.value.element.0.clone(),
+                )
+            }))
+        }
+        None => Ok(
+            parser.resolve_symbol(&defined_value.element.value.as_ref().map(|valref| &valref.0))
+        ),
+    }
+}
+
 pub enum ParsedValueAssignment {
     Value(DeclaredValue),
     Class(InformationObjectReference),
@@ -1044,9 +1086,9 @@ pub fn parse_value_assignment(
 
     if let AstType::ConstrainedType(constrained) = &value_assignment.element.ty.element {
         if let AstConstrainedType::Suffixed(suffixed) = &constrained.element {
-            if let AstUntaggedType::TypeReference(typeref) = &suffixed.element.ty.element {
+            if let AstUntaggedType::DefinedType(typeref) = &suffixed.element.ty.element {
                 let class = parser.context.lookup_information_object_class(
-                    &types::resolve_typereference(parser, typeref).element,
+                    &types::resolve_defined_type(parser, typeref)?.element,
                 );
                 if let Some(class) = class {
                     match stage {
@@ -1075,11 +1117,11 @@ pub fn parse_value_assignment(
                                         })
                                     }
                                 },
-                                AstValue::ValueReference(valref) => (
+                                AstValue::DefinedValue(valref) => (
                                     ident,
                                     ParsedValueAssignment::Class(
                                         InformationObjectReference::Reference(
-                                            resolve_valuereference(parser, valref),
+                                            resolve_defined_value(parser, valref)?,
                                         ),
                                     ),
                                 ),

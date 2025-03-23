@@ -367,10 +367,21 @@ json_compile_test!(
     "ModuleWithoutOID"
 );
 json_compile_test!(
+    test_mismatch_oid_import,
+    "../../test-data/compile/import/",
+    "MismatchOIDImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
+);
+json_compile_test!(
     test_parameter_violation,
     "../../test-data/compile/ParameterViolationTest"
 );
 json_compile_test!(
-    test_information_object_class,
-    "../../test-data/compile/classes/InformationObjectClassTest"
+    test_object_class,
+    "../../test-data/compile/classes/ObjectClassTest"
+);
+json_compile_test!(
+    test_object_set,
+    "../../test-data/compile/classes/ObjectSetTest"
 );

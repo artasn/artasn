@@ -20,10 +20,10 @@ struct Cli {
     #[arg(long, short = 's')]
     silent: bool,
     /// Encode an ASN.1 value definition in the format "ModuleName.valueName"
-    #[arg(long, group = "encode")]
+    #[arg(long, group = "group_encode")]
     encode: Option<String>,
     /// The transfer syntax to encode the value into
-    #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER, requires = "encode")]
+    #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER, requires = "group_encode")]
     transfer_syntax: TransferSyntaxName,
     /// ASN.1 module files to compile
     #[arg(required = true, num_args = 1..)]

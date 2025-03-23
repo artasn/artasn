@@ -13,6 +13,14 @@ rule_definition = {
     "}"
 }
 
+error_text = {
+    (!"\"" ~ ANY)+
+}
+
+error_definition = {
+    "error" ~ "{" ~ "\"" ~ error_text ~ "\"" ~ "}"
+}
+
 variant_definition = {
     "variant" ~ ident ~ "=" ~
     variant ~ 
@@ -20,7 +28,7 @@ variant_definition = {
     ";"
 }
 
-variant = _{ named_variant | ident }
+variant = _{ error_definition | named_variant | ident }
 
 named_variant = { ident  ~ "{" ~ NEWLINE+ ~ (statement ~ NEWLINE*)+ ~ "}" }
 
