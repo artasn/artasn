@@ -1,4 +1,4 @@
 [
-    "compile error: undefined reference to type 'WithoutType FROM ModuleWithoutOID (2.1337.47.4.101)'",
-    "compile error: undefined reference to type 'WithoutType FROM ModuleWithoutOID (2.1337.47.4.101)'"
+    "compile error: failed to resolve symbol 'WithoutType' (module 'ModuleWithoutOID (2.1337.47.4.101)' not found)",
+    "compile error: failed to resolve symbol 'withoutValue' (module 'ModuleWithoutOID (2.1337.47.4.101)' not found)"
 ]

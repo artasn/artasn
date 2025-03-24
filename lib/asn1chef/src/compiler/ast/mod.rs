@@ -27,18 +27,33 @@ pub struct AstParser<'a> {
 }
 
 impl AstParser<'_> {
-    pub fn resolve_symbol(&self, symbol: &AstElement<&String>) -> AstElement<QualifiedIdentifier> {
-        AstElement::new(
+    pub fn resolve_symbol(
+        &self,
+        symbol: &AstElement<&String>,
+    ) -> Result<AstElement<QualifiedIdentifier>> {
+        Ok(AstElement::new(
             self.context
                 .lookup_module(&self.module)
                 .expect("lookup_module")
-                .resolve_symbol(self.context, symbol.element),
+                .resolve_symbol(self.context, symbol.element)
+                .map_err(|err| Error {
+                    kind: ErrorKind::Ast(format!(
+                        "failed to resolve symbol '{}' ({})",
+                        symbol.element,
+                        match err {
+                            ImportError::ModuleNotFound(module) =>
+                                format!("module '{}' not found", module.element),
+                            ImportError::SymbolNotFound => "symbol not found".to_string(),
+                        }
+                    )),
+                    loc: symbol.loc,
+                })?,
             symbol.loc,
-        )
+        ))
     }
 
-    pub fn run_with_context<'a, T, F: Fn(&Self) -> Result<T>>(
-        &'a self,
+    pub fn run_with_context<T, F: Fn(&Self) -> Result<T>>(
+        &self,
         target_module: &ModuleIdentifier,
         f: F,
     ) -> Result<T> {
@@ -148,7 +163,7 @@ pub(crate) fn module_ast_to_module_ident(
 
 fn module_ref_to_module_ident(
     module_ref: &AstElement<AstGlobalModuleReference>,
-) -> Result<ModuleIdentifier> {
+) -> Result<AstElement<ModuleIdentifier>> {
     let oid = match &module_ref.element.oid {
         Some(oid) => match &oid.element {
             AstAssignedIdentifier::DefinitiveOid(oid) => Some(oid),
@@ -157,22 +172,29 @@ fn module_ref_to_module_ident(
         },
         None => None,
     };
-    object_id::name_and_oid_to_module_ident(&module_ref.element.name, oid)
+    Ok(AstElement::new(
+        object_id::name_and_oid_to_module_ident(&module_ref.element.name, oid)?,
+        module_ref.loc,
+    ))
 }
 
-fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
+fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<AstElement<String>> {
     symbol_list
         .0
         .iter()
         .map(|symbol| {
             match match &symbol.element {
                 AstSymbol::ParameterizedReference(parameterized) => {
-                    parameterized.element.0.element.clone()
+                    &parameterized.element.0.element
                 }
-                AstSymbol::Reference(reference) => reference.element.clone(),
+                AstSymbol::Reference(reference) => &reference.element,
             } {
-                AstReference::TypeReference(type_ref) => type_ref.element.0,
-                AstReference::ValueReference(val_ref) => val_ref.element.0,
+                AstReference::TypeReference(type_ref) => {
+                    type_ref.as_ref().map(|name| name.0.clone())
+                }
+                AstReference::ValueReference(val_ref) => {
+                    val_ref.as_ref().map(|name| name.0.clone())
+                }
             }
         })
         .collect()
@@ -210,9 +232,12 @@ pub fn register_all_modules(
             // matches `EXPORTS ALL;` or `EXPORTS foo, bar, baz, ...`;
             Some(Some(exports)) => match &exports.element {
                 AstExportsKind::All(_) => Exports::All,
-                AstExportsKind::SymbolList(symbol_list) => {
-                    Exports::SymbolList(symbol_list_to_string_list(&symbol_list.element))
-                }
+                AstExportsKind::SymbolList(symbol_list) => Exports::SymbolList(
+                    symbol_list_to_string_list(&symbol_list.element)
+                        .into_iter()
+                        .map(|symbol| symbol.element)
+                        .collect(),
+                ),
             },
             // matches `EXPORTS;`
             Some(None) => match parser.config.empty_export_behavior {
@@ -222,17 +247,30 @@ pub fn register_all_modules(
             // matches no EXPORTS statement at all
             None => Exports::All,
         };
-        let mut imports = Vec::new();
+        let mut imports_from_module = Vec::new();
         if let Some(ref ast_imports) = header.element.imports {
             for symbols_from_module in &ast_imports.element.0 {
-                let symbols =
+                let imports =
                     symbol_list_to_string_list(&symbols_from_module.element.symbols.element);
                 let module = match module_ref_to_module_ident(&symbols_from_module.element.module) {
                     Ok(module) => module,
                     Err(err) => return vec![Err(err)],
                 };
-                for name in symbols {
-                    imports.push(QualifiedIdentifier::new(module.clone(), name));
+                imports_from_module.push(ImportsFromModule { imports, module });
+            }
+        }
+
+        let mut declarations = Vec::new();
+        for assignment in &parser.ast_module.element.body.element.0 {
+            match &assignment.element {
+                AstAssignment::TypeAssignment(assignment) => {
+                    declarations.push(assignment.element.name.element.0.clone())
+                }
+                AstAssignment::ValueAssignment(assignment) => {
+                    declarations.push(assignment.element.name.element.0.clone())
+                }
+                AstAssignment::ObjectSetAssignment(assignment) => {
+                    declarations.push(assignment.element.name.element.0.clone())
                 }
             }
         }
@@ -242,7 +280,8 @@ pub fn register_all_modules(
             tag_default,
             extensibility_implied,
             exports,
-            imports,
+            imports: imports_from_module,
+            declarations,
         })]
     }) {
         Ok(modules) => {
@@ -255,7 +294,36 @@ pub fn register_all_modules(
     }
 }
 
-/// Stage 2: register the names, but not the fields or syntax, of all declared information object classes.
+/// Stage 2: verify resolution of all imports.
+pub fn resolve_all_imports(
+    context: &mut Context,
+    compiler: &Compiler,
+    program: &AstElement<AstProgram>,
+) -> Vec<Error> {
+    match run_parser(context, compiler, program, |parser| {
+        let module = parser
+            .context
+            .lookup_module(&parser.module)
+            .expect("lookup_module");
+
+        let mut results: Vec<Result<()>> = Vec::new();
+        for imports_from_module in &module.imports {
+            for import in &imports_from_module.imports {
+                match parser.resolve_symbol(&import.as_ref()) {
+                    Ok(_) => (),
+                    Err(err) => results.push(Err(err)),
+                }
+            }
+        }
+
+        results
+    }) {
+        Ok(_) => Vec::new(),
+        Err(errors) => errors,
+    }
+}
+
+/// Stage 3: register the names, but not the fields or syntax, of all declared information object classes.
 ///
 /// This happens for two reasons:
 ///
@@ -266,7 +334,7 @@ pub fn register_all_modules(
 ///    In order to achieve this, we first find the qualified identifiers for every class in a first pass,
 ///    and then we pass those qualified identifiers to the second pass.
 ///
-/// 2. The type parser (register_all_types) needs to kn ow whether
+/// 2. The type parser (register_all_types) needs to know whether
 ///    a given typereference refers to a class of a type.
 ///    This is necessary in order to know whether a parameter passed to a parameterized type definition
 ///    is that of a class type or that of a normal type.
@@ -275,7 +343,6 @@ pub fn register_all_information_object_class_names(
     compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    // first pass
     match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
@@ -312,7 +379,7 @@ pub fn register_all_information_object_class_names(
     }
 }
 
-// Stage 3: register all parameterized types.
+// Stage 4: register all parameterized types.
 // This stores their ASTs in the Context so that they can be parsed with the substituted types later.
 pub fn register_all_parameterized_types(
     context: &mut Context,
@@ -342,7 +409,7 @@ pub fn register_all_parameterized_types(
     }
 }
 
-/// Stage 4: register all declared types.
+/// Stage 5: register all declared types.
 pub fn register_all_types(
     context: &mut Context,
     compiler: &Compiler,
@@ -375,7 +442,7 @@ pub fn register_all_types(
     }
 }
 
-/// Stage 5: register all declared information object classes.
+/// Stage 6: register all declared information object classes.
 pub fn register_all_information_object_classes(
     context: &mut Context,
     compiler: &Compiler,
@@ -420,7 +487,7 @@ pub fn register_all_information_object_classes(
     }
 }
 
-// Stage 6: register all declared information object sets.
+// Stage 7: register all declared information object sets.
 pub fn register_all_information_object_sets(
     context: &mut Context,
     compiler: &Compiler,
@@ -448,7 +515,7 @@ pub fn register_all_information_object_sets(
     }
 }
 
-// Stage 7: register all declared information objects.
+// Stage 8: register all declared information objects.
 pub fn register_all_information_objects(
     context: &mut Context,
     compiler: &Compiler,
@@ -486,7 +553,7 @@ pub fn register_all_information_objects(
     }
 }
 
-/// Stage 8: register the constraints for all types.
+/// Stage 9: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
     compiler: &Compiler,
@@ -516,7 +583,7 @@ pub fn register_all_constraints(
     }
 }
 
-/// Stage 9: register all declared values that do not contain references
+/// Stage 10: register all declared values that do not contain references
 /// to information object class fields.
 pub fn register_all_normal_values(
     context: &mut Context,
@@ -553,7 +620,7 @@ pub fn register_all_normal_values(
     }
 }
 
-/// Stage 10: register all values that contain references to information object class fields.
+/// Stage 11: register all values that contain references to information object class fields.
 pub fn register_all_class_reference_values(
     context: &mut Context,
     compiler: &Compiler,
@@ -592,7 +659,7 @@ pub fn register_all_class_reference_values(
     }
 }
 
-/// Stage 11: verify all types.
+/// Stage 12: verify all types.
 pub fn verify_all_types(
     context: &mut Context,
     compiler: &Compiler,
@@ -616,7 +683,7 @@ pub fn verify_all_types(
     })
 }
 
-/// Stage 12: verify all declared values.
+/// Stage 13: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
     compiler: &Compiler,

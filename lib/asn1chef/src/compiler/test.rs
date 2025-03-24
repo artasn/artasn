@@ -393,3 +393,10 @@ json_compile_test!(
     test_value_set,
     "../../test-data/compile/classes/ValueSetTest"
 );
+json_compile_test!(
+    test_import,
+    "../../test-data/compile/import/",
+    "ImportTest",
+    "ImportTestIntermediate",
+    "ImportTestRemote"
+);

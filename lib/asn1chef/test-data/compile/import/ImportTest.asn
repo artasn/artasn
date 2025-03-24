@@ -1,0 +1,11 @@
+ImportByProxyTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+IMPORTS DirectType, direct-value, UndeclaredType, ProxiedType, ProxiedUndeclaredType, RemoteType FROM ImportByProxyIntermediate
+    UndeclaredModuleType FROM UndeclaredModule;
+
+value ProxiedType ::= {
+    foo direct-value,
+    bar "Hello, world!"
+}
+
+END

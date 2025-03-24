@@ -1,0 +1,10 @@
+ImportByProxyRemote DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+ProxiedType ::= SEQUENCE {
+    foo INTEGER,
+    bar UTF8String
+}
+
+RemoteType ::= OCTET STRING
+
+END

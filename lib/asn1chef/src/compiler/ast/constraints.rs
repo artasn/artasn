@@ -162,10 +162,10 @@ fn parse_table_constraint(
     table: &AstElement<AstTableConstraint>,
     parameters: &[(&String, &Parameter)],
 ) -> Result<TableConstraint> {
-    let set_ref = types::resolve_defined_type(parser, &table.element.set_name)?;
+    let set_name = &table.element.set_name.element.ty;
     let set_parameter = if table.element.set_name.element.external_module.is_none() {
         parameters.iter().find_map(|(name, parameter)| {
-            if *name == &set_ref.element.name {
+            if *name == &set_name.element.0 {
                 Some(*parameter)
             } else {
                 None
@@ -181,14 +181,14 @@ fn parse_table_constraint(
                 return Err(Error {
                     kind: ErrorKind::Ast(format!(
                     "expecting {} to be an information object class set parameter, but found {}",
-                    set_ref.element.name,
+                    set_name.element.0,
                     other.get_name()
                 )),
-                    loc: set_ref.loc,
+                    loc: set_name.loc,
                 })
             }
         },
-        None => set_ref,
+        None => types::resolve_defined_type(parser, &table.element.set_name)?,
     };
     Ok(TableConstraint {
         set_ref,

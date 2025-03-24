@@ -1,4 +1,4 @@
 [
-    "compile error: undefined reference to type 'WithType FROM ModuleWithOID (2.1337.47.4.100)'",
-    "compile error: undefined reference to type 'WithType FROM ModuleWithOID (2.1337.47.4.100)'"
+    "compile error: failed to resolve symbol 'WithType' (module 'ModuleWithOID (2.1337.47.4.100)' not found)",
+    "compile error: failed to resolve symbol 'withValue' (module 'ModuleWithOID (2.1337.47.4.100)' not found)"
 ]

@@ -370,9 +370,11 @@ pub(crate) fn resolve_defined_type(
             let mut imported_module = header
                 .imports
                 .iter()
-                .find_map(|import| {
-                    if import.module.name == external_module.element.0.element.0 {
-                        Some(import.module.clone())
+                .find_map(|imports_from_module| {
+                    if imports_from_module.module.element.name
+                        == external_module.element.0.element.0
+                    {
+                        Some(imports_from_module.module.clone())
                     } else {
                         None
                     }
@@ -386,12 +388,12 @@ pub(crate) fn resolve_defined_type(
                 })?;
             // if the module was imported by name only, see if it was declared with an OID
             // if so, apply the module's declared OID to the DeclaredValue's identifier
-            match &mut imported_module.oid {
+            match &mut imported_module.element.oid {
                 Some(_) => (),
                 oid @ None => {
                     let lookup_module = parser
                         .context
-                        .lookup_module_by_name(&imported_module.name)
+                        .lookup_module_by_name(&imported_module.element.name)
                         .expect("lookup_module_by_name");
                     if let Some(lookup_oid) = &lookup_module.ident.oid {
                         *oid = Some(lookup_oid.clone());
@@ -399,11 +401,14 @@ pub(crate) fn resolve_defined_type(
                 }
             }
             Ok(defined_type.as_ref().map(|_| {
-                QualifiedIdentifier::new(imported_module, defined_type.element.ty.element.0.clone())
+                QualifiedIdentifier::new(
+                    imported_module.element,
+                    defined_type.element.ty.element.0.clone(),
+                )
             }))
         }
         None => {
-            Ok(parser.resolve_symbol(&defined_type.element.ty.as_ref().map(|valref| &valref.0)))
+            Ok(parser.resolve_symbol(&defined_type.element.ty.as_ref().map(|valref| &valref.0))?)
         }
     }
 }
@@ -550,7 +555,7 @@ fn parse_untagged_type(
         AstUntaggedType::BuiltinType(builtin) => match &builtin.element {
             AstBuiltinType::InstanceOf(instance_of) => {
                 let class_type = &instance_of.element.class_type;
-                let class_ref = parser.resolve_symbol(&class_type.as_ref().map(|name| &name.0));
+                let class_ref = parser.resolve_symbol(&class_type.as_ref().map(|name| &name.0))?;
 
                 let ast_instance_of_type = parser
                     .context
@@ -646,7 +651,7 @@ fn parse_untagged_type(
                         })
                     }
                 }
-                None => parser.resolve_symbol(&class_ref),
+                None => parser.resolve_symbol(&class_ref)?,
             };
             let (kind, field) = match &ast_ocf.element.field.element {
                 AstFieldReference::TypeFieldReference(type_field) => (

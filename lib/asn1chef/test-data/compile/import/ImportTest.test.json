@@ -1,0 +1,7 @@
+[
+    "compile error: failed to resolve symbol 'UndeclaredType' (symbol not found)",
+    "compile error: failed to resolve symbol 'ProxiedUndeclaredType' (symbol not found) at ImportTest.asn",
+    "compile error: failed to resolve symbol 'RemoteType' (symbol not found)",
+    "compile error: failed to resolve symbol 'UndeclaredModuleType' (module 'UndeclaredModule' not found)",
+    "compile error: failed to resolve symbol 'ProxiedUndeclaredType' (symbol not found) at ImportTestIntermediate.asn"
+]

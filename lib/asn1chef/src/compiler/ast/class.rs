@@ -445,7 +445,7 @@ fn parse_next_syntax_node(
                         fields.push((
                             item.associated_data.clone(),
                             ObjectField::Object(InformationObjectReference::Reference(
-                                values::resolve_valuereference(parser, &valref),
+                                values::resolve_valuereference(parser, &valref)?,
                             )),
                         ));
                         return Ok(());
@@ -666,7 +666,7 @@ pub(crate) fn parse_object_set_assignment(
         AstObjectSetAssignmentSubject::ObjectSet(set) => {
             let class_ref = ast_set.element.ty.as_ref().map(|class| &class.0);
             let class =
-                resolve_information_object_class(parser, &parser.resolve_symbol(&class_ref))?
+                resolve_information_object_class(parser, &parser.resolve_symbol(&class_ref)?)?
                     .resolve(parser.context)?;
 
             parse_object_set(parser, class, set)?

@@ -83,25 +83,16 @@ fn parse_object_identifier_component_valref(
     valref: &AstElement<AstDefinedValue>,
     ty: TagType,
 ) -> Result<ObjectIdentifierComponent> {
-    let resolved_value = values::resolve_defined_value(parser, valref)?;
-    if valref.element.external_module.is_some() {
-        return Ok(ObjectIdentifierComponent::ValueReference(resolved_value));
+    if ty == TagType::ObjectIdentifier && valref.element.external_module.is_none() {
+        if let Some(node) = lookup_root_oid_component_str(&valref.element.value.element.0) {
+            return Ok(ObjectIdentifierComponent::IntegerLiteral {
+                name: Some(valref.element.value.as_ref().map(|name| name.0.clone())),
+                int: AstElement::new(node.node, valref.loc),
+            });
+        }
     }
-
-    let name = &valref.element.value;
-    let base = match ty {
-        TagType::ObjectIdentifier => lookup_root_oid_component_str(&name.element.0),
-        TagType::RelativeOid => None,
-        _ => unreachable!(),
-    };
-
-    Ok(base.map_or_else(
-        || ObjectIdentifierComponent::ValueReference(resolved_value),
-        |lit| ObjectIdentifierComponent::IntegerLiteral {
-            name: Some(name.as_ref().map(|name| name.0.clone())),
-            int: AstElement::new(lit.node, valref.loc),
-        },
-    ))
+    let resolved_value = values::resolve_defined_value(parser, valref)?;
+    Ok(ObjectIdentifierComponent::ValueReference(resolved_value))
 }
 
 pub fn parse_object_identifier(

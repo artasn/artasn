@@ -160,7 +160,7 @@ fn find_component_from_series<'a>(
     structures: (&'a [StructureComponent], &[StructureValueComponent]),
     component_series: &[AstElement<String>],
 ) -> Result<(&'a StructureComponent, StructureValueComponent)> {
-    if component_series.len() == 0 {
+    if component_series.is_empty() {
         panic!("component_series.len() == 0");
     }
 
@@ -171,34 +171,28 @@ fn find_component_from_series<'a>(
     for (component, component_value) in structure.iter().zip(structure_value) {
         if component.name.element == search_component.element {
             let is_search_terminal = component_series.len() == 1;
-            match &component.component_type.ty {
-                UntaggedType::BuiltinType(builtin) => match builtin {
-                    BuiltinType::Structure(structure) => {
-                        if is_search_terminal {
-                            return Err(Error {
-                                kind: ErrorKind::Ast(format!(
-                                    "component reference cannot be to a {}",
-                                    structure.ty
-                                )),
-                                loc: search_component.loc,
-                            });
-                        } else {
-                            let structure_value =
-                                match component_value.value.resolve(parser.context)?.value {
-                                    BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
-                                    _ => unreachable!(),
-                                };
-                            return find_component_from_series(
-                                parser,
-                                (&structure.components, &structure_value.components),
-                                &component_series[1..],
-                            );
-                        }
-                    }
-                    _ => (),
-                },
-                _ => (),
-            }
+            if let UntaggedType::BuiltinType(builtin) = &component.component_type.ty { if let BuiltinType::Structure(structure) = builtin {
+                if is_search_terminal {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "component reference cannot be to a {}",
+                            structure.ty
+                        )),
+                        loc: search_component.loc,
+                    });
+                } else {
+                    let structure_value =
+                        match component_value.value.resolve(parser.context)?.value {
+                            BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
+                            _ => unreachable!(),
+                        };
+                    return find_component_from_series(
+                        parser,
+                        (&structure.components, &structure_value.components),
+                        &component_series[1..],
+                    );
+                }
+            } }
             let resolved_type = component.component_type.resolve(parser.context)?;
             match &resolved_type.ty {
                 ty @ (BuiltinType::Structure(_)
@@ -1079,7 +1073,7 @@ pub fn parse_value(
 pub(crate) fn resolve_valuereference(
     parser: &AstParser<'_>,
     valref: &AstElement<AstValueReference>,
-) -> AstElement<QualifiedIdentifier> {
+) -> Result<AstElement<QualifiedIdentifier>> {
     parser.resolve_symbol(&valref.as_ref().map(|valref| &valref.0))
 }
 
@@ -1097,7 +1091,7 @@ pub(crate) fn resolve_defined_value(
                 .imports
                 .iter()
                 .find_map(|import| {
-                    if import.module.name == external_module.element.0 {
+                    if import.module.element.name == external_module.element.0 {
                         Some(import.module.clone())
                     } else {
                         None
@@ -1112,12 +1106,12 @@ pub(crate) fn resolve_defined_value(
                 })?;
             // if the module was imported by name only, see if it was declared with an OID
             // if so, apply the module's declared OID to the DeclaredValue's identifier
-            match &mut imported_module.oid {
+            match &mut imported_module.element.oid {
                 Some(_) => (),
                 oid @ None => {
                     let lookup_module = parser
                         .context
-                        .lookup_module_by_name(&imported_module.name)
+                        .lookup_module_by_name(&imported_module.element.name)
                         .expect("lookup_module_by_name");
                     if let Some(lookup_oid) = &lookup_module.ident.oid {
                         *oid = Some(lookup_oid.clone());
@@ -1126,14 +1120,15 @@ pub(crate) fn resolve_defined_value(
             }
             Ok(defined_value.as_ref().map(|_| {
                 QualifiedIdentifier::new(
-                    imported_module,
+                    imported_module.element,
                     defined_value.element.value.element.0.clone(),
                 )
             }))
         }
-        None => Ok(
-            parser.resolve_symbol(&defined_value.element.value.as_ref().map(|valref| &valref.0))
-        ),
+        None => {
+            Ok(parser
+                .resolve_symbol(&defined_value.element.value.as_ref().map(|valref| &valref.0))?)
+        }
     }
 }
 

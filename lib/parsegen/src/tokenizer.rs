@@ -882,13 +882,10 @@ impl StringTokenizer {
         let start = self.cursor;
         for operator in Operator::VARIANTS {
             let text = operator.name();
-            match mode {
-                Some(OperatorMode::Single) => {
-                    if text.len() > 1 {
-                        continue;
-                    }
+            if let Some(OperatorMode::Single) = mode {
+                if text.len() > 1 {
+                    continue;
                 }
-                _ => (),
             }
             if self.starts_with_str(text) {
                 self.cursor += text.len();

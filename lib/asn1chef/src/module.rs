@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    compiler::Context,
+    compiler::{parser::AstElement, Context},
     types::TaggedType,
     values::{BuiltinValue, Oid},
 };
@@ -139,43 +139,88 @@ pub struct ModuleHeader {
     pub tag_default: TagDefault,
     pub extensibility_implied: bool,
     pub exports: Exports,
-    pub imports: Vec<QualifiedIdentifier>,
+    pub imports: Vec<ImportsFromModule>,
+    pub declarations: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportsFromModule {
+    pub imports: Vec<AstElement<String>>,
+    pub module: AstElement<ModuleIdentifier>,
+}
+
+pub enum ImportError {
+    SymbolNotFound,
+    ModuleNotFound(AstElement<ModuleIdentifier>),
 }
 
 impl ModuleHeader {
-    pub fn resolve_symbol(&self, context: &Context, symbol: &str) -> QualifiedIdentifier {
+    pub fn resolve_symbol(
+        &self,
+        context: &Context,
+        symbol: &String,
+    ) -> Result<QualifiedIdentifier, ImportError> {
+        if self.has_export(symbol) {
+            return Ok(QualifiedIdentifier::new(
+                self.ident.clone(),
+                symbol.to_string(),
+            ));
+        }
         self.resolve_import(context, symbol)
-            .unwrap_or_else(|| QualifiedIdentifier::new(self.ident.clone(), symbol.to_string()))
     }
 
-    pub fn resolve_import(&self, context: &Context, symbol: &str) -> Option<QualifiedIdentifier> {
-        for import in &self.imports {
-            if import.name == symbol {
-                return Some(match import.module.oid {
-                    Some(_) => import.clone(),
-                    None => match context.lookup_module_by_name(&import.module.name) {
-                        Some(module) => {
-                            QualifiedIdentifier::new(module.ident.clone(), import.name.clone())
+    pub fn resolve_import(
+        &self,
+        context: &Context,
+        symbol: &String,
+    ) -> Result<QualifiedIdentifier, ImportError> {
+        for imports_from_module in &self.imports {
+            for import in &imports_from_module.imports {
+                if &import.element == symbol {
+                    let module = match &imports_from_module.module.element.oid {
+                        Some(_) => context.lookup_module(&imports_from_module.module.element),
+                        None => {
+                            context.lookup_module_by_name(&imports_from_module.module.element.name)
                         }
-                        None => return None,
-                    },
-                });
+                    };
+                    match module {
+                        Some(module) => {
+                            if module.declarations.contains(&import.element) {
+                                return Ok(QualifiedIdentifier::new(
+                                    module.ident.clone(),
+                                    import.element.clone(),
+                                ));
+                            } else {
+                                // try importing a proxied symbol
+                                // for example:
+                                //
+                                // ModuleA:
+                                //   IMPORTS Type from ModuleB
+                                // ModuleB:
+                                //   IMPORTS Type from ModuleC
+                                // ModuleC:
+                                //   Type ::= ...
+                                return module.resolve_import(context, symbol);
+                            }
+                        }
+                        None => {
+                            return Err(ImportError::ModuleNotFound(
+                                imports_from_module.module.clone(),
+                            ))
+                        }
+                    }
+                }
             }
         }
 
-        None
+        Err(ImportError::SymbolNotFound)
     }
 
     /// Returns true if this module exports the provided symbol.
-    /// Note that this does not check that the symbol is actually defined;
-    /// it only checks that the symbol is exported, either explicitly or implicitly.
-    ///
-    /// Symbols are exported explicitly via `EXPORTS symbol1, symbol2;`
-    /// Symbols are exported implicitly via `EXPORTS ALL;` or via the lack of an `EXPORTS` definition.
-    pub fn has_export(&self, symbol: String) -> bool {
+    pub fn has_export(&self, symbol: &String) -> bool {
         match &self.exports {
-            Exports::All => true,
-            Exports::SymbolList(symbol_list) => symbol_list.contains(&symbol),
+            Exports::All => self.declarations.contains(symbol),
+            Exports::SymbolList(symbol_list) => symbol_list.contains(symbol),
         }
     }
 }

@@ -412,7 +412,10 @@ impl Constraint {
 mod test {
     use crate::{
         compiler::{
-            ast::{self, types::TypeAssignmentParseMode, AstParser}, options::CompilerConfig, parser::*, Compiler, Context
+            ast::{self, types::TypeAssignmentParseMode, AstParser},
+            options::CompilerConfig,
+            parser::*,
+            Compiler, Context,
         },
         module::ModuleIdentifier,
     };
@@ -448,7 +451,7 @@ mod test {
             () => {{
                 &AstParser {
                     context,
-                    compiler: &compiler, 
+                    compiler: &compiler,
                     config: &compiler.config,
                     ast_module,
                     module: ModuleIdentifier::with_name(String::from("ConstraintTest")),
