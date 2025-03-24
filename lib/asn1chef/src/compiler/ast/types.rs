@@ -478,7 +478,9 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                             .element
                             .name
                             .chars()
-                            .all(|ch| ch.is_ascii_uppercase() || ch == '-') && class::resolve_information_object_class(parser, typeref).is_ok() {
+                            .all(|ch| ch.is_ascii_uppercase() || ch == '-')
+                            && class::resolve_information_object_class(parser, typeref).is_ok()
+                        {
                             return Ok(Parameter::ObjectClass {
                                 class_ref: typeref.clone(),
                             });
@@ -555,41 +557,48 @@ fn parse_untagged_type(
                     .lookup_parameterized_type(&INSTANCE_OF_IDENT)
                     .expect("INSTANCE OF implementation not found");
 
-                return parse_type(
-                    parser,
-                    match &ast_instance_of_type.element.subject.element {
-                        AstTypeAssignmentSubject::Type(ast_type) => ast_type,
-                        _ => unreachable!(),
-                    },
-                    &[(
-                        &String::from("CLASS-TYPE"),
-                        &Parameter::ObjectClass { class_ref },
-                    )],
-                    TypeContext::Contextless,
-                )
-                .map_err(|err| err.into_foreign(INSTANCE_OF_IDENT.module.to_foreign_string()));
+                return parser.run_with_context(&INSTANCE_OF_IDENT.module, |parser| {
+                    parse_type(
+                        parser,
+                        match &ast_instance_of_type.element.subject.element {
+                            AstTypeAssignmentSubject::Type(ast_type) => ast_type,
+                            _ => unreachable!(),
+                        },
+                        &[(
+                            &String::from("CLASS-TYPE"),
+                            &Parameter::ObjectClass {
+                                class_ref: class_ref.clone(),
+                            },
+                        )],
+                        TypeContext::Contextless,
+                    )
+                });
             }
             _ => parse_builtin_type(parser, builtin, parameters)?,
         },
         AstUntaggedType::ParameterizedDefinedType(typeref) => {
             let (parameterized_ast, parameters) =
                 resolve_parameterized_type_reference(parser, typeref, parameters)?;
-            let decl = match parse_type_assignment(
-                parser,
-                parameterized_ast,
-                &TypeAssignmentParseMode::Parameterized { parameters },
-            ) {
-                Ok(Some((_, decl))) => decl,
-                Ok(None) => panic!("parse_type_assignment for parameterized type returned None"),
-                Err(err) => {
-                    return Err(err.into_foreign(
-                        resolve_defined_type(parser, &typeref.element.name)?
-                            .element
-                            .module
-                            .to_foreign_string(),
-                    ))
+
+            let module = resolve_defined_type(parser, &typeref.element.name)?
+                .element
+                .module;
+
+            let decl = parser.run_with_context(&module, |parser| {
+                match parse_type_assignment(
+                    parser,
+                    parameterized_ast,
+                    &TypeAssignmentParseMode::Parameterized {
+                        parameters: parameters.clone(), // clone required to move into closure
+                    },
+                ) {
+                    Ok(Some((_, decl))) => Ok(decl),
+                    Ok(None) => {
+                        panic!("parse_type_assignment for parameterized type returned None")
+                    }
+                    Err(err) => Err(err),
                 }
-            };
+            })?;
             let resolved = decl.ty.resolve(parser.context)?;
 
             UntaggedType::BuiltinType(resolved.ty)
@@ -641,11 +650,11 @@ fn parse_untagged_type(
             };
             let (kind, field) = match &ast_ocf.element.field.element {
                 AstFieldReference::TypeFieldReference(type_field) => (
-                    ObjectClassFieldReferenceKind::OpenType,
+                    ObjectClassFieldReferenceKind::TypeLike,
                     type_field.element.0.as_ref().map(|name| name.0.clone()),
                 ),
                 AstFieldReference::ValueFieldReference(value_field) => (
-                    ObjectClassFieldReferenceKind::Value,
+                    ObjectClassFieldReferenceKind::ValueLike,
                     value_field.element.0.as_ref().map(|name| name.0.clone()),
                 ),
             };
@@ -778,7 +787,7 @@ pub fn parse_type(
                         }
                     }
                 } else if matches!(&tagged_type.ty,
-                    UntaggedType::ObjectClassField(ocf) if ocf.kind == ObjectClassFieldReferenceKind::OpenType
+                    UntaggedType::ObjectClassField(ocf) if ocf.kind == ObjectClassFieldReferenceKind::TypeLike
                 ) {
                     match source {
                         TagSource::KindSpecified => {
@@ -836,7 +845,7 @@ pub fn parse_type(
                     &tagged_type.ty,
                     UntaggedType::BuiltinType(BuiltinType::Choice(_))
                 ) || matches!(&tagged_type.ty,
-                        UntaggedType::ObjectClassField(field_ref) if field_ref.kind == ObjectClassFieldReferenceKind::OpenType)
+                        UntaggedType::ObjectClassField(field_ref) if field_ref.kind == ObjectClassFieldReferenceKind::TypeLike)
                 {
                     tag.kind = TagKind::Explicit(None);
                 }

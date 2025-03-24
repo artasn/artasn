@@ -4,7 +4,7 @@ use crate::{
     types::*,
     values::{
         InformationObject, InformationObjectReference, InformationObjectSet, ObjectField,
-        ObjectFieldReference, ObjectSetElement,
+        ObjectFieldReference, ObjectSetElement, ValueSet,
     },
 };
 
@@ -25,6 +25,157 @@ lazy_static::lazy_static! {
     );
 }
 
+fn parse_class_value_field(
+    parser: &AstParser<'_>,
+    class_idents: &[QualifiedIdentifier],
+    ast_field: &AstElement<AstValueField>,
+) -> Result<ObjectClassField> {
+    Ok(match &ast_field.element.subject.element {
+        AstValueFieldSubject::Type(ast_field_type) => {
+            let mut field_type =
+                types::parse_type(parser, ast_field_type, &[], TypeContext::Contextless)?;
+
+            match is_type_class(class_idents, &field_type) {
+                Some(class) => ObjectClassField::Object(ObjectClassFieldObject {
+                    class,
+                    optional: ast_field.element.optional,
+                }),
+                None => match &field_type.ty {
+                    UntaggedType::ObjectClassField(ocf) => {
+                        if ocf.kind == ObjectClassFieldReferenceKind::TypeLike {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "value field type cannot be a reference to an open type field"
+                                        .to_string(),
+                                ),
+                                loc: ocf.field.loc,
+                            });
+                        }
+
+                        if ast_field.element.unique {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "UNIQUE is invalid for reference-type value field".to_string(),
+                                ),
+                                loc: ast_field.loc,
+                            });
+                        }
+
+                        if let Some(default) = &ast_field.element.default {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(
+                                    "DEFAULT is invalid for reference-type value field".to_string(),
+                                ),
+                                loc: default.loc,
+                            });
+                        }
+
+                        ObjectClassField::Value(ObjectClassFieldValue {
+                            field_type: ObjectClassFieldValueType::ObjectClassFieldReference(
+                                ocf.clone(),
+                            ),
+                            option: if ast_field.element.optional {
+                                Some(ObjectClassFieldValueOption::Optional)
+                            } else {
+                                None
+                            },
+                        })
+                    }
+                    _ => {
+                        let target_type = field_type.resolve(parser.context)?;
+
+                        let constraint = constraints::parse_type_constraint(
+                            parser,
+                            ast_field_type,
+                            &target_type,
+                            &[],
+                        )?;
+                        constraints::apply_pending_constraint(&mut field_type, constraint);
+
+                        let option = match (
+                            ast_field.element.unique,
+                            ast_field.element.optional,
+                            &ast_field.element.default,
+                        ) {
+                            (true, false, None) => Some(ObjectClassFieldValueOption::Unique),
+                            (false, true, None) => Some(ObjectClassFieldValueOption::Optional),
+                            (false, false, Some(default)) => {
+                                Some(ObjectClassFieldValueOption::Default(values::parse_value(
+                                    parser,
+                                    ParseValueAssignmentStage::NormalValues,
+                                    default,
+                                    &target_type,
+                                )?))
+                            }
+                            (false, false, None) => None,
+                            (true, true, None) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "field cannot be both OPTIONAL and UNIQUE".to_string(),
+                                    ),
+                                    loc: ast_field.element.name.loc,
+                                })
+                            }
+                            (true, false, Some(default)) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "field cannot be both UNIQUE and have a DEFAULT"
+                                            .to_string(),
+                                    ),
+                                    loc: default.loc,
+                                })
+                            }
+                            (false, true, Some(default)) | (true, true, Some(default)) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "field cannot be both OPTIONAL and have a DEFAULT"
+                                            .to_string(),
+                                    ),
+                                    loc: default.loc,
+                                })
+                            }
+                        };
+
+                        ObjectClassField::Value(ObjectClassFieldValue {
+                            field_type: ObjectClassFieldValueType::TaggedType(field_type),
+                            option,
+                        })
+                    }
+                },
+            }
+        }
+        AstValueFieldSubject::OpenTypeReference(open_type_ref) => {
+            let option = match (
+                ast_field.element.unique,
+                ast_field.element.optional,
+                &ast_field.element.default,
+            ) {
+                (true, false, None) => Some(ObjectClassFieldValueOption::Unique),
+                (false, true, None) => Some(ObjectClassFieldValueOption::Optional),
+                (false, false, Some(default)) => {
+                    return Err(Error { kind: ErrorKind::Ast("information object fields referencing an open type field cannot have a default value".to_string()), loc: default.loc });
+                }
+                (false, false, None) => None,
+                _ => {
+                    todo!()
+                }
+            };
+
+            ObjectClassField::Value(ObjectClassFieldValue {
+                field_type: ObjectClassFieldValueType::OpenTypeReference(
+                    open_type_ref
+                        .element
+                        .0
+                        .as_ref()
+                        .map(|name| name.0.element.0.clone())
+                        .clone(),
+                ),
+                option,
+            })
+        }
+    })
+}
+
 fn parse_fields(
     parser: &AstParser<'_>,
     class_idents: &[QualifiedIdentifier],
@@ -33,142 +184,10 @@ fn parse_fields(
     let mut fields = Vec::new();
     for ast_field in ast_fields {
         match &ast_field.element {
-            AstObjectClassField::ValueField(value) => {
-                let field = match &value.element.subject.element {
-                    AstValueFieldSubject::Type(ast_field_type) => {
-                        let mut field_type = types::parse_type(
-                            parser,
-                            ast_field_type,
-                            &[],
-                            TypeContext::Contextless,
-                        )?;
-
-                        match is_type_class(class_idents, &field_type) {
-                            Some(class) => ObjectClassField::Object(ObjectClassFieldObject {
-                                class,
-                                optional: value.element.optional,
-                            }),
-                            None => {
-                                match &field_type.ty {
-                                    UntaggedType::ObjectClassField(ocf) => {
-                                        if ocf.kind == ObjectClassFieldReferenceKind::OpenType {
-                                            return Err(Error {
-                                            kind: ErrorKind::Ast("value field type cannot be a reference to an open type field".to_string()),
-                                            loc: ocf.field.loc,
-                                        });
-                                        }
-
-                                        if value.element.unique {
-                                            return Err(Error {
-                                            kind: ErrorKind::Ast("UNIQUE is invalid for reference-type value field".to_string()),
-                                            loc: value.loc,
-                                        });
-                                        }
-
-                                        if let Some(default) = &value.element.default {
-                                            return Err(Error {
-                                            kind: ErrorKind::Ast("DEFAULT is invalid for reference-type value field".to_string()),
-                                            loc: default.loc,
-                                        });
-                                        }
-
-                                        ObjectClassField::Value(ObjectClassFieldValue {
-                                            field_type:
-                                                ObjectClassFieldValueType::ObjectClassFieldReference(
-                                                    ocf.clone(),
-                                                ),
-                                            option: if value.element.optional {
-                                                Some(ObjectClassFieldValueOption::Optional)
-                                            } else {
-                                                None
-                                            },
-                                        })
-                                    }
-                                    _ => {
-                                        let target_type = field_type.resolve(parser.context)?;
-
-                                        let constraint = constraints::parse_type_constraint(
-                                            parser,
-                                            ast_field_type,
-                                            &target_type,
-                                            &[],
-                                        )?;
-                                        constraints::apply_pending_constraint(
-                                            &mut field_type,
-                                            constraint,
-                                        );
-
-                                        let option = match (
-                                            value.element.unique,
-                                            value.element.optional,
-                                            &value.element.default,
-                                        ) {
-                                            (true, false, None) => {
-                                                Some(ObjectClassFieldValueOption::Unique)
-                                            }
-                                            (false, true, None) => {
-                                                Some(ObjectClassFieldValueOption::Optional)
-                                            }
-                                            (false, false, Some(default)) => {
-                                                Some(ObjectClassFieldValueOption::Default(
-                                                    values::parse_value(
-                                                        parser,
-                                                        ParseValueAssignmentStage::NormalValues,
-                                                        default,
-                                                        &target_type,
-                                                    )?,
-                                                ))
-                                            }
-                                            (false, false, None) => None,
-                                            _ => {
-                                                todo!()
-                                            }
-                                        };
-
-                                        ObjectClassField::Value(ObjectClassFieldValue {
-                                            field_type: ObjectClassFieldValueType::TaggedType(
-                                                field_type,
-                                            ),
-                                            option,
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    AstValueFieldSubject::OpenTypeReference(open_type_ref) => {
-                        let option = match (
-                            value.element.unique,
-                            value.element.optional,
-                            &value.element.default,
-                        ) {
-                            (true, false, None) => Some(ObjectClassFieldValueOption::Unique),
-                            (false, true, None) => Some(ObjectClassFieldValueOption::Optional),
-                            (false, false, Some(default)) => {
-                                return Err(Error { kind: ErrorKind::Ast("information object fields referencing an open type field cannot have a default value".to_string()), loc: default.loc });
-                            }
-                            (false, false, None) => None,
-                            _ => {
-                                todo!()
-                            }
-                        };
-
-                        ObjectClassField::Value(ObjectClassFieldValue {
-                            field_type: ObjectClassFieldValueType::OpenTypeReference(
-                                open_type_ref
-                                    .element
-                                    .0
-                                    .as_ref()
-                                    .map(|name| name.0.element.0.clone())
-                                    .clone(),
-                            ),
-                            option,
-                        })
-                    }
-                };
-
+            AstObjectClassField::ValueField(ast_field) => {
+                let field = parse_class_value_field(parser, class_idents, ast_field)?;
                 fields.push((
-                    value
+                    ast_field
                         .element
                         .name
                         .as_ref()
@@ -176,30 +195,59 @@ fn parse_fields(
                     field,
                 ));
             }
-            AstObjectClassField::TypeField(open_type) => {
+            AstObjectClassField::TypeField(ast_field) => {
                 fields.push((
-                    open_type
+                    ast_field
                         .element
                         .name
                         .as_ref()
                         .map(|name| name.0.element.0.clone()),
                     ObjectClassField::OpenType(ObjectClassFieldType {
-                        optional: open_type.element.optional,
+                        optional: ast_field.element.optional,
                     }),
                 ));
             }
-            AstObjectClassField::ObjectSetField(object) => {
+            AstObjectClassField::SetField(ast_field) => {
+                let field_type = types::parse_type(
+                    parser,
+                    &ast_field.element.element_type,
+                    &[],
+                    TypeContext::Contextless,
+                )?;
+
+                let field = match is_type_class(class_idents, &field_type) {
+                    Some(class) => ObjectClassField::ObjectSet(ObjectClassFieldObject {
+                        class,
+                        optional: ast_field.element.optional,
+                    }),
+                    None => ObjectClassField::ValueSet(ObjectClassFieldValueSet {
+                        field_type,
+                        option: match (ast_field.element.optional, &ast_field.element.default) {
+                            (true, None) => Some(ObjectClassFieldValueSetOption::Optional),
+                            (false, Some(default)) => {
+                                Some(ObjectClassFieldValueSetOption::Default(default.clone()))
+                            }
+                            (false, None) => None,
+                            (true, Some(default)) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(
+                                        "field cannot be both OPTIONAL and have a DEFAULT"
+                                            .to_string(),
+                                    ),
+                                    loc: default.loc,
+                                })
+                            }
+                        },
+                    }),
+                };
+
                 fields.push((
-                    object
+                    ast_field
                         .element
                         .name
                         .as_ref()
                         .map(|name| name.0.element.0.clone()),
-                    ObjectClassField::ObjectSet(ObjectClassFieldObject {
-                        class: parser
-                            .resolve_symbol(&object.element.class.as_ref().map(|class| &class.0)),
-                        optional: object.element.optional,
-                    }),
+                    field,
                 ));
             }
         }
@@ -226,6 +274,13 @@ fn parse_syntax_item(item: &AstElement<AstSyntaxItem>) -> ObjectClassSyntaxNode 
     }
 }
 
+// TODO: "The Literal 'WITH' must be different from the first Literal of all immediately preceding OptionalGroups."
+// for example:
+// } WITH SYNTAX {
+//     SYNTAX &ExtnType IDENTIFIED BY &id
+//     [WITH CRITICALITY &Critical]
+// 	   [WITH SUPERCLASSES &Supers]
+// }
 fn parse_syntax_elements(
     elements: &[AstElement<AstSyntaxListElement>],
 ) -> Vec<ObjectClassSyntaxNodeGroup> {
@@ -316,6 +371,15 @@ fn parse_next_syntax_node(
             let set = parse_object_set(parser, class, &ast_set)?;
 
             fields.push((item.associated_data.clone(), ObjectField::ObjectSet(set)));
+
+            return Ok(());
+        }
+        ObjectClassField::ValueSet(field) => {
+            let target_type = field.field_type.resolve(parser.context)?;
+            let ast_set = try_parse!(ParseContext::new(token_stream), AstValueSet::parse);
+            let set = parse_value_set(parser, &target_type, &ast_set)?;
+
+            fields.push((item.associated_data.clone(), ObjectField::ValueSet(set)));
 
             return Ok(());
         }
@@ -457,7 +521,7 @@ pub(crate) fn parse_information_object(
 
     let mut token_stream = TokenStream::from_tokens(tokens.element.0.clone());
     try_parse!(ParseContext::new(&mut token_stream), |ctx| {
-        Operator::match_operator(Operator::OpenBrace, ctx)
+        Operator::match_operator(Operator::OpenBrace, OperatorMode::Single, ctx)
     });
 
     let mut fields = Vec::new();
@@ -472,7 +536,7 @@ pub(crate) fn parse_information_object(
     }
 
     try_parse!(ParseContext::new(&mut token_stream), |ctx| {
-        Operator::match_operator(Operator::CloseBrace, ctx)
+        Operator::match_operator(Operator::CloseBrace, OperatorMode::Single, ctx)
     });
 
     Ok(InformationObject { fields })
@@ -552,6 +616,38 @@ fn parse_object_set(
                 )?));
             }
         }
+    }
+
+    Ok(set_elements)
+}
+
+fn parse_value_set(
+    parser: &AstParser<'_>,
+    target_type: &ResolvedType,
+    set: &AstElement<AstValueSet>,
+) -> Result<ValueSet> {
+    let mut set_elements = Vec::new();
+
+    let ast_elements: Vec<&AstElement<AstValue>> = set
+        .element
+        .element_groups
+        .iter()
+        .filter_map(|group| match &group.element {
+            AstValueSetElementGroup::Extensible(_) => None,
+            AstValueSetElementGroup::ValueSetElements(elements) => {
+                Some(elements.element.0.iter().collect::<Vec<_>>())
+            }
+        })
+        .flatten()
+        .collect();
+
+    for ast_value in ast_elements {
+        set_elements.push(values::parse_value(
+            parser,
+            ParseValueAssignmentStage::NormalValues,
+            ast_value,
+            target_type,
+        )?);
     }
 
     Ok(set_elements)

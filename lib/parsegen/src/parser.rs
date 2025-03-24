@@ -23,8 +23,13 @@ impl TokenStream {
         }
     }
 
-    pub fn try_parse(&mut self, kind: TokenKind, data: Option<TokenData>) -> Result<Token> {
-        let token = self.tokenizer.tokenize_next()?;
+    pub fn try_parse(
+        &mut self,
+        kind: TokenKind,
+        data: Option<TokenData>,
+        operator_mode: Option<OperatorMode>,
+    ) -> Result<Token> {
+        let token = self.tokenizer.tokenize_next(operator_mode)?;
         if token.kind == kind {
             Ok(token)
         } else {
@@ -38,12 +43,12 @@ impl TokenStream {
         }
     }
 
-    pub fn try_next(&mut self) -> Result<Token> {
-        self.tokenizer.tokenize_next()
+    pub fn try_next(&mut self, operator_mode: Option<OperatorMode>) -> Result<Token> {
+        self.tokenizer.tokenize_next(operator_mode)
     }
 
     pub fn try_parse_token_literal(&mut self) -> Result<Token> {
-        let token = self.tokenizer.tokenize_next()?;
+        let token = self.tokenizer.tokenize_next(Some(OperatorMode::Single))?;
         match token.kind {
             TokenKind::TypeReference => {
                 let name = match token.data.as_ref().unwrap() {
@@ -87,22 +92,6 @@ impl TokenStream {
     pub fn offset(&self) -> usize {
         self.tokenizer.offset()
     }
-
-    pub fn into_tokenizer(self) -> Box<dyn Tokenizer> {
-        self.tokenizer
-    }
-
-    pub fn as_tokens(&mut self) -> Result<Vec<Token>> {
-        let mut tokens = Vec::new();
-        loop {
-            let token = self.tokenizer.tokenize_next()?;
-            if token.kind == TokenKind::Eoi {
-                tokens.push(token);
-                return Ok(tokens);
-            }
-            tokens.push(token);
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -112,7 +101,7 @@ impl Parseable for Soi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Soi, None)
+            .try_parse(TokenKind::Soi, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: Soi,
@@ -130,7 +119,7 @@ impl Parseable for Eoi {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Eoi, None)
+            .try_parse(TokenKind::Eoi, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: Eoi,
@@ -148,7 +137,7 @@ impl Parseable for AstTypeReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::TypeReference, None)
+            .try_parse(TokenKind::TypeReference, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstTypeReference(match token.data.unwrap() {
@@ -169,7 +158,7 @@ impl Parseable for AstUppercaseReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::TypeReference, None)
+            .try_parse(TokenKind::TypeReference, None, None)
             .map(|token| {
                 let name = match token.data.as_ref().unwrap() {
                     TokenData::Named(name) => name,
@@ -206,7 +195,7 @@ impl Parseable for AstValueReference {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::ValueReference, None)
+            .try_parse(TokenKind::ValueReference, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstValueReference(match token.data.unwrap() {
@@ -230,7 +219,7 @@ impl Parseable for AstStringLiteral {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::String, None)
+            .try_parse(TokenKind::String, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
@@ -251,7 +240,7 @@ impl Parseable for AstNumber {
     fn parse(context: ParseContext) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Number, None)
+            .try_parse(TokenKind::Number, None, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: AstNumber(match token.data.unwrap() {
@@ -269,7 +258,7 @@ impl ParseableEnum for Keyword {
     fn parse(context: ParseContext, data: Option<TokenData>) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Keyword, data)
+            .try_parse(TokenKind::Keyword, data, None)
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
@@ -305,11 +294,15 @@ impl Keyword {
     }
 }
 
-impl ParseableEnum for Operator {
-    fn parse(context: ParseContext, data: Option<TokenData>) -> ParseResult<Self> {
+impl Operator {
+    fn parse(
+        context: ParseContext,
+        data: Option<TokenData>,
+        mode: OperatorMode,
+    ) -> ParseResult<Self> {
         context
             .tokens
-            .try_parse(TokenKind::Operator, data)
+            .try_parse(TokenKind::Operator, data, Some(mode))
             .map(|token| {
                 ParseResult::Ok(AstElement {
                     element: match token.data.unwrap() {
@@ -321,11 +314,13 @@ impl ParseableEnum for Operator {
             })
             .unwrap_or_else(ParseResult::Fail)
     }
-}
 
-impl Operator {
-    pub fn match_operator(operator: Operator, context: ParseContext) -> ParseResult<Operator> {
-        let parse = Self::parse(context, Some(TokenData::Operator(operator.clone())));
+    pub fn match_operator(
+        operator: Operator,
+        mode: OperatorMode,
+        context: ParseContext,
+    ) -> ParseResult<Operator> {
+        let parse = Self::parse(context, Some(TokenData::Operator(operator.clone())), mode);
         match parse {
             ParseResult::Ok(ast) => {
                 if ast.element == operator {
@@ -354,6 +349,7 @@ impl Parseable for AstBracedTokenStream {
         match context.tokens.try_parse(
             TokenKind::Operator,
             Some(TokenData::Operator(Operator::OpenBrace)),
+            Some(OperatorMode::Single),
         ) {
             Ok(token) => tokens.push(token),
             Err(err) => return ParseResult::Fail(err),
@@ -361,7 +357,7 @@ impl Parseable for AstBracedTokenStream {
 
         let mut brace_depth = 1;
         loop {
-            let next_token = match context.tokens.try_next() {
+            let next_token = match context.tokens.try_next(None) {
                 Ok(token) => token,
                 Err(err) => return ParseResult::Fail(err),
             };

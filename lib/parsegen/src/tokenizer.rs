@@ -465,8 +465,14 @@ impl Display for ErrorKind {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum OperatorMode {
+    Normal,
+    Single,
+}
+
 pub trait Tokenizer {
-    fn tokenize_next(&mut self) -> Result<Token>;
+    fn tokenize_next(&mut self, operator_mode: Option<OperatorMode>) -> Result<Token>;
     fn set_cursor(&mut self, cursor: usize);
     fn cursor(&self) -> usize;
     fn offset(&self) -> usize;
@@ -478,7 +484,7 @@ pub struct AotTokenizer {
 }
 
 impl Tokenizer for AotTokenizer {
-    fn tokenize_next(&mut self) -> Result<Token> {
+    fn tokenize_next(&mut self, _: Option<OperatorMode>) -> Result<Token> {
         if self.cursor == self.tokens.len() {
             return Ok(Token {
                 kind: TokenKind::Eoi,
@@ -537,7 +543,7 @@ lazy_static::lazy_static! {
 }
 
 impl Tokenizer for StringTokenizer {
-    fn tokenize_next(&mut self) -> Result<Token> {
+    fn tokenize_next(&mut self, operator_mode: Option<OperatorMode>) -> Result<Token> {
         if !self.yielded_soi {
             self.yielded_soi = true;
             return Ok(Token {
@@ -574,7 +580,7 @@ impl Tokenizer for StringTokenizer {
             if let Some(named) = self.tokenize_name()? {
                 return Ok(named);
             }
-            if let Some(op) = self.tokenize_operator() {
+            if let Some(op) = self.tokenize_operator(operator_mode) {
                 return Ok(op);
             }
         }
@@ -872,10 +878,18 @@ impl StringTokenizer {
         }
     }
 
-    fn tokenize_operator(&mut self) -> Option<Token> {
+    fn tokenize_operator(&mut self, mode: Option<OperatorMode>) -> Option<Token> {
         let start = self.cursor;
         for operator in Operator::VARIANTS {
             let text = operator.name();
+            match mode {
+                Some(OperatorMode::Single) => {
+                    if text.len() > 1 {
+                        continue;
+                    }
+                }
+                _ => (),
+            }
             if self.starts_with_str(text) {
                 self.cursor += text.len();
                 return Some(Token {
@@ -931,45 +945,45 @@ mod test {
     #[test]
     pub fn empty_input() {
         let mut t = StringTokenizer::new("", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
     }
 
     #[test]
     pub fn only_comments_is_equivalent_to_empty_input() {
         let mut t = StringTokenizer::new("-- Hello world", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
         let mut t = StringTokenizer::new("-- Hello world\n", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
 
         let mut t = StringTokenizer::new("--Goodbye world--", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
         let mut t = StringTokenizer::new("--Goodbye world--\n", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
 
         let mut t = StringTokenizer::new("-- Hello world\n--Goodbye world--", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
         let mut t = StringTokenizer::new("-- Hello world\n--Goodbye world--\n", true);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Soi), "{:?}", r);
-        let r = assert_ok!(t.tokenize_next());
+        let r = assert_ok!(t.tokenize_next(None));
         assert!(matches!(r.kind, TokenKind::Eoi), "{:?}", r);
     }
 }

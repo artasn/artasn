@@ -77,7 +77,13 @@ pub enum SubtypeElement {
 #[derive(Debug, Clone)]
 pub struct TableConstraint {
     pub set_ref: AstElement<QualifiedIdentifier>,
-    pub field_ref: Option<AstElement<String>>,
+    pub component_ref: Option<ComponentReference>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ComponentReference {
+    pub is_relative: bool,
+    pub component_series: Vec<AstElement<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -406,10 +412,7 @@ impl Constraint {
 mod test {
     use crate::{
         compiler::{
-            ast::{self, types::TypeAssignmentParseMode, AstParser},
-            options::CompilerConfig,
-            parser::*,
-            Context,
+            ast::{self, types::TypeAssignmentParseMode, AstParser}, options::CompilerConfig, parser::*, Compiler, Context
         },
         module::ModuleIdentifier,
     };
@@ -431,9 +434,10 @@ mod test {
         };
 
         let config = CompilerConfig::default();
+        let compiler = Compiler::new(config);
         {
             assert_eq!(
-                ast::register_all_modules(context, &config, &ast_program).len(),
+                ast::register_all_modules(context, &compiler, &ast_program).len(),
                 0
             );
         }
@@ -444,7 +448,8 @@ mod test {
             () => {{
                 &AstParser {
                     context,
-                    config: &config,
+                    compiler: &compiler, 
+                    config: &compiler.config,
                     ast_module,
                     module: ModuleIdentifier::with_name(String::from("ConstraintTest")),
                 }

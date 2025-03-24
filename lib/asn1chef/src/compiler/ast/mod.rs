@@ -11,7 +11,7 @@ use types::TypeAssignmentParseMode;
 use values::{ParseValueAssignmentStage, ParsedValueAssignment};
 
 use super::options::CompilerConfig;
-use super::{parser::*, Context};
+use super::{parser::*, Compiler, Context};
 use crate::compiler::options::EmptyExportBehavior;
 use crate::module::ModuleIdentifier;
 use crate::module::*;
@@ -23,6 +23,7 @@ pub struct AstParser<'a> {
     pub config: &'a CompilerConfig,
     pub ast_module: &'a AstElement<AstModule>,
     pub module: ModuleIdentifier,
+    pub(crate) compiler: &'a Compiler,
 }
 
 impl AstParser<'_> {
@@ -35,6 +36,26 @@ impl AstParser<'_> {
             symbol.loc,
         )
     }
+
+    pub fn run_with_context<'a, T, F: Fn(&Self) -> Result<T>>(
+        &'a self,
+        target_module: &ModuleIdentifier,
+        f: F,
+    ) -> Result<T> {
+        let (_, ast_target_module) = self
+            .compiler
+            .find_source_by_ident(target_module)
+            .expect("find_source_by_ident failed");
+
+        let context_parser = AstParser {
+            context: self.context,
+            config: self.config,
+            ast_module: ast_target_module,
+            module: target_module.clone(),
+            compiler: self.compiler,
+        };
+        f(&context_parser).map_err(|err| err.into_foreign(target_module.to_foreign_string()))
+    }
 }
 
 pub struct AstVerifier<'a> {
@@ -45,7 +66,7 @@ pub struct AstVerifier<'a> {
 
 fn run_parser<T, F: Fn(AstParser<'_>) -> Vec<Result<T>>>(
     context: &Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
     f: F,
 ) -> std::result::Result<Vec<T>, Vec<Error>> {
@@ -63,9 +84,10 @@ fn run_parser<T, F: Fn(AstParser<'_>) -> Vec<Result<T>>>(
 
         let parser = AstParser {
             context,
-            config,
+            config: &compiler.config,
             ast_module,
             module,
+            compiler,
         };
 
         for result in f(parser) {
@@ -85,7 +107,7 @@ fn run_parser<T, F: Fn(AstParser<'_>) -> Vec<Result<T>>>(
 
 fn run_verifier<F: Fn(AstVerifier<'_>) -> Vec<Error>>(
     context: &Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
     f: F,
 ) -> Vec<Error> {
@@ -102,7 +124,7 @@ fn run_verifier<F: Fn(AstVerifier<'_>) -> Vec<Error>>(
 
         let verifier = AstVerifier {
             context,
-            config,
+            config: &compiler.config,
             module,
         };
 
@@ -159,10 +181,10 @@ fn symbol_list_to_string_list(symbol_list: &AstSymbolList) -> Vec<String> {
 /// Stage 1: register all module headers.
 pub fn register_all_modules(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let header = &parser.ast_module.element.header;
 
         let tag_default = match header
@@ -250,11 +272,11 @@ pub fn register_all_modules(
 ///    is that of a class type or that of a normal type.
 pub fn register_all_information_object_class_names(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
     // first pass
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
@@ -294,10 +316,10 @@ pub fn register_all_information_object_class_names(
 // This stores their ASTs in the Context so that they can be parsed with the substituted types later.
 pub fn register_all_parameterized_types(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
@@ -323,10 +345,10 @@ pub fn register_all_parameterized_types(
 /// Stage 4: register all declared types.
 pub fn register_all_types(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
@@ -356,7 +378,7 @@ pub fn register_all_types(
 /// Stage 5: register all declared information object classes.
 pub fn register_all_information_object_classes(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
     let class_idents = context
@@ -366,7 +388,7 @@ pub fn register_all_information_object_classes(
         .collect::<Vec<_>>();
 
     // second pass
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
@@ -401,10 +423,10 @@ pub fn register_all_information_object_classes(
 // Stage 6: register all declared information object sets.
 pub fn register_all_information_object_sets(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::ObjectSetAssignment(object_set_assignment) = &assignment.element {
@@ -429,10 +451,10 @@ pub fn register_all_information_object_sets(
 // Stage 7: register all declared information objects.
 pub fn register_all_information_objects(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
@@ -467,10 +489,10 @@ pub fn register_all_information_objects(
 /// Stage 8: register the constraints for all types.
 pub fn register_all_constraints(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
@@ -498,10 +520,10 @@ pub fn register_all_constraints(
 /// to information object class fields.
 pub fn register_all_normal_values(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
@@ -534,10 +556,10 @@ pub fn register_all_normal_values(
 /// Stage 10: register all values that contain references to information object class fields.
 pub fn register_all_class_reference_values(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    match run_parser(context, config, program, |parser| {
+    match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
             if let AstAssignment::ValueAssignment(ref value_assignment) = assignment.element {
@@ -573,13 +595,13 @@ pub fn register_all_class_reference_values(
 /// Stage 11: verify all types.
 pub fn verify_all_types(
     context: &mut Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
     // free up some memory by clearing the ASTs for parameterized types
     context.clear_parameterized_types();
 
-    run_verifier(context, config, program, |verifier| {
+    run_verifier(context, compiler, program, |verifier| {
         let mut errors: Vec<Error> = Vec::new();
         for (ident, declared_type) in verifier.context.list_types() {
             if ident.module != verifier.module {
@@ -597,10 +619,10 @@ pub fn verify_all_types(
 /// Stage 12: verify all declared values.
 pub fn verify_all_values(
     context: &Context,
-    config: &CompilerConfig,
+    compiler: &Compiler,
     program: &AstElement<AstProgram>,
 ) -> Vec<Error> {
-    run_verifier(context, config, program, |verifier| {
+    run_verifier(context, compiler, program, |verifier| {
         let mut errors: Vec<Error> = Vec::new();
         for (ident, declared_value) in verifier.context.list_values() {
             if ident.module != verifier.module {

@@ -385,3 +385,11 @@ json_compile_test!(
     test_object_set,
     "../../test-data/compile/classes/ObjectSetTest"
 );
+json_compile_test!(
+    test_component_reference,
+    "../../test-data/compile/classes/ComponentReferenceTest"
+);
+json_compile_test!(
+    test_value_set,
+    "../../test-data/compile/classes/ValueSetTest"
+);

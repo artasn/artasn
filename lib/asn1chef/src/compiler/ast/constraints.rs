@@ -192,11 +192,17 @@ fn parse_table_constraint(
     };
     Ok(TableConstraint {
         set_ref,
-        field_ref: table
-            .element
-            .field_ref
-            .as_ref()
-            .map(|field_ref| field_ref.as_ref().map(|name| name.0.clone())),
+        component_ref: table.element.component_ref.as_ref().map(|component_ref| {
+            ComponentReference {
+                is_relative: component_ref.element.relative,
+                component_series: component_ref
+                    .element
+                    .elements
+                    .iter()
+                    .map(|element| element.as_ref().map(|element| element.0.clone()))
+                    .collect(),
+            }
+        }),
     })
 }
 

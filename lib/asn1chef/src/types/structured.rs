@@ -45,8 +45,8 @@ impl Display for ObjectClassFieldReference {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectClassFieldReferenceKind {
-    OpenType,
-    Value,
+    TypeLike,
+    ValueLike,
 }
 
 #[derive(Debug, Clone)]

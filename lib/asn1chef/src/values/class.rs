@@ -43,6 +43,8 @@ pub enum ObjectSetElement {
     ObjectSet(AstElement<QualifiedIdentifier>),
 }
 
+pub type ValueSet = Vec<AstElement<TypedValue>>;
+
 #[derive(Debug, Clone)]
 pub enum ObjectField {
     Type(TaggedType),
@@ -50,6 +52,7 @@ pub enum ObjectField {
     ObjectFieldReference(ObjectFieldReference),
     Object(InformationObjectReference),
     ObjectSet(InformationObjectSet),
+    ValueSet(ValueSet),
 }
 
 #[derive(Debug, Clone)]

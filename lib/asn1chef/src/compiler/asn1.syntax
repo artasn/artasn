@@ -454,18 +454,35 @@ variant SubtypeElement = UserDefinedConstraint | TableConstraint | ContentsConst
 rule TableConstraint {
     captures {
         set_name = DefinedType
-        field_ref = optional: ValueReference
+        component_ref = optional: ComponentReference
     }
     operator {
     persist
     set_name = DefinedType
     operator }
     optional {
-        operator {
-        operator @
-        field_ref = ValueReference
-        operator }
+        component_ref = ComponentReference
     }
+}
+
+rule ComponentReference {
+    captures {
+        relative = bool 
+        elements = repeated: ValueReference
+    }
+    operator {
+    persist
+    operator @
+    optional {
+        operator .
+        relative = true
+    }
+    elements = ValueReference
+    optional repeated {
+        operator .
+        elements = ValueReference
+    }
+    operator }
 }
 
 variant ContentsConstraint = EncodedBy {
@@ -1107,6 +1124,38 @@ variant ObjectSetElementGroup = Extensible | ObjectSetElements {
 
 variant ObjectSetElement = DefinedValue | DefinedType | BracedTokenStream | error { "expecting object definition or valuereference" };
 
+rule ValueSet {
+    captures {
+        element_groups = repeated: ValueSetElementGroup
+        extensible = bool
+    }
+    operator {
+    element_groups = ValueSetElementGroup
+    persist
+    optional repeated {
+        operator ,
+        element_groups = ValueSetElementGroup
+    }
+    optional {
+        operator ,
+        operator ...
+        extensible = true
+    }
+    operator }
+}
+
+variant ValueSetElementGroup = Extensible | ValueSetElements {
+    captures {
+        elements = repeated: Value
+    }
+    elements = Value
+    optional repeated {
+        operator |
+        elements = Value
+    }
+    return elements
+} | error { "expecting values or '...'" };
+
 rule NamedBitStringValue {
     captures {
         bits = repeated: ValueReference
@@ -1264,7 +1313,7 @@ rule InformationObjectClass {
     syntax = SyntaxList
 }
 
-variant ObjectClassField = ValueField | ObjectSetField | TypeField | error { "expecting open type, value, or object set field" };
+variant ObjectClassField = ValueField | SetField | TypeField | error { "expecting open type, value, or object set field" };
 
 rule TypeField {
     captures {
@@ -1279,18 +1328,23 @@ rule TypeField {
     }
 }
 
-rule ObjectSetField {
+rule SetField {
     captures {
         name = TypeFieldReference
-        class = UppercaseReference
+        element_type = Type
+        default = optional: BracedTokenStream
         optional = bool
     }
     name = TypeFieldReference
-    class = UppercaseReference
+    element_type = Type
     optional {
         keyword OPTIONAL
         optional = true
-    }   
+    }
+    optional {
+        keyword DEFAULT
+        default = BracedTokenStream
+    }
 }
 
 rule ValueField {
@@ -1362,12 +1416,12 @@ variant SyntaxListElement = OptionalSyntaxElement {
     captures {
         elements = repeated: SyntaxListElement
     }
-    operator [
+    single-operator [
     persist
     repeated {
         elements = SyntaxListElement
     }
-    operator ]
+    single-operator ]
     return elements
 } | RequiredSyntaxElement {
     captures {

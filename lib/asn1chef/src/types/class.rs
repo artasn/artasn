@@ -43,6 +43,7 @@ impl InformationObjectClass {
 #[derive(Debug, Clone)]
 pub enum ObjectClassField {
     Value(ObjectClassFieldValue),
+    ValueSet(ObjectClassFieldValueSet),
     OpenType(ObjectClassFieldType),
     Object(ObjectClassFieldObject),
     ObjectSet(ObjectClassFieldObject),
@@ -66,6 +67,18 @@ pub enum ObjectClassFieldValueOption {
     Unique,
     Optional,
     Default(AstElement<TypedValue>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectClassFieldValueSet {
+    pub field_type: TaggedType,
+    pub option: Option<ObjectClassFieldValueSetOption>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ObjectClassFieldValueSetOption {
+    Optional,
+    Default(AstElement<AstBracedTokenStream>),
 }
 
 #[derive(Debug, Clone)]

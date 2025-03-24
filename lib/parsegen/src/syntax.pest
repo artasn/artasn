@@ -42,6 +42,7 @@ statement = _{
     return_statement | 
     keyword_statement | 
     operator_statement |
+    single_operator_statement |
     repeated_statement | 
     optional_statement |
     not_statement |
@@ -69,6 +70,7 @@ var_statement = { ident ~ "=" ~ statement }
 return_statement = { "return" ~ ident }
 keyword_statement = { "keyword" ~ ident ~ (" " ~ ident)* }
 operator_statement = { "operator" ~ operator }
+single_operator_statement = { "single-operator" ~ single_operator }
 repeated_statement = {
     optional? ~
     "repeated" ~ 
@@ -80,4 +82,5 @@ def_statement = { ident }
 
 ident = @{ (ASCII_ALPHANUMERIC | "-" | "_")+ }
 operator = { (!NEWLINE ~ ANY)+ }
+single_operator = { !NEWLINE ~ ANY }
 optional = { "optional" }

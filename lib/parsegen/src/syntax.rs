@@ -210,7 +210,21 @@ impl SyntaxParser {
                 if let Some(operator) = Operator::from_name(operator) {
                     self.write_indented(&format!(
                         "{};\n",
-                        self.make_ok(&format!("Operator::match_operator(Operator::{}, ParseContext::new(context.tokens))", operator.variant_name())),
+                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Normal, ParseContext::new(context.tokens))", operator.variant_name())),
+                    ));
+                } else {
+                    panic!(
+                        "invalid operator '{}' in rule {}",
+                        operator, self.data.rule_name
+                    )
+                }
+            }
+            Rule::single_operator_statement => {
+                let operator = pair.into_inner().next().unwrap().as_str();
+                if let Some(operator) = Operator::from_name(operator) {
+                    self.write_indented(&format!(
+                        "{};\n",
+                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Single, ParseContext::new(context.tokens))", operator.variant_name())),
                     ));
                 } else {
                     panic!(

@@ -20,10 +20,11 @@ pub mod options;
 #[cfg(test)]
 pub mod test;
 
-struct SourceFile {
+#[derive(Debug)]
+pub(crate) struct SourceFile {
     path: String,
     code: String,
-    program: AstElement<AstProgram>,
+    pub program: AstElement<AstProgram>,
 }
 
 pub type CompileResult<T> = std::result::Result<T, CompileError>;
@@ -102,6 +103,7 @@ lazy_static::lazy_static! {
     ];
 }
 
+#[derive(Debug)]
 pub struct Compiler {
     sources: Vec<SourceFile>,
     pub config: CompilerConfig,
@@ -191,12 +193,15 @@ impl Compiler {
         }
     }
 
-    fn find_source_by_ident<'a>(&'a self, find_ident: &ModuleIdentifier) -> Option<&'a SourceFile> {
+    pub(crate) fn find_source_by_ident<'a>(
+        &'a self,
+        find_ident: &ModuleIdentifier,
+    ) -> Option<(&'a SourceFile, &'a AstElement<AstModule>)> {
         for source in &self.sources {
             for ast_module in &source.program.element.0 {
                 if let Ok(module) = ast::module_ast_to_module_ident(&ast_module.element.header) {
                     if &module == find_ident {
-                        return Some(source);
+                        return Some((source, ast_module));
                     }
                 }
             }
@@ -210,15 +215,17 @@ impl Compiler {
             ( $stage:ident ) => {{
                 let mut errors = Vec::new();
                 for source in &self.sources {
-                    let source_errors = ast::$stage(context, &self.config, &source.program)
+                    let source_errors = ast::$stage(context, self, &source.program)
                         .into_iter()
                         .map(|error| {
                             let error_source = match &error.kind {
-                                ErrorKind::Foreign { source, .. } => self
-                                    .find_source_by_ident(&ModuleIdentifier::from_foreign_string(
-                                        &source,
-                                    ))
-                                    .expect("find_source_by_ident failed"),
+                                ErrorKind::Foreign { source, .. } => {
+                                    self.find_source_by_ident(
+                                        &ModuleIdentifier::from_foreign_string(&source),
+                                    )
+                                    .expect("find_source_by_ident failed")
+                                    .0
+                                }
                                 _ => source,
                             };
                             CompileError {
