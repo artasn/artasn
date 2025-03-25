@@ -1,11 +1,15 @@
 NamedBitTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
 
+-- eValue INTEGER ::= 4
+
 NamedBitString ::= BIT STRING {
     a (0),
     b (1),
     c (2),
     d (3),
-    e (4),
+    -- not yet supported
+    -- e (eValue), 
+    e(4),
     f (7),
     g (8),
     h (100)

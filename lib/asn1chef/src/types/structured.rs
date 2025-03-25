@@ -1,15 +1,16 @@
 use std::fmt::Display;
 
 use crate::{
-    compiler::{
-        ast::types::LazyParsedDefaultValue,
-        parser::{AstElement, Result},
-        Context,
-    },
+    compiler::{ast::types::LazyParsedDefaultValue, parser::AstElement},
     module::QualifiedIdentifier,
 };
 
-use super::{TagType, TaggedType, UntaggedType};
+use super::{TagType, TaggedType};
+
+pub trait ComponentLike: Clone {
+    fn name(&self) -> &AstElement<String>;
+    fn component_type(&self) -> &Box<TaggedType>;
+}
 
 #[derive(Debug, Clone)]
 pub struct StructureComponent {
@@ -19,14 +20,16 @@ pub struct StructureComponent {
     pub default_value: Option<LazyParsedDefaultValue>,
 }
 
-impl StructureComponent {
-    pub fn resolve_possible_types(&self, _context: &Context) -> Result<Vec<TaggedType>> {
-        match &self.component_type.ty {
-            UntaggedType::ObjectClassField(_) => todo!("resolve ObjectClassField possible types"),
-            _ => Ok(vec![*self.component_type.clone()]),
-        }
+impl ComponentLike for StructureComponent {
+    fn name(&self) -> &AstElement<String> {
+        &self.name
+    }
+
+    fn component_type(&self) -> &Box<TaggedType> {
+        &self.component_type
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct ObjectClassFieldReference {
     pub class_type: AstElement<QualifiedIdentifier>,
@@ -67,6 +70,16 @@ pub struct StructureOf {
 pub struct ChoiceAlternative {
     pub name: AstElement<String>,
     pub alternative_type: Box<TaggedType>,
+}
+
+impl ComponentLike for ChoiceAlternative {
+    fn name(&self) -> &AstElement<String> {
+        &self.name
+    }
+
+    fn component_type(&self) -> &Box<TaggedType> {
+        &self.alternative_type
+    }
 }
 
 #[derive(Debug, Clone)]

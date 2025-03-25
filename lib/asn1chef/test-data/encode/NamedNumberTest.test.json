@@ -1,0 +1,32 @@
+{
+    "module": "NamedNumberTest",
+    "tests": [
+        "Encode"
+    ],
+    "values": [
+        {
+            "name": "nni-a",
+            "der": "020100"
+        },
+        {
+            "name": "nni-b",
+            "der": "020101"
+        },
+        {
+            "name": "nni-c",
+            "der": "020102"
+        },
+        {
+            "name": "nni-undefined",
+            "der": "020164"
+        },
+        {
+            "name": "nni-undefined-by-reference",
+            "der": "020165"
+        },
+        {
+            "name": "nni-named-number-duplicate-valuereference",
+            "der": "020101"
+        }
+    ]
+}

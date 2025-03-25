@@ -1,4 +1,4 @@
-use crate::{compiler::parser::*, module::QualifiedIdentifier, types::*};
+use crate::{compiler::parser::*, module::QualifiedIdentifier, types::*, values::TypedValue};
 
 use super::{
     types::{self, Parameter, TypeContext},
@@ -39,6 +39,62 @@ fn parse_constraint(
     })
 }
 
+fn resolve_value_parameter(
+    parameters: &[(&String, &Parameter)],
+    constraint_value: &AstElement<AstValue>,
+) -> Result<Option<AstElement<TypedValue>>> {
+    match &constraint_value.element {
+        AstValue::DefinedValue(defined_value)
+            if defined_value.element.external_module.is_none() =>
+        {
+            let param = parameters.iter().find_map(|(name, param)| {
+                if *name == &defined_value.element.value.element.0 {
+                    Some(param)
+                } else {
+                    None
+                }
+            });
+            if let Some(param) = param { match param {
+                Parameter::Value { value, .. } => return Ok(Some(value.clone())),
+                other => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "expecting value parameter, but found {} parameter",
+                            other.get_name()
+                        )),
+                        loc: constraint_value.loc,
+                    })
+                }
+            } }
+        }
+        _ => (),
+    }
+
+    Ok(None)
+}
+
+fn resolve_named_number(
+    constrained_type: &ResolvedType,
+    constraint_value: &AstElement<AstValue>,
+) -> Result<Option<AstElement<TypedValue>>> {
+    match &constraint_value.element {
+        AstValue::DefinedValue(defined_value)
+            if defined_value.element.external_module.is_none() =>
+        {
+            if let BuiltinType::Integer(integer) = &constrained_type.ty { if let Some(named_values) = &integer.named_values {
+                for named_value in named_values {
+                    if defined_value.element.value.element.0 == named_value.name.element {
+                        return Ok(Some(named_value.value.clone()));
+                    }
+                }
+            } }
+        }
+        _ => (),
+    }
+
+    Ok(None)
+}
+
 fn parse_subtype_element(
     parser: &AstParser<'_>,
     ast_subtype_element: &AstElement<AstSubtypeElement>,
@@ -46,14 +102,30 @@ fn parse_subtype_element(
     parameters: &[(&String, &Parameter)],
     ctx: ConstraintContext,
 ) -> Result<SubtypeElement> {
+    macro_rules! resolve_value {
+        ( $value:expr, $or:tt ) => {{
+            let value = $value;
+            match resolve_named_number(constrained_type, value)? {
+                Some(named_number) => named_number,
+                None => match resolve_value_parameter(parameters, value)? {
+                    Some(param_value) => param_value,
+                    None => $or,
+                },
+            }
+        }};
+    }
+
     Ok(match &ast_subtype_element.element {
         AstSubtypeElement::SingleValueConstraint(single_value) => {
-            SubtypeElement::SingleValue(values::parse_value(
-                parser,
-                ParseValueAssignmentStage::NormalValues,
-                &single_value.element.0,
-                constrained_type,
-            )?)
+            let single_value = resolve_value!(&single_value.element.0, {
+                values::parse_value(
+                    parser,
+                    ParseValueAssignmentStage::NormalValues,
+                    &single_value.element.0,
+                    constrained_type,
+                )?
+            });
+            SubtypeElement::SingleValue(single_value)
         }
         AstSubtypeElement::ValueRangeConstraint(value_range) => {
             match &constrained_type.ty {
@@ -72,33 +144,49 @@ fn parse_subtype_element(
             }
             SubtypeElement::ValueRange(ValueRange {
                 lower: match &value_range.element.lower.element {
-                    AstRangeLowerBound::Value(value) => RangeLowerBound::Eq(values::parse_value(
-                        parser,
-                        ParseValueAssignmentStage::NormalValues,
-                        value,
-                        constrained_type,
-                    )?),
-                    AstRangeLowerBound::GtValue(value) => RangeLowerBound::Gt(values::parse_value(
-                        parser,
-                        ParseValueAssignmentStage::NormalValues,
-                        &value.element.0,
-                        constrained_type,
-                    )?),
+                    AstRangeLowerBound::Value(value) => {
+                        RangeLowerBound::Eq(resolve_value!(value, {
+                            values::parse_value(
+                                parser,
+                                ParseValueAssignmentStage::NormalValues,
+                                value,
+                                constrained_type,
+                            )?
+                        }))
+                    }
+                    AstRangeLowerBound::GtValue(value) => {
+                        RangeLowerBound::Gt(resolve_value!(&value.element.0, {
+                            values::parse_value(
+                                parser,
+                                ParseValueAssignmentStage::NormalValues,
+                                &value.element.0,
+                                constrained_type,
+                            )?
+                        }))
+                    }
                     AstRangeLowerBound::Min(_) => RangeLowerBound::Min,
                 },
                 upper: match &value_range.element.upper.element {
-                    AstRangeUpperBound::Value(value) => RangeUpperBound::Eq(values::parse_value(
-                        parser,
-                        ParseValueAssignmentStage::NormalValues,
-                        value,
-                        constrained_type,
-                    )?),
-                    AstRangeUpperBound::LtValue(value) => RangeUpperBound::Lt(values::parse_value(
-                        parser,
-                        ParseValueAssignmentStage::NormalValues,
-                        &value.element.0,
-                        constrained_type,
-                    )?),
+                    AstRangeUpperBound::Value(value) => {
+                        RangeUpperBound::Eq(resolve_value!(value, {
+                            values::parse_value(
+                                parser,
+                                ParseValueAssignmentStage::NormalValues,
+                                value,
+                                constrained_type,
+                            )?
+                        }))
+                    }
+                    AstRangeUpperBound::LtValue(value) => {
+                        RangeUpperBound::Lt(resolve_value!(&value.element.0, {
+                            values::parse_value(
+                                parser,
+                                ParseValueAssignmentStage::NormalValues,
+                                &value.element.0,
+                                constrained_type,
+                            )?
+                        }))
+                    }
                     AstRangeUpperBound::Max(_) => RangeUpperBound::Max,
                 },
             })
@@ -148,7 +236,7 @@ fn parse_subtype_element(
                             "table constraints can only be applied to information object class field references".to_string()
                         ),
                         loc: table.loc,
-                    })
+                    });
                 }
             }
             SubtypeElement::Table(parse_table_constraint(parser, table, parameters)?)
@@ -493,9 +581,14 @@ fn parse_constrained_type(
                                     == alternative.element.name.element.0
                             })
                             .expect("resolved type missing alternative from ast type");
-                        let component_type = resolved_alternative
-                            .alternative_type
-                            .resolve(parser.context)?;
+                        let component_type = match &resolved_alternative.alternative_type.ty {
+                            UntaggedType::ObjectClassField(_) => {
+                                ResolvedType::universal(TagType::Any)
+                            }
+                            _ => resolved_alternative
+                                .alternative_type
+                                .resolve(parser.context)?,
+                        };
                         alternative_constraints.push((
                             resolved_alternative.name.element.clone(),
                             parse_type_constraint(

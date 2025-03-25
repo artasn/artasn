@@ -44,6 +44,14 @@ impl AstParser<'_> {
                             ImportError::ModuleNotFound(module) =>
                                 format!("module '{}' not found", module.element),
                             ImportError::SymbolNotFound => "symbol not found".to_string(),
+                            ImportError::AmbiguousSymbol(symbols) => format!(
+                                "ambigous symbol defined in modules {}",
+                                symbols
+                                    .into_iter()
+                                    .map(|symbol| symbol.module.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
                         }
                     )),
                     loc: symbol.loc,

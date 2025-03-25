@@ -361,6 +361,10 @@ mod test {
         "../../test-data/encode/NamedBitTest"
     );
     json_test!(
+        test_encode_named_number_integer,
+        "../../test-data/encode/NamedNumberTest"
+    );
+    json_test!(
         test_type_identifier,
         "../../test-data/encode/classes/TypeIdentifierTest"
     );

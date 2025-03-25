@@ -289,8 +289,11 @@ fn parse_builtin_type(
     Ok(UntaggedType::BuiltinType(match &builtin.element {
         AstBuiltinType::Any(_) => BuiltinType::Any,
         AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
-        AstBuiltinType::Integer(_) => BuiltinType::Integer(IntegerType {
-            named_values: None, // TODO
+        AstBuiltinType::Integer(integer) => BuiltinType::Integer(IntegerType {
+            named_values: match &integer.element.named_values {
+                Some(named_values) => Some(parse_named_numbers(parser, named_values)?),
+                None => None,
+            },
         }),
         AstBuiltinType::BitString(bit_string) => BuiltinType::BitString(BitStringType {
             named_bits: match &bit_string.element.named_bits {

@@ -1,0 +1,25 @@
+NamedNumberTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+cValue INTEGER ::= 2
+
+NamedNumberInteger ::= INTEGER {
+    a (0),
+    b (1),
+    c (cValue)
+}
+
+nni-a NamedNumberInteger ::= a
+nni-b NamedNumberInteger ::= b
+nni-c NamedNumberInteger ::= c
+
+nni-undefined NamedNumberInteger ::= 100
+
+undefined-integer INTEGER ::= 101
+nni-undefined-by-reference NamedNumberInteger ::= undefined-integer
+
+-- the named number takes priority over the referenced number;
+-- nni-named-number-duplicate-valuereference should equal 2
+b INTEGER ::= 1001
+nni-named-number-duplicate-valuereference NamedNumberInteger ::= b
+
+END

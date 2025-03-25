@@ -42,11 +42,26 @@ impl Display for BitStringValue {
     }
 }
 
+pub trait ComponentValueLike {
+    fn name(&self) -> &AstElement<String>;
+    fn value(&self) -> &AstElement<TypedValue>;
+}
+
 #[derive(Debug, Clone)]
 pub struct StructureValueComponent {
     pub name: AstElement<String>,
     pub value: AstElement<TypedValue>,
     pub is_default: bool,
+}
+
+impl ComponentValueLike for StructureValueComponent {
+    fn name(&self) -> &AstElement<String> {
+        &self.name
+    }
+
+    fn value(&self) -> &AstElement<TypedValue> {
+        &self.value
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +74,16 @@ pub struct ChoiceValue {
     pub alternative: AstElement<String>,
     pub alternative_type: ResolvedType,
     pub value: Box<AstElement<TypedValue>>,
+}
+
+impl ComponentValueLike for ChoiceValue {
+    fn name(&self) -> &AstElement<String> {
+        &self.alternative
+    }
+
+    fn value(&self) -> &AstElement<TypedValue> {
+        &self.value
+    }
 }
 
 #[derive(Debug, Clone)]

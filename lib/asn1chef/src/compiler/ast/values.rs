@@ -64,17 +64,13 @@ pub fn parse_decimal_value(dec: &AstElement<AstDecimalValue>) -> Result<RealLite
 
 fn parse_object_class_field<'a, 'b>(
     parser: &'a AstParser<'_>,
-    ty_component: &'b StructureComponent,
+    component_type: &'b TaggedType,
     class_type: &AstElement<QualifiedIdentifier>,
     field: &AstElement<String>,
 ) -> Result<(&'a ObjectClassField, Option<&'b TableConstraint>)> {
-    let table_constraint = ty_component
-        .component_type
-        .constraint
-        .as_ref()
-        .and_then(|constraint| {
-            constraint.find(|element| matches!(element, SubtypeElement::Table(_)))
-        });
+    let table_constraint = component_type.constraint.as_ref().and_then(|constraint| {
+        constraint.find(|element| matches!(element, SubtypeElement::Table(_)))
+    });
 
     let class =
         class::resolve_information_object_class(parser, class_type)?.resolve(parser.context)?;
@@ -175,7 +171,7 @@ fn find_component_from_series<'a>(
     parser: &AstParser<'_>,
     structures: (&'a [StructureComponent], &[StructureValueComponent]),
     component_series: &[AstElement<String>],
-) -> Result<(&'a StructureComponent, StructureValueComponent)> {
+) -> Result<(&'a Box<TaggedType>, AstElement<TypedValue>)> {
     if component_series.is_empty() {
         panic!("component_series.len() == 0");
     }
@@ -183,11 +179,10 @@ fn find_component_from_series<'a>(
     let (structure, structure_value) = structures;
 
     let search_component = &component_series[0];
-    println!("--------------------------");
     for (component, component_value) in structure.iter().zip(structure_value) {
-        if component.name.element == search_component.element {
+        if component.name().element == search_component.element {
             let is_search_terminal = component_series.len() == 1;
-            if let UntaggedType::BuiltinType(builtin) = &component.component_type.ty {
+            if let UntaggedType::BuiltinType(builtin) = &component.component_type().ty {
                 if let BuiltinType::Structure(structure) = builtin {
                     if is_search_terminal {
                         return Err(Error {
@@ -199,7 +194,7 @@ fn find_component_from_series<'a>(
                         });
                     } else {
                         let structure_value =
-                            match component_value.value.resolve(parser.context)?.value {
+                            match component_value.value().resolve(parser.context)?.value {
                                 BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
                                 _ => unreachable!(),
                             };
@@ -211,7 +206,7 @@ fn find_component_from_series<'a>(
                     }
                 }
             }
-            let resolved_type = component.component_type.resolve(parser.context)?;
+            let resolved_type = component.component_type().resolve(parser.context)?;
             match &resolved_type.ty {
                 ty @ (BuiltinType::Structure(_)
                 | BuiltinType::StructureOf(_)
@@ -223,7 +218,7 @@ fn find_component_from_series<'a>(
                 }
                 _ => {
                     if is_search_terminal {
-                        return Ok((component, component_value.clone()));
+                        return Ok((component.component_type(), component_value.value().clone()));
                     } else {
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(
@@ -244,41 +239,61 @@ fn find_component_from_series<'a>(
     })
 }
 
-fn parse_object_class_field_reference(
+fn parse_object_class_field_reference<C: ComponentLike>(
     parser: &AstParser<'_>,
-    struct_component: &StructureComponent,
-    val_component: &AstElement<AstStructureValueComponent>,
+    struct_component: &C,
+    value_loc: Loc,
     ocf: &ObjectClassFieldReference,
-    root_container: (&[StructureComponent], &[StructureValueComponent]),
-    container: (&[StructureComponent], &[StructureValueComponent]),
-) -> Result<ResolvedType> {
-    let (field, table_constraint) =
-        parse_object_class_field(parser, struct_component, &ocf.class_type, &ocf.field)?;
+    // If the top-level type is a SEQUENCE or SET type, `root_container` represents the components of that structure.
+    // Otherwise, if the root container is a CHOICE, `root_container` is None.
+    root_container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+    // If the reference-type field is within a SEQUENCE or SET type, `container` represents the components of that structure.
+    // Otherwise, if the container is a CHOICE, `container` is None.
+    container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+) -> Result<(ResolvedType, ObjectClassFieldReferenceKind)> {
+    let (field, table_constraint) = parse_object_class_field(
+        parser,
+        struct_component.component_type(),
+        &ocf.class_type,
+        &ocf.field,
+    )?;
 
-    match (field, &ocf.kind) {
-        (ObjectClassField::Value(value_field), ObjectClassFieldReferenceKind::ValueLike) => {
+    match (field, ocf.kind.clone()) {
+        (ObjectClassField::Value(value_field), kind @ ObjectClassFieldReferenceKind::ValueLike) => {
             let mut value_type = match &value_field.field_type {
                 ObjectClassFieldValueType::TaggedType(tagged_type) => tagged_type.resolve(parser.context)?,
                 ObjectClassFieldValueType::OpenTypeReference(_) => todo!("value fields referencing open type fields are not yet supported"),
                 ObjectClassFieldValueType::ObjectClassFieldReference(_) => todo!("value fields referencing other object class value fields are not (yet?) supported"),
             };
-            value_type.tag = struct_component.component_type.tag.clone().or(value_type.tag);
-            Ok(value_type)
+            value_type.tag = struct_component.component_type().tag.clone().or(value_type.tag);
+            Ok((value_type, kind))
         }
-        (ObjectClassField::OpenType(_), ObjectClassFieldReferenceKind::TypeLike) => {
+        (ObjectClassField::OpenType(_), kind @ ObjectClassFieldReferenceKind::TypeLike) => {
             match table_constraint {
                 Some(table_constraint) => {
                     match &table_constraint.component_ref {
                         Some(ast_component_ref) => {
-                            let structure = if ast_component_ref.is_relative {
-                                container
+                            let set = class::resolve_information_object_set(parser, &table_constraint.set_ref)?;
+
+                            let (component_type, component_value) = if ast_component_ref.is_relative {
+                                match container {
+                                    Some(container) => find_component_from_series(parser, container, &ast_component_ref.component_series)?,
+                                    None => return Err(Error {
+                                        kind: ErrorKind::Ast("relative component references are illegal when the containing type is not SEQUENCE or SET".to_string()),
+                                        loc: ast_component_ref.component_series[0].loc
+                                    })
+                                }
                             } else {
-                                root_container
+                                match root_container {
+                                    Some(root_container) => find_component_from_series(parser, root_container, &ast_component_ref.component_series)?,
+                                    None => return Err(Error {
+                                        kind: ErrorKind::Ast("absolute component references are illegal when the root type is not SEQUENCE or SET".to_string()),
+                                        loc: ast_component_ref.component_series[0].loc
+                                    })
+                                }
                             };
 
-                            let set = class::resolve_information_object_set(parser, &table_constraint.set_ref)?;
-                            let (component_ref, component_value) = find_component_from_series(parser, structure, &ast_component_ref.component_series)?;
-                            let component_ref_type = match &component_ref.component_type.ty {
+                            let component_ref_type = match &component_type.ty {
                                 UntaggedType::ObjectClassField(ocf) => ocf,
                                 _ => {
                                     let terminal_component = ast_component_ref.component_series.last().unwrap();
@@ -292,7 +307,7 @@ fn parse_object_class_field_reference(
                                 }
                             };
 
-                            match find_matching_object_in_set(parser, set, &component_ref_type.field, &component_value.value)? {
+                            match find_matching_object_in_set(parser, set, &component_ref_type.field, &component_value)? {
                                 Some(object) => {
                                     let type_field = object.fields.iter().find_map(|(name, field)| if name == &ocf.field.element {
                                         Some(field)
@@ -303,26 +318,26 @@ fn parse_object_class_field_reference(
                                         match type_field {
                                             ObjectField::Type(tagged_type) => {
                                                 let inner_type = tagged_type.resolve(parser.context)?;
-                                                if let Some(mut outer_tag) = struct_component.component_type.tag.clone() {
+                                                if let Some(mut outer_tag) = struct_component.component_type().tag.clone() {
                                                     match &mut outer_tag.kind {
                                                         TagKind::Explicit(inner_tag) => {
                                                             *inner_tag = inner_type.tag.clone().map(|tag| (tag.class, tag.num));
-                                                            Ok(ResolvedType {
+                                                            Ok((ResolvedType {
                                                                 tag: Some(outer_tag),
                                                                 ty: inner_type.ty,
                                                                 constraint: inner_type.constraint,
-                                                            })
+                                                            }, kind))
                                                         }
                                                         TagKind::Implicit => {
-                                                            Ok(ResolvedType {
-                                                                tag: struct_component.component_type.tag.clone(),
+                                                            Ok((ResolvedType {
+                                                                tag: struct_component.component_type().tag.clone(),
                                                                 ty: inner_type.ty,
                                                                 constraint: inner_type.constraint,
-                                                            })
+                                                            }, kind))
                                                         }
                                                     }
                                                 } else {
-                                                    Ok(inner_type)
+                                                    Ok((inner_type, kind))
                                                 }
                                             }
                                             _ => unreachable!(),
@@ -333,10 +348,10 @@ fn parse_object_class_field_reference(
                                                 "class in set '{}' with field '{}' equal to {} does not define the field '{}'",
                                                 table_constraint.set_ref.element,
                                                 component_ref_type.field.element,
-                                                component_value.value.resolve(parser.context)?.value,
-                                                struct_component.name.element,
+                                                component_value.resolve(parser.context)?.value,
+                                                struct_component.name().element,
                                             )),
-                                            loc: val_component.loc,
+                                            loc: value_loc,
                                         })
                                     }
                                 }
@@ -346,10 +361,10 @@ fn parse_object_class_field_reference(
                                             "there is no class in set '{}' with field '{}' equal to {}, and thus the open type for component '{}' could not be determined",
                                             table_constraint.set_ref.element,
                                             component_ref_type.field.element,
-                                            component_value.value.resolve(parser.context)?.value,
-                                            struct_component.name.element,
+                                            component_value.resolve(parser.context)?.value,
+                                            struct_component.name().element,
                                         )),
-                                        loc: val_component.loc,
+                                        loc: value_loc,
                                     })
                                 }
                             }
@@ -361,16 +376,39 @@ fn parse_object_class_field_reference(
                 }
                 None => {
                     let mut base_type = ResolvedType::universal(TagType::Any);
-                    base_type.tag = struct_component.component_type.tag.clone();
-                    Ok(base_type)
+                    base_type.tag = struct_component.component_type().tag.clone();
+                    Ok((base_type, kind))
                 }
             }
         }
         (ObjectClassField::ValueSet(value_set), ObjectClassFieldReferenceKind::TypeLike) => {
-            Ok(value_set.field_type.resolve(parser.context)?)
+            Ok((value_set.field_type.resolve(parser.context)?, ObjectClassFieldReferenceKind::ValueLike))
         }
         (a, b) => panic!("mismatch between field reference kind and field definition kind; this should never happen\na = {:#?}\nb={:#?}", a, b),
     }
+}
+
+fn validate_class_field_reference_value(
+    value: &AstElement<AstValue>,
+    kind: ObjectClassFieldReferenceKind,
+) -> Result<()> {
+    if kind == ObjectClassFieldReferenceKind::TypeLike {
+        let is_open_type_value = match &value.element {
+            AstValue::BuiltinValue(builtin) => match &builtin.element {
+                AstBuiltinValue::OpenTypeValue(_) => true,
+                _ => false,
+            },
+            _ => false,
+        };
+        if !is_open_type_value {
+            return Err(Error {
+                kind: ErrorKind::Ast("expecting open type value".to_string()),
+                loc: value.loc,
+            });
+        }
+    }
+
+    Ok(())
 }
 
 fn parse_structure_value(
@@ -417,14 +455,17 @@ fn parse_structure_value(
                         if stage != ParseValueAssignmentStage::ClassReferenceValues {
                             return Err(Error::break_parser());
                         }
-                        parse_object_class_field_reference(
+
+                        let (resolved_type, kind) = parse_object_class_field_reference(
                             parser,
                             ty_component,
-                            val_component,
+                            val_component.loc,
                             ocf,
-                            root_container.unwrap_or_else(|| (struct_ty_components, &components)),
-                            (struct_ty_components, &components),
-                        )?
+                            root_container.or_else(|| Some((struct_ty_components, &components))),
+                            Some((struct_ty_components, &components)),
+                        )?;
+                        validate_class_field_reference_value(&val_component.element.value, kind)?;
+                        resolved_type
                     }
                     _ => ty_component.component_type.resolve(parser.context)?,
                 };
@@ -697,12 +738,91 @@ fn resolve_information_object<'a>(
         .resolve(parser.context)
 }
 
+fn parse_choice_value(
+    parser: &AstParser<'_>,
+    stage: ParseValueAssignmentStage,
+    choice: &AstElement<AstChoiceValue>,
+    target_type: &ResolvedType,
+    root_container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+) -> Result<BuiltinValue> {
+    let choice_type = match &target_type.ty {
+        BuiltinType::Choice(ty) => ty,
+        other_type => {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!("CHOICE value cannot be assigned to {}", other_type,)),
+                loc: choice.loc,
+            })
+        }
+    };
+    let alternative = 'block: {
+        for alternative in &choice_type.alternatives {
+            if alternative.name.element == choice.element.alternative.element.0 {
+                break 'block alternative;
+            }
+        }
+
+        return Err(Error {
+            kind: ErrorKind::Ast(format!(
+                "CHOICE type does not define an alternative named '{}'",
+                choice.element.alternative.element.0,
+            )),
+            loc: choice.loc,
+        });
+    };
+
+    let resolved_alternative_ty = match &alternative.alternative_type.ty {
+        UntaggedType::ObjectClassField(ocf) => {
+            if stage != ParseValueAssignmentStage::ClassReferenceValues {
+                return Err(Error::break_parser());
+            }
+            let (resolved_type, kind) = parse_object_class_field_reference(
+                parser,
+                alternative,
+                choice.loc,
+                ocf,
+                root_container,
+                None,
+            )?;
+            validate_class_field_reference_value(&choice.element.value, kind)?;
+            resolved_type
+        }
+        _ => alternative.alternative_type.resolve(parser.context)?,
+    };
+    let alternative_value = parse_value(
+        parser,
+        stage,
+        &choice.element.value,
+        &resolved_alternative_ty,
+    )?;
+
+    Ok(BuiltinValue::Choice(ChoiceValue {
+        alternative: choice
+            .element
+            .alternative
+            .as_ref()
+            .map(|name| name.0.clone()),
+        alternative_type: resolved_alternative_ty,
+        value: Box::new(alternative_value),
+    }))
+}
+
 pub fn parse_value(
     parser: &AstParser<'_>,
     stage: ParseValueAssignmentStage,
     value: &AstElement<AstValue>,
     target_type: &ResolvedType,
 ) -> Result<AstElement<TypedValue>> {
+    macro_rules! return_reference {
+        ( $valref:expr ) => {
+            return Ok(resolve_defined_value(parser, $valref)?
+                .with_loc(value.loc)
+                .map(|valref| TypedValue {
+                    resolved_type: target_type.clone(),
+                    value: ValueReference::Reference(valref),
+                }))
+        };
+    }
+
     let builtin = match &value.element {
         AstValue::BuiltinValue(builtin) => match &builtin.element {
             AstBuiltinValue::Null(_) => BuiltinValue::Null,
@@ -831,50 +951,7 @@ pub fn parse_value(
                 BuiltinValue::RealLiteral(parse_decimal_value(dec)?)
             }
             AstBuiltinValue::ChoiceValue(choice) => {
-                let alternative_ty = match &target_type.ty {
-                    BuiltinType::Choice(ty) => 'block: {
-                        for alternative in &ty.alternatives {
-                            if alternative.name.element == choice.element.alternative.element.0 {
-                                break 'block &alternative.alternative_type;
-                            }
-                        }
-
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "CHOICE type does not define an alternative named '{}'",
-                                choice.element.alternative.element.0,
-                            )),
-                            loc: builtin.loc,
-                        });
-                    }
-                    other_type => {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "CHOICE value cannot be assigned to {}",
-                                other_type,
-                            )),
-                            loc: builtin.loc,
-                        })
-                    }
-                };
-
-                let resolved_alternative_ty = alternative_ty.resolve(parser.context)?;
-                let alternative_value = parse_value(
-                    parser,
-                    stage,
-                    &choice.element.value,
-                    &resolved_alternative_ty,
-                )?;
-
-                BuiltinValue::Choice(ChoiceValue {
-                    alternative: choice
-                        .element
-                        .alternative
-                        .as_ref()
-                        .map(|name| name.0.clone()),
-                    alternative_type: resolved_alternative_ty,
-                    value: Box::new(alternative_value),
-                })
+                parse_choice_value(parser, stage, choice, target_type, None)?
             }
             AstBuiltinValue::SpecialRealValue(special) => {
                 return Ok(AstElement::new(
@@ -1062,21 +1139,20 @@ pub fn parse_value(
                     }
                 }
 
-                return Ok(resolve_defined_value(parser, valref)?
-                    .with_loc(value.loc)
-                    .map(|valref| TypedValue {
-                        resolved_type: target_type.clone(),
-                        value: ValueReference::Reference(valref),
-                    }));
+                return_reference!(valref);
             }
-            _ => {
-                return Ok(resolve_defined_value(parser, valref)?
-                    .with_loc(value.loc)
-                    .map(|valref| TypedValue {
-                        resolved_type: target_type.clone(),
-                        value: ValueReference::Reference(valref),
-                    }))
+            BuiltinType::Integer(integer)
+                if valref.element.external_module.is_none() && integer.named_values.is_some() =>
+            {
+                for named_value in integer.named_values.as_ref().unwrap() {
+                    if named_value.name.element == valref.element.value.element.0 {
+                        return Ok(named_value.value.clone());
+                    }
+                }
+
+                return_reference!(valref);
             }
+            _ => return_reference!(valref),
         },
     };
     Ok(AstElement::new(

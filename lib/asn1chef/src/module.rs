@@ -152,6 +152,7 @@ pub struct ImportsFromModule {
 pub enum ImportError {
     SymbolNotFound,
     ModuleNotFound(AstElement<ModuleIdentifier>),
+    AmbiguousSymbol(Vec<QualifiedIdentifier>),
 }
 
 impl ModuleHeader {
@@ -174,6 +175,7 @@ impl ModuleHeader {
         context: &Context,
         symbol: &String,
     ) -> Result<QualifiedIdentifier, ImportError> {
+        let mut resolutions = Vec::with_capacity(1);
         for imports_from_module in &self.imports {
             for import in &imports_from_module.imports {
                 if &import.element == symbol {
@@ -200,7 +202,7 @@ impl ModuleHeader {
                                 //   IMPORTS Type from ModuleC
                                 // ModuleC:
                                 //   Type ::= ...
-                                return module.resolve_import(context, symbol);
+                                resolutions.push(module.resolve_import(context, symbol)?);
                             }
                         }
                         None => {
@@ -213,7 +215,13 @@ impl ModuleHeader {
             }
         }
 
-        Err(ImportError::SymbolNotFound)
+        if resolutions.is_empty() {
+            Err(ImportError::SymbolNotFound)
+        } else if resolutions.len() == 1 {
+            Ok(resolutions.into_iter().next().unwrap())
+        } else {
+            Err(ImportError::AmbiguousSymbol(resolutions))
+        }
     }
 
     /// Returns true if this module exports the provided symbol.
