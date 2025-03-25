@@ -1,13 +1,12 @@
+use std::collections::HashMap;
+
 use parser::{PestSyntaxParser, Rule};
 use pest::{
     iterators::{Pair, Pairs},
     Parser,
 };
 
-use crate::{
-    code_builder::*,
-    tokenizer::{Keyword, Operator},
-};
+use crate::code_builder::*;
 
 pub mod parser {
     use pest_derive::Parser;
@@ -33,6 +32,8 @@ struct SyntaxParser {
     block_stack: Vec<BlockType>,
     persist: bool,
     not: bool,
+    keywords: HashMap<String, String>,
+    operators: HashMap<String, String>,
 }
 
 impl SyntaxParser {
@@ -196,10 +197,10 @@ impl SyntaxParser {
             }
             Rule::keyword_statement => {
                 let keyword = pair.into_inner().as_str();
-                if let Some(keyword) = Keyword::from_name(keyword) {
+                if let Some(keyword_name) = self.keywords.get(keyword) {
                     self.write_indented(&format!(
                         "{};\n",
-                        self.make_ok(&format!("Keyword::match_keyword(Keyword::{}, ParseContext::new(context.tokens))", keyword.variant_name())),
+                        self.make_ok(&format!("Keyword::match_keyword(Keyword::{}, ParseContext::new(context.tokens))", keyword_name)),
                     ));
                 } else {
                     panic!(
@@ -210,10 +211,10 @@ impl SyntaxParser {
             }
             Rule::operator_statement => {
                 let operator = pair.into_inner().next().unwrap().as_str();
-                if let Some(operator) = Operator::from_name(operator) {
+                if let Some(operator_name) = self.operators.get(operator) {
                     self.write_indented(&format!(
                         "{};\n",
-                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Normal, ParseContext::new(context.tokens))", operator.variant_name())),
+                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Normal, ParseContext::new(context.tokens))", operator_name)),
                     ));
                 } else {
                     panic!(
@@ -224,10 +225,10 @@ impl SyntaxParser {
             }
             Rule::single_operator_statement => {
                 let operator = pair.into_inner().next().unwrap().as_str();
-                if let Some(operator) = Operator::from_name(operator) {
+                if let Some(operator_name) = self.operators.get(operator) {
                     self.write_indented(&format!(
                         "{};\n",
-                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Single, ParseContext::new(context.tokens))", operator.variant_name())),
+                        self.make_ok(&format!("Operator::match_operator(Operator::{}, OperatorMode::Single, ParseContext::new(context.tokens))", operator_name)),
                     ));
                 } else {
                     panic!(
@@ -326,7 +327,12 @@ pub struct RuleData {
     pub return_variable: Option<String>,
 }
 
-fn parse_rule(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) -> RuleData {
+fn parse_rule(
+    cb: &mut CodeBuilder,
+    mut pairs: Pairs<Rule>,
+    keywords: &HashMap<String, String>,
+    operators: &HashMap<String, String>,
+) -> RuleData {
     let name = pairs.next().unwrap().as_str();
     let data = {
         let mut parser = SyntaxParser {
@@ -339,6 +345,8 @@ fn parse_rule(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) -> RuleData {
             block_stack: Vec::with_capacity(4),
             persist: false,
             not: false,
+            keywords: keywords.clone(),
+            operators: operators.clone(),
         };
         parser.block_stack.push(BlockType::General);
         for pair in pairs {
@@ -351,13 +359,18 @@ fn parse_rule(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) -> RuleData {
     data
 }
 
-fn parse_variant(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) {
+fn parse_variant(
+    cb: &mut CodeBuilder,
+    mut pairs: Pairs<Rule>,
+    keywords: &HashMap<String, String>,
+    operators: &HashMap<String, String>,
+) {
     let mut variants: Vec<String> = Vec::new();
     let name = format!("Ast{}", pairs.next().unwrap().as_str());
     let mut error_message = None;
     for pair in pairs {
         let rule_name = match pair.as_rule() {
-            Rule::named_variant => parse_rule(cb, pair.into_inner()).rule_name,
+            Rule::named_variant => parse_rule(cb, pair.into_inner(), keywords, operators).rule_name,
             Rule::ident => format!("Ast{}", pair.as_str()),
             Rule::error_definition => {
                 error_message = Some(pair.into_inner().next().unwrap().as_str());
@@ -375,6 +388,8 @@ fn parse_variant(cb: &mut CodeBuilder, mut pairs: Pairs<Rule>) {
 pub fn parse_syntax(
     syntax_path: &str,
     syntax_defs: &str,
+    keywords: &HashMap<String, String>,
+    operators: &HashMap<String, String>,
 ) -> Result<String, pest::error::Error<Rule>> {
     let parser = PestSyntaxParser::parse(Rule::syntax, syntax_defs);
     match parser {
@@ -383,10 +398,10 @@ pub fn parse_syntax(
             for pair in pairs {
                 match pair.as_rule() {
                     Rule::rule_definition => {
-                        parse_rule(&mut cb, pair.into_inner());
+                        parse_rule(&mut cb, pair.into_inner(), keywords, operators);
                     }
                     Rule::variant_definition => {
-                        parse_variant(&mut cb, pair.into_inner());
+                        parse_variant(&mut cb, pair.into_inner(), keywords, operators);
                     }
                     Rule::extern_definition | Rule::EOI => (),
                     x => unreachable!("{:?}", x),

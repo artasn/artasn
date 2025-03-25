@@ -12,6 +12,7 @@ use crate::{
 use super::{
     class,
     constraints::{self, apply_pending_constraint},
+    extra::AstBracedTokenStream,
     object_id, types, AstParser,
 };
 

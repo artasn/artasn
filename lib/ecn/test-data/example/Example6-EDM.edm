@@ -1,0 +1,84 @@
+Example6-EDM {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module6(19)}
+ENCODING-DEFINITIONS ::=
+BEGIN
+
+EXPORTS Example6Encodings;
+
+IMPORTS #My-Special-1, #My-Special-2, #My-Special-3
+	FROM Example6-ASN1-Module
+	{joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module6(18)};
+
+Example6Encodings #ENCODINGS ::= {
+	myintencoding1 |
+	myintencoding2 |
+	myintencoding3
+	}
+
+myintencoding1 #My-Special-1 ::=
+	{ USE  #BITS
+	--	ECN Huffman
+	--	RANGE (1..10)
+	--	1 IS 20%
+	--	1 IS 25%
+	--	0 IS 15%
+	--	(3..6) IS 10%
+	--	Rest IS 2%
+	--	End Definition
+	--	Mappings produced by "ECN Public Domain Software for Huffman 
+	--	encodings, version 1"
+	MAPPING TO BITS {
+			-1 TO '11'B,
+			0 ..  1 TO '01'B .. '10'B,
+			2 TO '0000001'B ,
+			3 ..  5 TO '0001'B .. '0011'B,
+			6 TO '00001'B,
+			7 ..  8 TO '0000010'B .. '0000011'B,
+			9 ..  10 TO '00000000'B .. '00000001'B
+	}
+	WITH  myselfdelimbitsencoding }
+
+myintencoding2 #My-Special-2 ::=
+	{ USE  #BITS
+	--	 ECN Huffman
+	--	 RANGE (10..10)
+	--	10 IS 20%
+	--	 1 IS 25%
+	--	 5 IS 15%
+	--	 (7..10) is 10%
+	--	 End Definition
+	--	 Mappings produced by "ECN Public Domain Software for Huffman 
+	--	 encodings, version 1"
+	MAPPING TO BITS {
+			-10 TO '11'B ,
+			1 TO '10'B ,
+			5 TO '01'B ,
+	 		7 ..  10 TO '0000'B .. '0011'B
+	}
+	WITH myselfdelimbitsencoding }
+
+myintencoding3 #My-Special-3 ::=
+	{ USE  #BITS
+	--	 ECN Huffman
+	--	 RANGE  (0..1000)
+	--	 (0..63) IS 100%
+	--	 REST IS 0%
+	--	 End Definition
+	--	 Mappings produced by "ECN Public Domain Software for Huffman 
+	--	 encodings"
+	MAPPING TO BITS {
+		0 ..  62 TO '000001'B .. '111111'B,
+		63 TO '0000001'B ,
+		64 ..  150 TO '0000000110101001'B .. '0000000111111111'B,
+		151 ..  1000 TO '00000000000000000'B .. '00000001101010001'B
+	}
+	WITH myselfdelimbitsencoding }
+
+myselfdelimbitsencoding #BITS ::= {
+	REPETITION-ENCODING {
+		REPETITION-SPACE }}
+
+
+END
+
+
+

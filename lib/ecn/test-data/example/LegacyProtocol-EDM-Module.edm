@@ -1,0 +1,76 @@
+LegacyProtocol-EDM-Module 
+	{joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module4(13)}
+ENCODING-DEFINITIONS ::=
+BEGIN
+EXPORTS LegacyProtocolEncodings;
+IMPORTS #B, #LegacyProtocolMessages, #Message1
+        FROM	LegacyProtocol-ASN1-Module
+        { joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module4(11) };
+
+LegacyProtocolEncodings #ENCODINGS ::= {
+	legacyProtocolMessagesEncoding 	|
+	message1Encoding }
+
+legacyProtocolMessagesEncoding #LegacyProtocolMessages ::= {
+	ENCODE STRUCTURE {
+        	message-id {
+        	ENCODING {
+        		ENCODING-SPACE
+        		SIZE 8}},
+		messages {
+        		ENCODE STRUCTURE {
+        			STRUCTURED WITH {
+				ALTERNATIVE
+					DETERMINED BY field-to-be-used
+					USING message-id}}
+        	WITH PER-BASIC-UNALIGNED}}
+	WITH PER-BASIC-UNALIGNED}
+
+message1Encoding #Message1 ::= {
+	ENCODE STRUCTURE {
+		b	b-encoding
+			OPTIONAL-ENCODING {
+				PRESENCE
+				DETERMINED BY field-to-be-used
+				USING b-flag},
+        	c	octet-aligned-seq-of-with-ext-determinant{< c-len >},
+		d	octet-aligned-seq-of-until-end-of-container 
+        		OPTIONAL-ENCODING USE-SET}
+		WITH PER-BASIC-UNALIGNED}
+
+b-encoding #B ::= {
+	ENCODE STRUCTURE {
+        	-- Components
+        	b3 {
+        		ENCODING {
+        		ALIGNED TO NEXT nibble 
+        		ENCODING-SPACE
+        			SIZE 2	
+        			MULTIPLE OF bit }}
+        	-- Structure
+        	STRUCTURED WITH {
+        		ALIGNED TO NEXT octet 
+        	ENCODING-SPACE 
+        		SIZE self-delimiting-values
+        	MULTIPLE OF bit }}
+	-- The rest 
+	WITH PER-BASIC-UNALIGNED}
+
+octet-aligned-seq-of-with-ext-determinant{< REFERENCE : len >} #REPETITION ::= {
+	REPETITION-ENCODING {
+		ALIGNED TO NEXT octet
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		MULTIPLE OF repetitions
+		DETERMINED BY field-to-be-used
+		USING len}}
+
+octet-aligned-seq-of-until-end-of-container #REPETITION ::= {
+	REPETITION-ENCODING {
+		ALIGNED TO NEXT octet
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+		USING OUTER}}
+
+END

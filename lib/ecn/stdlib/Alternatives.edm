@@ -1,0 +1,57 @@
+-- Per X.692 clause 23.1.1
+
+#ALTERNATIVES ::= ENCODING-CLASS { 
+    -- Structure-only replacement specification (see 22.1) 
+    &#Replacement-structure                                         OPTIONAL, 
+    &replacement-structure-encoding-object  &#Replacement-structure OPTIONAL, 
+    
+    -- Pre-alignment and padding specification (see 22.2) 
+    &encoding-space-pre-alignment-unit  Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+    &encoding-space-pre-padding         Padding DEFAULT zero, 
+    &encoding-space-pre-pattern         Non-Null-Pattern (ALL EXCEPT different:any) 
+                                        DEFAULT bits:'0'B, 
+    
+    -- Start pointer specification (see 22.3) 
+    &start-pointer                      REFERENCE OPTIONAL, 
+    &start-pointer-unit                 Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+    &Start-pointer-encoder-transforms   #TRANSFORM ORDERED OPTIONAL, 
+    
+    -- Alternative determination (see 22.6) 
+    &alternative-determination          AlternativeDetermination 
+                                        DEFAULT field-to-be-set, 
+    &alternative-reference              REFERENCE OPTIONAL, 
+    &Encoder-transforms                 #TRANSFORM ORDERED OPTIONAL, 
+    &Decoder-transforms                 #TRANSFORM ORDERED OPTIONAL, 
+    &handle-id                          PrintableString 
+                                        DEFAULT "default-handle", 
+    &alternative-ordering               ENUMERATED {textual, tag} 
+                                        DEFAULT textual, 
+    
+    -- Identification handle specification (see 22.9) 
+    &exhibited-handle                   PrintableString DEFAULT "default-handle", 
+    &Handle-positions                   INTEGER (0..MAX) OPTIONAL, 
+    &handle-value-set                   HandleValueSet DEFAULT tag:any 
+} WITH SYNTAX { 
+    [REPLACE 
+        [STRUCTURE] 
+        WITH &#Replacement-structure 
+            [ENCODED BY &replacement-structure-encoding-object]]  
+    [ALIGNED TO 
+        [NEXT]  
+        [ANY] 
+            &encoding-space-pre-alignment-unit 
+            [PADDING &encoding-space-pre-padding 
+                [PATTERN &encoding-space-pre-pattern]]] 
+    [START-POINTER   &start-pointer 
+        [MULTIPLE OF &start-pointer-unit] 
+        [ENCODER-TRANSFORMS    &Start-pointer-encoder-transforms]] 
+    ALTERNATIVE 
+        [DETERMINED BY &alternative-determination 
+            [HANDLE &handle-id]] 
+        [USING &alternative-reference 
+            [ORDER &alternative-ordering] 
+            [ENCODER-TRANSFORMS &Encoder-transforms] 
+            [DECODER-TRANSFORMS &Decoder-transforms]] 
+    [EXHIBITS HANDLE &exhibited-handle AT &Handle-positions 
+        [AS &handle-value-set]] 
+}

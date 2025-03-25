@@ -1,0 +1,52 @@
+-- Per X.692 clause 23.2.1
+
+#BITS ::= ENCODING-CLASS { 
+ 
+-- Pre-alignment and padding specification (see 22.2) 
+&encoding-space-pre-alignment-unit Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&encoding-space-pre-padding   Padding DEFAULT zero, 
+&encoding-space-pre-pattern   Non-Null-Pattern (ALL EXCEPT different:any) 
+      DEFAULT bits:'0'B, 
+ 
+-- Start pointer specification (see 22.3) 
+&start-pointer    REFERENCE  OPTIONAL, 
+&start-pointer-unit   Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&Start-pointer-encoder-transforms  #TRANSFORM ORDERED OPTIONAL, 
+ 
+-- Bits value encoding 
+&value-reversal     BOOLEAN DEFAULT FALSE, 
+&Transforms     #TRANSFORM ORDERED OPTIONAL, 
+&Bits-repetition-encodings  #CONDITIONAL-REPETITION ORDERED OPTIONAL, 
+&bits-repetition-encoding  #CONDITIONAL-REPETITION OPTIONAL, 
+ 
+-- Identification handle specification (see 22.9) 
+&exhibited-handle    PrintableString DEFAULT "default-handle", 
+&Handle-positions    INTEGER (0..MAX) OPTIONAL, 
+&handle-value-set    HandleValueSet DEFAULT tag:any, 
+ 
+-- Contained type encoding specification (see 22.11) 
+&Primary-encoding-object-set  #ENCODINGS OPTIONAL, 
+&Secondary-encoding-object-set #ENCODINGS OPTIONAL, 
+&over-ride-encoded-by    BOOLEAN DEFAULT FALSE 
+ 
+} WITH SYNTAX { 
+ 
+[ALIGNED TO 
+ [NEXT]  
+ [ANY] 
+  &encoding-space-pre-alignment-unit 
+  [PADDING &encoding-space-pre-padding 
+   [PATTERN &encoding-space-pre-pattern]]] 
+[START-POINTER   &start-pointer 
+ [MULTIPLE OF &start-pointer-unit] 
+ [ENCODER-TRANSFORMS    &Start-pointer-encoder-transforms]] 
+[VALUE-REVERSAL    &value-reversal] 
+[TRANSFORMS    &Transforms] 
+[REPETITION-ENCODINGS    &Bits-repetition-encodings] 
+[REPETITION-ENCODING     &bits-repetition-encoding] 
+[EXHIBITS HANDLE &exhibited-handle AT &Handle-positions 
+ [AS &handle-value-set]] 
+[CONTENTS-ENCODING &Primary-encoding-object-set 
+                [COMPLETED BY &Secondary-encoding-object-set] 
+                [OVERRIDE &over-ride-encoded-by]] 
+}

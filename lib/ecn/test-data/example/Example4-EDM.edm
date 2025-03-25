@@ -1,0 +1,65 @@
+Example4-EDM {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module4(16)}
+ENCODING-DEFINITIONS ::=
+BEGIN
+
+EXPORTS Example4Encodings;
+
+IMPORTS	#ProfileIndication,#ProfileIndication2
+	FROM Example4-ASN1-Module
+	{joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module4(15)};
+
+Example4Encodings #ENCODINGS ::= {
+	profileIndicationEncoding |
+	profileIndication2Encoding
+	}
+
+more-bit-encoding {< REFERENCE:more-bit >} #SEQUENCE-OF ::= {
+	REPETITION-ENCODING {
+        	REPETITION-SPACE
+        		SIZE variable-with-determinant
+        	DETERMINED BY flag-to-be-set
+        	USING more-bit
+        	ENCODER-TRANSFORMS
+        	{ { BOOL-TO-BOOL AS logical:not } } } }
+
+profileIndicationEncoding #ProfileIndication ::= {
+	ENCODE STRUCTURE {
+        STRUCTURED WITH more-bit-encoding {< more-bit >} }
+	WITH PER-BASIC-UNALIGNED }
+
+#ProfileIndicationStruct ::= #SEQUENCE-OF {
+	#SEQUENCE {
+        	more-bit-field		#BOOLEAN,
+        	reserved		#PAD,
+        	protocol-Profile-ID    	#INTEGER (0..31) } }
+
+pad-encoding #PAD ::= {
+	ENCODING-SPACE SIZE 2
+	PAD-PATTERN bits:'00'B }
+
+profileIndicationStructEncoding #ProfileIndicationStruct ::= {
+	ENCODE STRUCTURE {
+        	STRUCTURED WITH more-bit-encoding {< more-bit-field >} }
+	WITH {pad-encoding} COMPLETED BY PER-BASIC-UNALIGNED }
+
+profileIndication2Encoding #ProfileIndication2 ::= {
+	USE #ProfileIndicationStruct
+        MAPPING FIELDS
+	WITH profileIndicationStructEncoding }
+
+#SequenceOfStruct {< #Component >} ::= #SEQUENCE {
+        more-bit-field		#BOOLEAN,
+        reserved		#PAD,
+        sequence-of-component	#Component }
+
+sequence-of-encoding #SEQUENCE-OF ::= {
+	REPETITION-ENCODING {
+        	REPLACE COMPONENT WITH #SequenceOfStruct
+		REPETITION-SPACE
+        		SIZE variable-with-determinant
+        		DETERMINED BY flag-to-be-set
+        		USING more-bit-field
+        	ENCODER-TRANSFORMS
+        	{ { BOOL-TO-BOOL AS logical:not } } } }
+
+END

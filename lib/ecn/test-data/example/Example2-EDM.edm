@@ -1,0 +1,261 @@
+Example2-EDM {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module2(6)}
+ENCODING-DEFINITIONS ::=
+        BEGIN
+EXPORTS Example2Encodings;
+IMPORTS #NormallySmallValues1, #NormallySmallValues2, 
+	#SparseEvenlyDistributedValueSet,
+        #SparseUnevenlyDistributedValueSet, #ConditionalPresenceOnValue,
+        #ConditionalPresenceOnExternalCondition,
+        #EnclosingStructureForList, #EqualLengthLists, 
+	#EnclosingStructureForChoice,
+        #Version1Message, #List1, #List2, #VariableLengthList,
+	#UnevenChoiceProbability
+        FROM Example2-ASN1-Module
+        {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module2(5)};
+
+Example2Encodings #ENCODINGS ::= {
+	normallySmallValuesEncoding-1 |
+	normallySmallValuesEncoding-2 |
+	sparseEvenlyDistributedValueSetEncoding |
+	sparseUnevenlyDistributedValueSetEncoding |
+	conditionalPresenceOnValueEncoding |
+	conditionalPresenceOnExternalConditionEncoding |
+	enclosingStructureForListEncoding |
+	equalLengthListsEncoding |
+	enclosingStructureForChoiceEncoding |
+	version1MessageEncoding }
+
+normallySmallValuesEncoding-1 #NormallySmallValues1 ::= {
+	USE 	#NormallySmallValuesStruct
+	MAPPING DISTRIBUTION {
+		0..63		TO small,
+		REMAINDER 	TO large }
+	WITH PER-BASIC-UNALIGNED}
+
+#NormallySmallValuesStruct ::= #CHOICE {
+	small	#INT (0..63),
+	large	#INT (64..1000)}
+
+normallySmallValuesEncoding-2 #NormallySmallValues2 ::= {
+	USE 	#NormallySmallValuesStruct2
+	MAPPING ORDERED VALUES
+	WITH 	NormallySmallValuesTag-encoding-plus-PER}
+
+	normallySmallValuesTag-encoding	#TAG ::= {
+	ENCODING-SPACE
+        	SIZE 1}
+
+NormallySmallValuesTag-encoding-plus-PER #ENCODINGS ::= 
+	{normallySmallValuesTag-encoding}
+	COMPLETED BY PER-BASIC-UNALIGNED
+
+#NormallySmallValuesStruct2 ::= #CHOICE {
+	small	[#TAG(0)]	#INT (0..63),
+	large	[#TAG(1)]	#INT (0..MAX) }
+
+sparseEvenlyDistributedValueSetEncoding #SparseEvenlyDistributedValueSet ::= {
+	USE 	#IntFrom0To7
+	MAPPING ORDERED VALUES
+	WITH PER-BASIC-UNALIGNED}
+
+#IntFrom0To7 ::= #INT (0..7)
+
+sparseEvenlyDistributedValueSetEncoding-2 #SparseEvenlyDistributedValueSet ::= {
+	USE 	#IntFrom0To7
+	MAPPING TRANSFORMS {{INT-TO-INT divide: 2}, {INT-TO-INT decrement:1}}
+	WITH PER-BASIC-UNALIGNED}
+
+-- Out of order to illustrate that order does not matter in the constraint
+sparseUnevenlyDistributedValueSetEncoding 
+	#SparseUnevenlyDistributedValueSet ::= {
+	USE 	#IntFrom0To5
+	MAPPING ORDERED VALUES
+	WITH PER-BASIC-UNALIGNED}
+
+#IntFrom0To5 ::= #INT (0..5)
+
+conditionalPresenceOnValueEncoding #ConditionalPresenceOnValue ::= {
+	ENCODE STRUCTURE {
+		c	USE-SET OPTIONAL-ENCODING is-c-present{<  a  >},
+		d 	USE-SET OPTIONAL-ENCODING is-d-present{<  a  >}}
+	WITH PER-BASIC-UNALIGNED}
+
+is-c-present {<  REFERENCE : a  >} #OPTIONAL ::= { 
+	PRESENCE
+		DETERMINED BY field-to-be-used
+		USING a
+		DECODER-TRANSFORMS {{INT-TO-BOOL  TRUE-IS {0}}}}
+
+is-d-present {< REFERENCE : a >} #OPTIONAL ::= {
+	PRESENCE
+	DETERMINED BY field-to-be-used
+	USING a
+		DECODER-TRANSFORMS {{INT-TO-BOOL TRUE-IS {0 | 2 | 3 | 4}}}}
+
+conditionalPresenceOnExternalConditionEncoding 
+	#ConditionalPresenceOnExternalCondition ::= {
+	ENCODE STRUCTURE {
+		a	USE-SET OPTIONAL-ENCODING is-a-present}
+	WITH PER-BASIC-UNALIGNED}
+
+is-a-present #OPTIONAL ::= 
+	NON-ECN-BEGIN 
+	{joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) user-notation(7)}
+	extern C;
+	extern channel;
+	/* a is present only if channel is equal to some value C */
+	int is_a_present() {
+		if(channel == C) return 1;
+		else return 0; }
+	NON-ECN-END
+
+enclosingStructureForListEncoding #EnclosingStructureForList ::= {
+	USE	#EnclosingStructureForListStruct
+        MAPPING FIELDS
+	WITH {
+		ENCODE STRUCTURE {
+		aux-length	list-lengthEncoding,
+		list  {
+			ENCODE STRUCTURE {
+				STRUCTURED WITH {
+        		REPETITION-ENCODING {
+        			REPETITION-SPACE
+				SIZE variable-with-determinant
+				MULTIPLE OF repetitions
+        			DETERMINED BY field-to-be-set
+        			USING aux-length}}}
+        		WITH PER-BASIC-UNALIGNED }}
+        	WITH PER-BASIC-UNALIGNED}}
+
+-- First mapping: use of an encoding structure with an explicit length 
+-- determinant.
+
+list-lengthEncoding #AuxVariableListLength ::= {
+	USE	#AuxVariableListLengthStruct		-- See D.2.8.4.
+	MAPPING ORDERED VALUES
+	WITH PER-BASIC-UNALIGNED} 
+
+-- Second mapping: list length is encoded as a choice between a short form 
+-- "normally" and  a long form "sometimes".
+
+#EnclosingStructureForListStruct ::= #CONCATENATION {
+	aux-length	#AuxVariableListLength,
+	list		#VariableLengthList}
+
+#AuxVariableListLength ::= #INT (0..1023)
+
+#AuxVariableListLengthStruct ::= #CHOICE {
+	normally	#INT (0..31),
+	sometimes	#INT (32..1023)}
+
+equalLengthListsEncoding #EqualLengthLists ::= {
+	USE	#EqualLengthListsStruct
+	MAPPING FIELDS
+	WITH {
+		ENCODE STRUCTURE {
+			list1	list1Encoding{< aux-length >},
+			list2	list2Encoding{< aux-length >}}
+        	WITH PER-BASIC-UNALIGNED}}
+
+list1Encoding {< REFERENCE : length >} #List1 ::= {
+	ENCODE STRUCTURE { USE-SET
+		STRUCTURED WITH list-with-determinantEncoding {< length >}}
+	WITH PER-BASIC-UNALIGNED}
+
+list2Encoding {< REFERENCE : length >} #List2 ::= {
+	ENCODE STRUCTURE { USE-SET
+		STRUCTURED WITH list-with-determinantEncoding {< length >}}
+	WITH PER-BASIC-UNALIGNED}
+
+list-with-determinantEncoding {< REFERENCE : length-determinant >} 
+	#REPETITION ::= {
+	REPETITION-ENCODING {
+		REPETITION-SPACE
+			SIZE variable-with-determinant
+			MULTIPLE OF repetitions
+		DETERMINED BY field-to-be-set
+		USING length-determinant}}
+
+#EqualLengthListsStruct ::= #CONCATENATION {
+	aux-length	#AuxListLength,
+	list1		#List1,
+	list2		#List2}
+
+#AuxListLength ::= #INT (0..1023)
+
+#EnclosingStructureForChoiceStruct ::= #CONCATENATION {
+	aux-selector	#AuxSelector,
+	choice		#UnevenChoiceProbability }
+
+-- Explicit auxiliary alternative determinant for "choice".
+#AuxSelector ::= #INT (0..7)
+
+enclosingStructureForChoiceEncoding #EnclosingStructureForChoice ::= {
+	USE	#EnclosingStructureForChoiceStruct
+        MAPPING FIELDS
+	WITH {
+		ENCODE STRUCTURE {
+			aux-selector	auxSelectorEncoding,
+			choice {
+				ENCODE STRUCTURE  {
+					STRUCTURED WITH  {
+					ALTERNATIVE
+						DETERMINED BY field-to-be-set
+						USING aux-selector}}
+				WITH PER-BASIC-UNALIGNED }}
+        	WITH PER-BASIC-UNALIGNED} }
+		-- First mapping: inserts an explicit auxiliary alternative 
+		-- determinant.
+		-- This encoding object specifies that an auxiliary 
+		-- determinant is used
+		-- as an alternative determinant.
+
+auxSelectorEncoding #AuxSelector ::= {
+	USE	#BITS
+	--[SC1] ECN Huffman
+	-- RANGE (0..7)
+	-- (0..1) IS 60%
+	-- (2..4) IS 30%
+	-- (5..7) IS 10%
+	-- End Definition
+	-- Mappings produced by "ECN Public Domain Software for Huffman 
+	-- encodings, version 1" (see E.8) 
+        MAPPING TO BITS {
+	        0 ..  1 TO '10'B   .. '11'B,
+        	2 ..  4 TO '001'B .. '011'B,
+        	5  TO '0001'B,
+        	6 ..  7 TO '00000'B .. '00001'B}
+	WITH bitStringEncoding }
+
+bitStringEncoding #BITS ::= {
+	REPETITION-ENCODING {
+		REPETITION-SPACE
+		}
+	}
+
+#Version1DecodingStructure ::= #CONCATENATION {
+	ie-1		#BOOL,
+	ie-2		#INT (0..20),
+	future-additions	#PAD}
+
+version1MessageEncoding  #Version1Message ::= {
+	ENCODE-DECODE
+		{ENCODE WITH PER-BASIC-UNALIGNED }
+	DECODE AS IF decodingSpecification}
+
+decodingSpecification #Version1Message ::= {
+	USE #Version1DecodingStructure
+	MAPPING FIELDS
+	WITH {
+		ENCODE STRUCTURE {
+     			future-additions    additionsEncoding{< OUTER >} }
+		WITH PER-BASIC-UNALIGNED}}
+
+additionsEncoding {< REFERENCE:determinant >} #PAD ::= {
+	ENCODING-SPACE
+		SIZE	encoder-option-with-determinant
+	DETERMINED BY container
+	USING determinant}
+
+END
+

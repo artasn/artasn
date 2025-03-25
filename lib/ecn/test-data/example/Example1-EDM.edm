@@ -1,0 +1,247 @@
+Example1-EDM {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module1(3)}
+ENCODING-DEFINITIONS ::=
+BEGIN
+
+EXPORTS Example1Encodings;
+
+IMPORTS #Married1, #Married2, #Married3, #Altitude, #EvenPositiveInteger, 
+	#EvenNegativeInteger, 
+        #IntegerWithHole, #PositiveInteger, #NegativeInteger, 
+	#PositiveIntegerBCD, #Fax,
+        #BinaryFile, #Password, #CharacterStringToBit, #Sequence1, #Choice1,#Choice2,
+	#Sequence2, #Sequence3
+        FROM Example1-ASN1-Module 
+	{ joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module1(2) };
+
+Example1Encodings #ENCODINGS ::= {
+	marriedEncoding-1 |
+	marriedEncoding-2 |
+	marriedEncoding-3 |
+	integerRightAlignedEncoding |
+	evenPositiveIntegerEncoding |
+	evenNegativeIntegerEncoding |
+	integerWithHoleEncoding |
+	positiveIntegerEncoding |
+	negativeIntegerEncoding |
+	positiveIntegerBCDEncoding |
+	faxEncoding |
+	binaryFileEncoding |
+	passwordEncoding |
+	characterStringToBitEncoding |
+	sequence1Encoding |
+	choice1Encoding |
+	choice2Encoding |
+	sequence2Encoding |
+	sequence3Encoding
+	}
+
+booleanEncoding #BOOLEAN ::= {
+        ENCODING-SPACE
+        SIZE 1
+        MULTIPLE OF bit
+		TRUE-PATTERN bits:'1'B
+	FALSE-PATTERN bits:'0'B}
+
+marriedEncoding-1 #Married1 ::= booleanEncoding
+
+marriedEncoding-2 #Married2 ::= {
+	ENCODING-SPACE
+		SIZE 1 }
+
+marriedEncoding-3 #Married3 ::= {
+	ENCODE WITH PER-BASIC-UNALIGNED}
+
+evenPositiveIntegerEncoding #EvenPositiveInteger ::= {
+	USE #NonNegativeInt
+		MAPPING TRANSFORMS {{INT-TO-INT divide:2}}
+	WITH PER-BASIC-UNALIGNED}
+
+#NonNegativeInt ::= #INT(0..MAX)
+
+evenNegativeIntegerEncoding #EvenNegativeInteger ::= {
+	USE #NonPositiveInt		
+		MAPPING TRANSFORMS {{INT-TO-INT divide:2
+                -- Note: -1 / 2 = 0 - see clause 24.3.7 -- }}
+	WITH PER-BASIC-UNALIGNED}
+
+#NonPositiveInt ::= #INT(MIN..0)
+
+integerRightAlignedEncoding #Altitude ::= {
+	ENCODING {
+	ALIGNED TO NEXT octet
+	ENCODING-SPACE
+               	SIZE 16}}
+
+integerWithHoleEncoding #IntegerWithHole ::= {
+	USE #IntFrom0To1280
+	MAPPING ORDERED VALUES
+	WITH PER-BASIC-UNALIGNED}
+
+#IntFrom0To1280 ::= #INT (0..1280)
+
+positiveIntegerEncoding #PositiveInteger ::= integerEncoding
+
+negativeIntegerEncoding #NegativeInteger ::= integerEncoding
+
+integerEncoding #INT ::= {ENCODINGS {
+	{ IF unbounded-or-no-lower-bound
+	ENCODING-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+		USING OUTER
+	ENCODING twos-complement} ,
+	{ IF bounded-with-negatives
+	ENCODING-SPACE
+		SIZE fixed-to-max
+ 	ENCODING twos-complement} ,
+	{ IF semi-bounded-with-negatives
+	ENCODING-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+		USING OUTER
+	ENCODING twos-complement} ,
+	{ IF semi-bounded-without-negatives
+	ENCODING-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+		USING OUTER
+	ENCODING positive-int} ,
+	{ IF bounded-without-negatives
+	ENCODING-SPACE
+		SIZE fixed-to-max
+	ENCODING positive-int}}}
+
+positiveIntegerBCDEncoding #PositiveIntegerBCD ::= {
+	USE #CHARS
+	MAPPING TRANSFORMS{{
+        INT-TO-CHARS
+		-- We convert to characters (e.g., integer 42
+		-- becomes character string "42") and encode the characters
+		-- with the encoding object "numeric-chars-to-bcdEncoding"
+        SIZE variable
+        PLUS-SIGN FALSE}}
+	WITH numeric-chars-to-bcdEncoding }
+
+numeric-chars-to-bcdEncoding #CHARS ::= {
+	ALIGNED TO NEXT nibble
+        TRANSFORMS {{
+        CHAR-TO-BITS
+	-- We convert each character to a bitstring
+	--(e.g., character "4" becomes '0100'B and "2" becomes '0010'B)
+        AS mapped
+        CHAR-LIST { "0","1","2","3","4","5","6","7","8","9"}
+        BITS-LIST { '0000'B, '0001'B, '0010'B, '0011'B, '0100'B, '0101'B, 
+	            '0110'B, '0111'B,
+        '1000'B, '1001'B }}}
+        REPETITION-ENCODING {
+        REPETITION-SPACE
+	-- We determine the concatenation of the bitstrings for the
+	-- characters and add a terminator (e.g.,
+	-- '0100'B + '0010'B becomes '0100 0010 1111'B)
+	SIZE variable-with-determinant
+	DETERMINED BY pattern
+		PATTERN bits:'1111'B}}
+
+faxEncoding #Fax ::= {
+	ALIGNED TO NEXT octet
+	REPETITION-ENCODING {
+	REPETITION-SPACE 
+        SIZE variable-with-determinant
+	DETERMINED BY pattern
+		PATTERN bits:'00000000'B}}
+
+binaryFileEncoding #BinaryFile ::= {
+        ALIGNED TO NEXT octet
+        PADDING one
+	REPETITION-ENCODING {
+		REPETITION-SPACE
+        	SIZE variable-with-determinant
+		DETERMINED BY container
+        USING OUTER}}
+
+passwordEncoding #Password ::= {
+	ALIGNED TO NEXT octet
+        TRANSFORMS {{CHAR-TO-BITS
+        AS compact
+        SIZE fixed-to-max
+        MULTIPLE OF bit }}
+	REPETITION-ENCODING {
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+        USING OUTER}}
+
+characterStringToBitEncoding #CharacterStringToBit ::= {
+	USE #IntFrom0To2
+	MAPPING VALUES {
+	"FIRST" 	TO 0,
+	"SECOND" 	TO 1,
+	"THIRD"	TO 2}
+	WITH integerEncoding}
+
+#IntFrom0To2 ::= #INT (0..2)
+
+sequence1Encoding #Sequence1 ::= {
+	ENCODE STRUCTURE {
+	b USE-SET OPTIONAL-ENCODING parameterizedPresenceEncoding {< a >},
+	c binaryFileEncoding
+	-- "binaryFileEncoding" is defined in D.1.8.2 -- }
+        	WITH PER-BASIC-UNALIGNED}
+
+parameterizedPresenceEncoding {< REFERENCE:reference >}  #OPTIONAL ::= {
+	PRESENCE
+	DETERMINED BY field-to-be-used
+	USING reference}
+
+choice1Encoding	#Choice1 ::= {
+	ENCODE STRUCTURE {
+	boolean	[tagEncoding] USE-SET,
+	integer [tagEncoding] USE-SET,
+	string 	[tagEncoding] USE-SET
+	STRUCTURED WITH {
+		ALTERNATIVE
+			DETERMINED BY handle
+				HANDLE "Tag"}}
+		WITH PER-BASIC-UNALIGNED}
+
+tagEncoding #TAG ::= {
+	ENCODING-SPACE
+	SIZE 3
+	MULTIPLE OF bit
+	EXHIBITS HANDLE "Tag" AT {0 | 1 | 2}}
+
+MyEncodings #ENCODINGS ::= { tagEncoding } COMPLETED BY PER-BASIC-UNALIGNED
+
+choice2Encoding	#Choice2 ::= {
+	ENCODE STRUCTURE {
+	STRUCTURED WITH {
+		ALTERNATIVE
+			DETERMINED BY handle
+				HANDLE "Tag"}}
+	WITH MyEncodings}
+
+sequence2Encoding #Sequence2 ::= {
+	ENCODE STRUCTURE {
+	b 	{ REPETITION-ENCODING {
+		REPETITION-SPACE
+			SIZE 8
+			MULTIPLE OF bit}
+	CONTENTS-ENCODING {sequence3Encoding}}}
+	WITH PER-BASIC-UNALIGNED}
+
+sequence3Encoding	#Sequence3 ::= {
+	ENCODE STRUCTURE {
+		STRUCTURED WITH sequence3StructureEncoding }
+	WITH PER-BASIC-UNALIGNED }
+
+sequence3StructureEncoding #CONCATENATION ::= {
+	ENCODING-SPACE
+		MULTIPLE OF octet
+	VALUE-PADDING
+		JUSTIFIED left:0
+		POST-PADDING zero
+		UNUSED BITS
+		DETERMINED BY not-needed
+	}
+
+END

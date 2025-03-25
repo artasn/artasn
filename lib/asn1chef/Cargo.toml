@@ -17,6 +17,7 @@ widestring = "1.1"
 
 [build-dependencies]
 parsegen = { path = "../parsegen" }
+syn = { version = "2.0", features = ["parsing", "printing", "full"] }
 
 [lib]
 crate-type = ["rlib"]

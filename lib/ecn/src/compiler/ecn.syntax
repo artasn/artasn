@@ -1,0 +1,385 @@
+extern TypeReference
+extern UppercaseReference
+extern ValueReference
+extern Number
+extern StringLiteral
+
+rule Program {
+    captures {
+        modules = repeated: Module
+    }
+    persist
+    soi
+    optional repeated {
+        modules = Module
+    }
+    eoi
+    return modules
+}
+
+rule Module {
+    captures {
+        header = ModuleHeader
+        body = ModuleBody
+    }
+    header = ModuleHeader
+    persist
+    body = ModuleBody
+    keyword END
+}
+
+rule ModuleHeader {
+    captures {
+        name = TypeReference
+        oid = optional: ModuleIdentifier
+        exports = optional: Exports
+        imports = optional: Imports
+    }
+    name = TypeReference
+    persist
+    oid = optional ModuleIdentifier
+    keyword ENCODING-DEFINITIONS
+    operator ::=
+    keyword BEGIN
+    exports = optional Exports
+    imports = optional Imports
+}
+
+rule Exports {
+    captures {
+        kind = optional: ExportsKind
+    }
+    keyword EXPORTS
+    persist
+    kind = optional ExportsKind
+    operator ;
+    return kind
+}
+
+variant ExportsKind = All {
+    keyword ALL
+} | SymbolList | error { "expecting a symbol list or ALL" };
+
+rule Imports {
+    captures {
+        symbols_from_module = repeated: SymbolsFromModule
+    }
+    keyword IMPORTS
+    persist
+    optional repeated {
+        symbols_from_module = SymbolsFromModule
+    }
+    operator ;
+    return symbols_from_module
+}
+
+rule SymbolsFromModule {
+    captures {
+        symbols = SymbolList
+        module = GlobalModuleReference
+    }
+    symbols = SymbolList
+    keyword FROM
+    persist
+    module = GlobalModuleReference
+}
+
+rule GlobalModuleReference {
+    captures {
+        name = TypeReference
+        oid = optional: ModuleIdentifier
+    }
+    name = TypeReference
+    optional {
+        oid = ModuleIdentifier
+    }
+}
+
+rule SymbolList {
+    captures {
+        symbols = repeated: Symbol
+    }
+    symbols = Symbol
+    persist
+    optional repeated {
+        operator ,
+        symbols = Symbol
+    }
+    return symbols
+}
+
+variant Symbol = EncodingClassReference | TypeReference | ValueReference | error { "expecting a symbol (encoding reference)" };
+
+rule EncodingClassReference {
+    captures {
+        ty = TypeReference
+    }
+    operator #
+    persist
+    ty = TypeReference
+    return ty
+}
+
+rule ModuleBody {
+    captures {
+        assignments = repeated: Assignment
+    }
+    repeated {
+        assignments = Assignment
+    }
+    return assignments
+}
+
+variant ModuleIdentifier = DefinitiveOid | error { "expecting module identifier" };
+
+rule DefinitiveOid {
+    captures {
+        components = repeated: DefinitiveOidComponent
+    }
+    operator {
+    persist
+    repeated {
+        components = DefinitiveOidComponent
+    }
+    operator }
+    return components
+}
+
+variant DefinitiveOidComponent = NamedNumber | Number | error { "expecting a named number or a number literal" };
+
+rule NamedNumber {
+    captures {
+        name = ValueReference
+        num = Number
+    }
+    name = ValueReference
+    operator (
+    persist
+    num = Number
+    operator )
+}
+
+variant Assignment = EncodingObjectAssignment | EncodingObjectSetAssignment | error { "expecting encoding object or encoding object set assignment" };
+
+rule EncodingObjectAssignment {
+    captures {
+        name = ValueReference
+        class = EncodingClassReference
+        object = EncodingObject
+    }
+    name = ValueReference
+    persist
+    class = EncodingClassReference
+    operator ::=
+    object = EncodingObject
+}
+
+// 10.9.2
+rule DefinedEncodingObject {
+    captures {
+        external_module = optional: TypeReference
+        object = ValueReference
+    }
+    optional {
+        external_module = TypeReference
+    }
+    object = ValueReference 
+}
+
+// 10.9.3
+rule DefinedEncodingObjectSet {
+    captures {
+        external_module = optional: DefinedEncodingObjectSetModule
+        set = TypeReference
+    }
+    optional {
+        external_module = DefinedEncodingObjectSetModule
+    }
+    set = TypeReference 
+}
+
+rule DefinedEncodingObjectSetModule {
+    captures {
+        external_module = TypeReference
+    }
+    external_module = TypeReference
+    operator .
+    return external_module
+}
+
+// 17.1.5
+variant EncodingObject = DefinedEncodingObject | EncodeStructure;
+
+// 17.5.1
+rule EncodeStructure {
+    captures {
+        component_encodings = repeated: ComponentEncoding
+        structure_encoding = optional: StructureEncoding
+        combined_encodings = optional: boxed CombinedEncodings
+    }
+    operator {
+    keyword ENCODE
+    keyword STRUCTURE
+    persist
+    operator {
+    component_encodings = ComponentEncoding
+    optional repeated {
+        operator ,
+        component_encodings = ComponentEncoding
+    }
+    optional {
+        structure_encoding = StructureEncoding
+    }
+    operator }
+    optional {
+        combined_encodings = CombinedEncodings
+    }
+    operator }
+}
+
+// 17.5.1
+rule StructureEncoding {
+    captures {
+        tag_encoding = optional: TagEncoding
+        encoding_or_use_set = boxed EncodingOrUseSet
+    }
+    keyword STRUCTURED
+    persist
+    keyword WITH
+    optional {
+        tag_encoding = TagEncoding
+    }
+    encoding_or_use_set = EncodingOrUseSet
+}
+
+// 13.1.3
+rule CombinedEncodings {
+    captures {
+        primary = EncodingObjectSet
+        completion_clause = optional: CompletionClause
+    }
+    keyword WITH
+    primary = EncodingObjectSet
+    optional {
+        completion_clause = CompletionClause
+    }
+}
+
+// 13.1.3
+rule CompletionClause {
+    captures {
+        secondary = EncodingObjectSet
+    }
+    keyword COMPLETED
+    persist
+    keyword BY
+    secondary = EncodingObjectSet
+    return secondary
+}
+
+// 17.5.10
+rule ComponentEncoding {
+    captures {
+        component = ValueReference
+        tag_and_element_encoding = TagAndElementEncoding
+        optional_encoding = optional: OptionalEncoding
+    }
+    component = ValueReference
+    persist
+    tag_and_element_encoding = TagAndElementEncoding
+    optional {
+        optional_encoding = OptionalEncoding
+    }
+}
+
+// 17.5.10
+rule OptionalEncoding {
+    captures {
+        encoding_or_use_set = boxed EncodingOrUseSet
+    }
+    keyword OPTIONAL-ENCODING
+    persist
+    encoding_or_use_set = EncodingOrUseSet
+    return encoding_or_use_set
+}
+
+// 17.5.10
+rule TagAndElementEncoding {
+    captures {
+        tag_encoding = optional: TagEncoding
+        encoding_or_use_set = boxed EncodingOrUseSet
+    }
+    optional {
+        tag_encoding = TagEncoding
+        persist
+    }
+    encoding_or_use_set = EncodingOrUseSet
+}
+
+// 17.5.1
+rule TagEncoding {
+    captures {
+        encoding_or_use_set = boxed EncodingOrUseSet
+    }
+    operator [
+    persist
+    encoding_or_use_set = EncodingOrUseSet
+    operator ]
+    return encoding_or_use_set
+}
+
+variant EncodingOrUseSet = EncodingObject | UseSet {
+    keyword USE-SET
+} | error { "expecting encoding object or USE-SET" };
+
+rule EncodingObjectSetAssignment {
+    captures {
+        name = TypeReference
+        class = EncodingClassReference
+        set = boxed EncodingObjectSet
+    }
+    name = TypeReference
+    persist
+    class = EncodingClassReference
+    operator ::=
+    set = EncodingObjectSet
+}
+
+// 18.1.1
+variant EncodingObjectSet = DefinedEncodingObjectSet | EncodingObjectSetSpec;
+
+// 10.9.3
+variant DefinedOrBuiltinEncodingObjectSet = DefinedEncodingObjectSet | BuiltinEncodingObjectSetReference;
+
+// 18.1.1
+rule EncodingObjectSetSpec {
+    captures {
+        objects = EncodingObject
+    }
+    operator {
+    persist
+    objects = EncodingObject
+    optional repeated {
+        operator |
+        objects = EncodingObject
+    }
+    operator }
+    return objects
+}
+
+// 18.2.1
+variant BuiltinEncodingObjectSetReference = PerBasicAligned {
+    keyword PER-BASIC-ALIGNED
+} | PerBasicUnaligned {
+    keyword PER-BASIC-UNALIGNED
+} | PerCanonicalAligned {
+    keyword PER-CANONICAL-ALIGNED
+} | PerCanonicalUnaligned {
+    keyword PER-CANONICAL-UNALIGNED
+} | Ber {
+    keyword BER
+} | Cer {
+    keyword CER
+} | Der {
+    keyword DER
+};

@@ -1,0 +1,43 @@
+-- Per X.692 clause 25.1.1
+
+#OUTER ::= ENCODING-CLASS { 
+ 
+-- Alignment point 
+&alignment-point    ENUMERATED 
+      {unchanged, reset } DEFAULT reset, 
+-- Padding 
+&post-padding-unit   Unit (1..MAX) DEFAULT octet, 
+&post-padding    Padding DEFAULT zero, 
+&post-padding-pattern    Non-Null-Pattern (ALL EXCEPT different:any) 
+      DEFAULT bits:'0'B, 
+ 
+-- Bit reversal specification (see 22.12) 
+&bit-reversal    ReversalSpecification 
+      DEFAULT no-reversal, 
+ 
+-- Added bits action 
+&added-bits     ENUMERATED 
+      {hard-error, signal-application, 
+      silently-ignore, next-value} 
+      DEFAULT hard-error 
+} WITH SYNTAX { 
+ 
+[ALIGNMENT &alignment-point] 
+[PADDING    
+ [MULTIPLE OF &post-padding-unit] 
+ [POST-PADDING &post-padding 
+  [PATTERN &post-padding-pattern]]] 
+[BIT-REVERSAL &bit-reversal] 
+[ADDED BITS DECODING         &added-bits] 
+}
+
+-- Per X.692 clause 25.1.2
+
+Unit ::= INTEGER  
+{repetitions(0), bit(1), nibble(4), octet(8), word16(16), 
+ dword32(32)} (0..256) --  (see 21.1) 
+Padding ::= ENUMERATED {zero, one, pattern, encoder-option} -- (see 21.9) 
+Non-Null-Pattern ::= Pattern 
+(ALL EXCEPT (bits:''B | octets:''H | char8:"" | char16:"" | 
+   char32:"")) -- (see 21.10.2)
+   

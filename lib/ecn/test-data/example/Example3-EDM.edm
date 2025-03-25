@@ -1,0 +1,199 @@
+Example3-EDM {joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) edm-module3(10)}
+ENCODING-DEFINITIONS ::=
+BEGIN
+
+EXPORTS Example3Encodings-1, Example3Encodings-2;
+RENAMES
+	#OPTIONAL AS #Sequence2-optional
+		IN #Sequence2
+	#OCTET-STRING AS #Octets3
+		IN ALL
+	#OPTIONAL AS #Sequence3-optional
+		IN #Sequence3
+	#TAG AS #TAG-4-bits
+		IN #Sequence3
+FROM Example3-ASN1-Module 
+	{ joint-iso-itu-t(2) asn1(1) ecn(4) examples(5) asn1-module3(9)};
+
+Example3Encodings-1	#ENCODINGS ::= {
+	sequence1-encoding }
+
+Example3Encodings-2	#ENCODINGS ::= {
+	concat |
+	sequence2-optional-encoding |
+	octets3-encoding |
+	sequenceOf-encoding |
+	sequence3-encoding |
+	outer-encoding
+	}
+
+sequence1-encoding #SEQUENCE ::= {
+	REPLACE OPTIONALS
+        	WITH #Integer-with-pointer-concat
+        	ENCODED BY integer-with-pointer-concat-encoding
+			INSERT AT HEAD #Pointer
+	ENCODING-SPACE 
+	        SIZE variable-with-determinant
+        	DETERMINED BY container
+        	USING OUTER }
+
+#Pointer ::= #INTEGER
+
+#Integer-with-pointer-concat {< #Element >} ::= #CONCATENATION {
+	element	#Element OPTIONAL-ENCODING #Integer-optionality }
+
+#Integer-optionality ::= #OPTIONAL
+
+integer-optionality-encoding{< REFERENCE: start-pointer>} 	
+	#Integer-optionality ::= {
+	ALIGNED TO ANY octet
+	START-POINTER start-pointer
+	PRESENCE DETERMINED BY pointer} 
+
+integer-with-pointer-concat-encoding 
+	{< #Element, REFERENCE: pointer, #ENCODINGS:EncodingObjectSet >}
+	#Integer-with-pointer-concat{< #Element >} ::= {
+	ENCODE STRUCTURE {
+		element USE-SET OPTIONAL-ENCODING 
+		integer-optionality-encoding{< pointer >}
+		STRUCTURED WITH concat}
+	WITH EncodingObjectSet} 
+
+concat #CONCATENATION ::= {
+	ENCODING-SPACE }
+
+#Sequence2-optional ::= #OPTIONAL
+
+sequence2-optional-encoding #Sequence2-optional ::= {
+        REPLACE STRUCTURE
+        WITH #Optional-with-determinant
+        ENCODED BY optional-with-determinant-encoding}
+
+#Optional-with-determinant{< #Element >} ::= #CONCATENATION {
+	determinant 	#BOOLEAN,
+	component 	#Element OPTIONAL-ENCODING #Presence-determinant}
+
+#Presence-determinant ::= #OPTIONAL
+
+optional-with-determinant-encoding 
+	{< #Element, #ENCODINGS: Sequence2-combined-encoding-object-set >}
+
+#Optional-with-determinant {< #Element >}	::= {
+	ENCODE STRUCTURE {
+		determinant	determinant-encoding,
+			component USE-SET
+        OPTIONAL-ENCODING if-component-present-encoding{< determinant >} }
+        WITH Sequence2-combined-encoding-object-set } 
+
+if-component-present-encoding {<REFERENCE:presence-bit>} 
+	#Presence-determinant ::= {
+        PRESENCE
+        DETERMINED BY field-to-be-set
+        USING presence-bit}
+
+determinant-encoding #BOOLEAN ::= {
+ENCODING-SPACE 
+	SIZE 1
+	MULTIPLE OF bit
+	TRUE-PATTERN bits:'0'B 
+	FALSE-PATTERN bits:'1'B}
+
+#Octets3 ::= #OCTET-STRING
+
+octets3-encoding #Octets3 ::= {
+	REPETITION-ENCODING {
+        	REPLACE STRUCTURE
+        	WITH #Octets-with-length
+			ENCODED BY octets-with-length-encoding}
+	}
+
+#Octets-with-length{< #Element >} ::= #CONCATENATION {
+	length	#INT(0..2047),
+	octets	#Element}
+
+octets-with-length-encoding{< #Element >} 
+	#Octets-with-length{< #Element >} ::= {
+	ENCODE STRUCTURE {
+	octets octets-encoding{< length >}}
+	WITH PER-BASIC-UNALIGNED}
+
+octets-encoding{< REFERENCE:length >} #Octet3 ::= {
+	REPETITION-ENCODING {
+        REPETITION-SPACE
+        	SIZE variable-with-determinant
+		MULTIPLE OF octet
+		DETERMINED BY field-to-be-set
+		USING length} 
+	CONTENTS-ENCODING {sequence3-encoding}}
+
+sequence3-encoding	#Sequence3 ::= {
+	ENCODE STRUCTURE {
+		STRUCTURED WITH sequence3Structure-encoding
+		}
+	WITH Sequence3-encodings
+		COMPLETED BY PER-BASIC-UNALIGNED
+	}
+
+Sequence3-encodings #ENCODINGS ::= {
+	sequence3-optional-encoding |
+	tag-4-bits-encoding
+	}
+
+sequence3Structure-encoding #CONCATENATION ::= {
+	ENCODING-SPACE
+		MULTIPLE OF octet
+	VALUE-PADDING
+		JUSTIFIED left:0
+		POST-PADDING zero
+		UNUSED BITS
+			DETERMINED BY not-needed
+	}
+	
+#Sequence3-optional ::= #OPTIONAL
+
+sequence3-optional-encoding  #Sequence3-optional ::= {
+	PRESENCE
+	DETERMINED BY container
+        USING OUTER}
+
+#TAG-4-bits ::= #TAG
+
+tag-4-bits-encoding  #TAG-4-bits	::= {
+	ENCODING-SPACE
+		SIZE 4}
+
+#SequenceOf ::= #REPETITION
+
+sequenceOf-encoding #SequenceOf ::= {
+	REPETITION-ENCODING {
+		REPLACE STRUCTURE
+		WITH #SequenceOf-with-count
+		ENCODED BY sequenceOf-with-count-encoding}}
+
+#SequenceOf-with-count{< #Element >} ::= #CONCATENATION {
+	count	#INT(0..63),
+	elements	#Element }
+
+sequenceOf-with-count-encoding{< #Element >} 
+	#SequenceOf-with-count{< #Element >} ::= {
+	ENCODE STRUCTURE {
+		elements {
+        	ENCODE STRUCTURE {
+        	STRUCTURED WITH elements-encoding{< count >}}
+        	WITH PER-BASIC-UNALIGNED}}
+	WITH PER-BASIC-UNALIGNED}
+
+elements-encoding{< REFERENCE:count >} #REPETITION ::= {
+	REPETITION-ENCODING {
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		MULTIPLE OF repetitions
+		DETERMINED BY field-to-be-set
+		USING count}}
+
+outer-encoding #OUTER ::= {
+	ADDED BITS DECODING silently-ignore
+	}
+
+END
+

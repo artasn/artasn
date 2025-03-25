@@ -1,0 +1,161 @@
+-- Per X.692 clause 24.1.1
+
+#TRANSFORM ::= ENCODING-CLASS { 
+ 
+-- int-to-int (see 24.3) 
+&int-to-int  CHOICE { 
+   increment  INTEGER (1..MAX), 
+   decrement  INTEGER (1..MAX), 
+   multiply  INTEGER (2..MAX), 
+   divide  INTEGER (2..MAX), 
+   negate  ENUMERATED{value}, 
+   modulo  INTEGER (2..MAX), 
+   subtract  ENUMERATED{lower-bound}}, 
+   mapping  IntegerMapping 
+   } OPTIONAL, 
+ 
+-- bool-to-bool (see 24.4) 
+&bool-to-bool  CHOICE 
+    {logical        ENUMERATED{not}} 
+    DEFAULT logical:not, 
+ 
+-- bool-to-int (see 24.5) 
+&bool-to-int  ENUMERATED {true-zero, true-one} 
+    DEFAULT true-one, 
+ 
+-- int-to-bool (see 24.6) 
+&int-to-bool   ENUMERATED {zero-true, zero-false} 
+     DEFAULT zero-false, 
+&Int-to-bool-true-is  INTEGER OPTIONAL, 
+&Int-to-bool-false-is   INTEGER OPTIONAL, 
+ 
+-- int-to-chars (see 24.7) 
+&int-to-chars-size  ResultSize DEFAULT variable, 
+&int-to-chars-plus  BOOLEAN DEFAULT FALSE, 
+&int-to-chars-pad   ENUMERATED 
+     {spaces, zeros} DEFAULT zeros, 
+ 
+-- int-to-bits (see 24.8) 
+&int-to-bits-encoded-as ENUMERATED 
+     {positive-int, twos-complement} 
+     DEFAULT twos-complement, 
+&int-to-bits-unit   Unit (1..MAX) DEFAULT bit, 
+&int-to-bits-size   ResultSize DEFAULT variable, 
+ 
+-- bits-to-int (see 24.9) 
+&bits-to-int-decoded-assuming     ENUMERATED 
+                              {positive-int, twos-complement} 
+                              DEFAULT twos-complement, 
+ 
+-- char-to-bits (see 24.10) 
+&char-to-bits-encoded-as ENUMERATED 
+     {iso10646, compact, mapped} 
+     DEFAULT compact, 
+&Char-to-bits-chars  UniversalString (SIZE(1)) 
+     ORDERED OPTIONAL, 
+&Char-to-bits-values  BIT STRING ORDERED OPTIONAL, 
+&char-to-bits-unit  Unit (1..MAX) DEFAULT bit, 
+&char-to-bits-size  ResultSize DEFAULT variable, 
+ 
+-- bits-to-char (see 24.11) 
+&bits-to-char-decoded-assuming ENUMERATED 
+      {iso10646, mapped} 
+      DEFAULT iso10646, 
+&Bits-to-char-values   BIT STRING ORDERED OPTIONAL, 
+&Bits-to-char-chars   UniversalString (SIZE(1)) 
+      ORDERED OPTIONAL, 
+ 
+-- bit-to-bits (see 24.12) 
+&bit-to-bits-one   Non-Null-Pattern DEFAULT bits:'1'B, 
+&bit-to-bits-zero   Non-Null-Pattern DEFAULT bits:'0'B, 
+ 
+-- bits-to-bits (see 24.13) 
+&Source-values   BIT STRING ORDERED, 
+&Result-values   BIT STRING ORDERED, 
+ 
+-- chars-to-composite-char (see 24.14) 
+-- There are no encoding properties for this transformation 
+ 
+-- bits-to-composite-bits (see 24.15) 
+&bits-to-composite-bits-unit  Unit (1..MAX) DEFAULT bit 
+ 
+-- octets-to-composite-bits (see 24.16) 
+-- There are no encoding properties for this transformation 
+ 
+-- composite-char-to-chars (see 24.17) 
+-- There are no encoding properties for this transformation 
+ 
+-- composite-bits-to-bits (see 24.18) 
+-- There are no encoding properties for this transformation 
+ 
+-- composite-bits-to-octets (see 24.19) 
+-- There are no encoding properties for this transformation 
+} WITH SYNTAX { 
+ 
+-- Only one of the following clauses can be used. 
+ 
+[INT-TO-INT &int-to-int] 
+ 
+[BOOL-TO-BOOL [AS &bool-to-bool]] 
+ 
+[BOOL-TO-INT AS &bool-to-int] 
+ 
+[INT-TO-BOOL 
+ [AS &int-to-bool] 
+ [TRUE-IS &Int-to-bool-true-is] 
+ [FALSE-IS &Int-to-bool-false-is]] 
+ 
+[INT-TO-CHARS 
+ [SIZE &int-to-chars-size] 
+ [PLUS-SIGN &int-to-chars-plus] 
+ [PADDING &int-to-chars-pad]] 
+ 
+[INT-TO-BITS 
+ [AS &int-to-bits-encoded-as] 
+ [SIZE &int-to-bits-size] 
+ [MULTIPLE OF &int-to-bits-unit]] 
+ 
+[BITS-TO-INT 
+ [AS &bits-to-int-decoded-assuming]] 
+ 
+[CHAR-TO-BITS 
+ [AS &char-to-bits-encoded-as] 
+ [CHAR-LIST &Char-to-bits-chars] 
+ [BITS-LIST &Char-to-bits-values] 
+ [SIZE &char-to-bits-size] 
+ [MULTIPLE OF &char-to-bits-unit]] 
+ 
+[BITS-TO-CHAR 
+ [AS &bits-to-char-decoded-assuming] 
+ [BITS-LIST &Bits-to-char-values] 
+ [CHAR-LIST &Bits-to-char-chars]] 
+ 
+[BIT-TO-BITS 
+ [ZERO-PATTERN &bit-to-bits-zero] 
+ [ONE-PATTERN &bit-to-bits-one]] 
+ 
+[BITS-TO-BITS 
+ SOURCE-LIST &Source-values 
+ RESULT-LIST &Result-values]  
+ 
+[CHARS-TO-COMPOSITE-CHAR] 
+ 
+[BITS-TO-COMPOSITE-BITS 
+ [UNIT &bits-to-composite-bits-unit]] 
+ 
+[OCTETS-TO-COMPOSITE-BITS] 
+ 
+[COMPOSITE-CHAR-TO-CHARS] 
+ 
+[COMPOSITE-BITS-TO-BITS] 
+ 
+[COMPOSITE-BITS-TO-OCTETS] 
+}
+
+-- Per X.62 clause 24.3.3
+
+IntegerMapping ::= SET OF SEQUENCE { 
+  source SET OF INTEGER, 
+  result INTEGER} (CONSTRAINED BY {/* the intersection of the source 
+        components shall be empty 
+        (see 21.17) */}) 

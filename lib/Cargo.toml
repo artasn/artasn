@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "asn1chef",
-    "cli",
+    "cli", "ecn",
     "parsegen",
 ]
 resolver = "2"

@@ -1,0 +1,48 @@
+-- Per X.692 clause 23.11.1
+
+#OPTIONAL ::= ENCODING-CLASS { 
+ 
+-- Structure-only replacement specification (see 22.1) 
+&#Replacement-structure    OPTIONAL, 
+&replacement-structure-encoding-object  &#Replacement-structure    OPTIONAL, 
+ 
+-- Pre-alignment and padding specification (see 22.2) 
+&encoding-space-pre-alignment-unit Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&encoding-space-pre-padding   Padding DEFAULT zero, 
+&encoding-space-pre-pattern   Non-Null-Pattern (ALL EXCEPT different:any) 
+      DEFAULT bits:'0'B, 
+ 
+-- Start pointer specification (see 22.3) 
+&start-pointer    REFERENCE  OPTIONAL, 
+&start-pointer-unit   Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&Start-pointer-encoder-transforms  #TRANSFORM ORDERED OPTIONAL, 
+ 
+-- Optionality determination (see 22.5) 
+&optionality-determination  OptionalityDetermination 
+      DEFAULT field-to-be-set, 
+&optionality-reference   REFERENCE OPTIONAL, 
+&Encoder-transforms   #TRANSFORM ORDERED OPTIONAL, 
+&Decoder-transforms   #TRANSFORM ORDERED OPTIONAL, 
+&handle-id      PrintableString 
+      DEFAULT "default-handle" 
+} WITH SYNTAX { 
+[REPLACE 
+ [STRUCTURE] 
+ WITH &#Replacement-structure 
+  [ENCODED BY &replacement-structure-encoding-object]] 
+[ALIGNED TO 
+ [NEXT]  
+ [ANY] 
+  &encoding-space-pre-alignment-unit 
+  [PADDING &encoding-space-pre-padding 
+   [PATTERN &encoding-space-pre-pattern]]] 
+[START-POINTER   &start-pointer 
+ [MULTIPLE OF &start-pointer-unit] 
+ [ENCODER-TRANSFORMS    &Start-pointer-encoder-transforms]] 
+PRESENCE 
+ [DETERMINED BY &optionality-determination 
+  [HANDLE &handle-id]] 
+ [USING &optionality-reference 
+  [ENCODER-TRANSFORMS &Encoder-transforms] 
+  [DECODER-TRANSFORMS &Decoder-transforms]] 
+}

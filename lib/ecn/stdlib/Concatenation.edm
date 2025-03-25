@@ -1,0 +1,110 @@
+-- Per X.692 23.5.1
+
+#CONCATENATION ::= ENCODING-CLASS { 
+ 
+-- Full replacement specification (see 22.1) 
+&#Replacement-structure    OPTIONAL, 
+&#Replacement-structure2    OPTIONAL, 
+&replacement-structure-encoding-object  &#Replacement-structure    OPTIONAL, 
+&replacement-structure-encoding-object2 &#Replacement-structure2 OPTIONAL,  
+&#Head-end-structure     OPTIONAL, 
+&#Head-end-structure2      OPTIONAL, 
+ 
+-- Pre-alignment and padding specification (see 22.2) 
+&encoding-space-pre-alignment-unit Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&encoding-space-pre-padding   Padding DEFAULT zero, 
+&encoding-space-pre-pattern   Non-Null-Pattern (ALL EXCEPT different:any) 
+      DEFAULT bits:'0'B, 
+ 
+-- Start pointer specification (see 22.3) 
+&start-pointer    REFERENCE  OPTIONAL, 
+&start-pointer-unit   Unit (ALL EXCEPT repetitions) DEFAULT bit, 
+&Start-pointer-encoder-transforms  #TRANSFORM ORDERED OPTIONAL, 
+ 
+-- Encoding space specification (see 22.4) 
+&encoding-space-size   EncodingSpaceSize 
+      DEFAULT self-delimiting-values, 
+&encoding-space-unit   Unit (ALL EXCEPT repetitions) 
+      DEFAULT bit, 
+&encoding-space-determination EncodingSpaceDetermination 
+      DEFAULT field-to-be-set, 
+&encoding-space-reference  REFERENCE OPTIONAL, 
+&Encoder-transforms   #TRANSFORM ORDERED OPTIONAL, 
+&Decoder-transforms   #TRANSFORM ORDERED OPTIONAL, 
+ 
+-- Concatenation specification (see 22.10) 
+&concatenation-order   ENUMERATED {textual, tag, random} 
+      DEFAULT textual, 
+&concatenation-alignment  ENUMERATED {none, aligned} 
+      DEFAULT aligned, 
+&concatenation-handle    PrintableString 
+      DEFAULT "default-handle", 
+ 
+-- Value padding and justification (see 22.8) 
+&value-justification   Justification DEFAULT right:0, 
+&value-pre-padding   Padding DEFAULT zero, 
+&value-pre-pattern   Non-Null-Pattern DEFAULT bits:'0'B, 
+&value-post-padding   Padding DEFAULT zero, 
+&value-post-pattern   Non-Null-Pattern DEFAULT bits:'0'B, 
+&unused-bits-determination  UnusedBitsDetermination 
+      DEFAULT field-to-be-set, 
+&unused-bits-reference   REFERENCE OPTIONAL, 
+&Unused-bits-encoder-transforms #TRANSFORM ORDERED OPTIONAL, 
+&Unused-bits-decoder-transforms #TRANSFORM ORDERED OPTIONAL, 
+ 
+-- Identification handle specification (see 22.9) 
+&exhibited-handle    PrintableString DEFAULT "default-handle", 
+&Handle-positions    INTEGER (0..MAX) OPTIONAL, 
+&handle-value-set    HandleValueSet DEFAULT tag:any, 
+ 
+-- Bit reversal specification (see 22.12) 
+&bit-reversal    ReversalSpecification 
+      DEFAULT no-reversal 
+} WITH SYNTAX { 
+[REPLACE 
+ [STRUCTURE] 
+ [COMPONENT] 
+ [ALL COMPONENTS] 
+ [OPTIONALS] 
+ [NON-OPTIONALS] 
+ WITH &#Replacement-structure 
+  [ENCODED BY &replacement-structure-encoding-object 
+   [INSERT AT HEAD &#Head-end-structure]] 
+  [AND OPTIONALS WITH &#Replacement-structure2 
+   [ENCODED BY &replacement-structure-encoding-object2 
+    [INSERT AT HEAD &#Head-end-structure2]]] ] 
+[ALIGNED TO 
+ [NEXT]  
+ [ANY] 
+  &encoding-space-pre-alignment-unit 
+  [PADDING &encoding-space-pre-padding 
+   [PATTERN &encoding-space-pre-pattern]]] 
+[START-POINTER   &start-pointer 
+ [MULTIPLE OF &start-pointer-unit] 
+ [ENCODER-TRANSFORMS    &Start-pointer-encoder-transforms]] 
+ENCODING-SPACE 
+ [SIZE &encoding-space-size 
+  [MULTIPLE OF &encoding-space-unit]] 
+ [DETERMINED BY &encoding-space-determination] 
+ [USING &encoding-space-reference 
+  [ENCODER-TRANSFORMS &Encoder-transforms] 
+  [DECODER-TRANSFORMS &Decoder-transforms]] 
+[CONCATENATION 
+ [ORDER &concatenation-order] 
+ [ALIGNMENT &concatenation-alignment] 
+ [HANDLE &concatenation-handle]] 
+[VALUE-PADDING 
+ [JUSTIFIED &value-justification] 
+ [PRE-PADDING &value-pre-padding 
+  [PATTERN &value-pre-pattern]] 
+ [POST-PADDING &value-post-padding 
+  [PATTERN &value-post-pattern]] 
+ [UNUSED BITS 
+  [DETERMINED BY &unused-bits-determination] 
+  [USING &unused-bits-reference 
+   [ENCODER-TRANSFORMS &Unused-bits-encoder-transforms] 
+   [DECODER-TRANSFORMS &Unused-bits-decoder-transforms]]]] 
+[EXHIBITS HANDLE &exhibited-handle AT &Handle-positions 
+ [AS &handle-value-set]] 
+[BIT-REVERSAL &bit-reversal] 
+}
