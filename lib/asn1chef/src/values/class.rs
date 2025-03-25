@@ -41,6 +41,7 @@ pub type InformationObjectSet = Vec<ObjectSetElement>;
 pub enum ObjectSetElement {
     Object(InformationObjectReference),
     ObjectSet(AstElement<QualifiedIdentifier>),
+    ObjectFieldReference(ObjectFieldReference),
 }
 
 pub type ValueSet = Vec<AstElement<TypedValue>>;
@@ -53,6 +54,19 @@ pub enum ObjectField {
     Object(InformationObjectReference),
     ObjectSet(InformationObjectSet),
     ValueSet(ValueSet),
+}
+
+impl ObjectField {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            Self::Type(_) => "type",
+            Self::Value(_) => "value",
+            Self::ObjectFieldReference(_) => "object field reference",
+            Self::Object(_) => "object",
+            Self::ObjectSet(_) => "object set",
+            Self::ValueSet(_) => "value set",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

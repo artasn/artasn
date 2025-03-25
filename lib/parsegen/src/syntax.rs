@@ -179,10 +179,13 @@ impl SyntaxParser {
                 if !expr.optional {
                     expr_code = self.make_ok(&expr_code);
                     if field.optional {
+                        if field.boxed {
+                            expr_code = format!("Box::new({})", expr_code);
+                        }
                         expr_code = format!("Some({})", expr_code);
                     }
                 }
-                if field.boxed {
+                if field.boxed && !(!expr.optional && field.optional) {
                     expr_code = format!("Box::new({})", expr_code);
                 }
                 if field.repeated {

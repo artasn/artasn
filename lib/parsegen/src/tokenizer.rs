@@ -135,6 +135,8 @@ enum_str! {
         RelativeOidIri = "RELATIVE-OID-IRI",
         Successors = "SUCCESSORS",
         Descendants = "DESCENDANTS",
+        Any = "ANY",
+        Defined = "DEFINED",
     }
 }
 

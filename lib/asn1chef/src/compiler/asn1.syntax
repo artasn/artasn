@@ -619,6 +619,19 @@ variant PresenceConstraint = PresencePresent {
     keyword OPTIONAL
 } | error { "expecting PRESENT, ABSENT, or OPTIONAL" };
 
+rule Any {
+    captures {
+        defined_by = optional: boxed Value
+    }
+    keyword ANY
+    persist
+    optional {
+        keyword DEFINED
+        keyword BY
+        defined_by = Value
+    }
+}
+
 rule Boolean {
     keyword BOOLEAN
 }
@@ -938,7 +951,7 @@ rule InstanceOf {
     class_type = UppercaseReference
 }
 
-variant BuiltinType = Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
+variant BuiltinType = Any | Boolean | Integer | BitString | OctetString | Null | ObjectIdentifier | ObjectDescriptor | External |
     Real | Enumerated | EmbeddedPDV | UTF8String | RelativeOid | Time | Structure | Choice | NumericString | PrintableString |
     TeletexString | VideotexString | IA5String | UTCTime |  GeneralizedTime | GraphicString | VisibleString | GeneralString |
     UniversalString | CharacterString | BMPString | Date | TimeOfDay | DateTime | Duration | InstanceOf | 
@@ -1122,7 +1135,7 @@ variant ObjectSetElementGroup = Extensible | ObjectSetElements {
     return elements
 } | error { "expecting objects or '...'" };
 
-variant ObjectSetElement = DefinedValue | DefinedType | BracedTokenStream | error { "expecting object definition or valuereference" };
+variant ObjectSetElement = ObjectFieldReference | Object | DefinedType | error { "expecting object or object set" };
 
 rule ValueSet {
     captures {
@@ -1443,3 +1456,5 @@ rule ObjectFieldReference {
     persist
     field_ref = FieldReference
 }
+
+variant Object = DefinedValue | BracedTokenStream | error { "expecting object" }; 

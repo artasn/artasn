@@ -333,6 +333,29 @@ fn is_type_class<'a>(
     }
 }
 
+fn parse_object_field_reference(
+    parser: &AstParser<'_>,
+    ast_field_ref: &AstElement<AstObjectFieldReference>,
+) -> Result<ObjectFieldReference> {
+    let ast_field = match &ast_field_ref.element.field_ref.element {
+        AstFieldReference::ValueFieldReference(field) => {
+            field.element.0.as_ref().map(|field| field.0.clone())
+        }
+        AstFieldReference::TypeFieldReference(field) => {
+            return Err(Error {
+                kind: ErrorKind::Ast(
+                    "expecting value field reference, found type field reference".to_string(),
+                ),
+                loc: field.loc,
+            })
+        }
+    };
+    Ok(ObjectFieldReference {
+        object_ref: values::resolve_defined_value(parser, &ast_field_ref.element.object_name)?,
+        field: ast_field,
+    })
+}
+
 fn parse_next_syntax_node(
     parser: &AstParser<'_>,
     class: &InformationObjectClass,
@@ -398,56 +421,40 @@ fn parse_next_syntax_node(
                         ObjectClassFieldValueType::OpenTypeReference(_) => {
                             todo!("value fields referencing open type fields are not yet supported")
                         }
-                        ObjectClassFieldValueType::ObjectClassFieldReference(field_ref) => {
-                            let ast_field_ref = try_parse!(
+                        ObjectClassFieldValueType::ObjectClassFieldReference(class_field_ref) => {
+                            let ast_object_field_ref = try_parse!(
                                 ParseContext::new(token_stream),
                                 AstObjectFieldReference::parse
                             );
 
-                            let ast_field = match &ast_field_ref.element.field_ref.element {
-                                AstFieldReference::ValueFieldReference(field) => {
-                                    field.element.0.as_ref().map(|field| field.0.clone())
-                                }
-                                AstFieldReference::TypeFieldReference(field) => {
-                                    return Err(Error {
-                                        kind: ErrorKind::Ast("expecting value field reference, found type field reference".to_string()),
-                                        loc: field.loc
-                                    })
-                                }
-                            };
-                            if ast_field.element != field_ref.field.element {
+                            let object_field_ref =
+                                parse_object_field_reference(parser, &ast_object_field_ref)?;
+                            if class_field_ref.field.element != object_field_ref.field.element {
                                 return Err(Error {
                                     kind: ErrorKind::Ast(format!(
                                         "expecting object field '{}', found '{}'",
-                                        field_ref.field.element, ast_field.element
+                                        class_field_ref.field.element,
+                                        object_field_ref.field.element,
                                     )),
-                                    loc: ast_field.loc,
+                                    loc: object_field_ref.field.loc,
                                 });
                             }
 
                             fields.push((
                                 item.associated_data.clone(),
-                                ObjectField::ObjectFieldReference(ObjectFieldReference {
-                                    object_ref: values::resolve_defined_value(
-                                        parser,
-                                        &ast_field_ref.element.object_name,
-                                    )?,
-                                    field: ast_field,
-                                }),
+                                ObjectField::ObjectFieldReference(object_field_ref),
                             ));
                             return Ok(());
                         }
                     },
-                    ObjectClassField::Object(_) => {
-                        let valref =
-                            try_parse!(ParseContext::new(token_stream), AstValueReference::parse);
+                    ObjectClassField::Object(object) => {
+                        let object_class = resolve_information_object_class(parser, &object.class)?
+                            .resolve(parser.context)?;
+                        let ast_object =
+                            try_parse!(ParseContext::new(token_stream), AstObject::parse);
+                        let object = parse_object(parser, object_class, &ast_object)?;
 
-                        fields.push((
-                            item.associated_data.clone(),
-                            ObjectField::Object(InformationObjectReference::Reference(
-                                values::resolve_valuereference(parser, &valref)?,
-                            )),
-                        ));
+                        fields.push((item.associated_data.clone(), ObjectField::Object(object)));
                         return Ok(());
                     }
                     _ => unreachable!(),
@@ -510,7 +517,7 @@ fn parse_token_stream_from_syntax_node_group(
     Ok(())
 }
 
-pub(crate) fn parse_information_object(
+pub(crate) fn parse_object_tokens(
     parser: &AstParser<'_>,
     tokens: &AstElement<AstBracedTokenStream>,
     class: &InformationObjectClass,
@@ -574,6 +581,21 @@ pub(crate) fn resolve_information_object_set<'a>(
     })
 }
 
+fn parse_object(
+    parser: &AstParser<'_>,
+    class: &InformationObjectClass,
+    object: &AstElement<AstObject>,
+) -> Result<InformationObjectReference> {
+    Ok(match &object.element {
+        AstObject::BracedTokenStream(tokens) => {
+            InformationObjectReference::Value(parse_object_tokens(parser, tokens, class)?)
+        }
+        AstObject::DefinedValue(objref) => {
+            InformationObjectReference::Reference(values::resolve_defined_value(parser, objref)?)
+        }
+    })
+}
+
 fn parse_object_set(
     parser: &AstParser<'_>,
     class: &InformationObjectClass,
@@ -596,24 +618,20 @@ fn parse_object_set(
 
     for ast_element in ast_elements {
         match &ast_element.element {
-            AstObjectSetElement::BracedTokenStream(tokens) => {
-                set_elements.push(ObjectSetElement::Object(InformationObjectReference::Value(
-                    parse_information_object(parser, tokens, class)?,
-                )));
-            }
-            AstObjectSetElement::DefinedValue(defined_value) => {
-                set_elements.push(ObjectSetElement::Object(
-                    InformationObjectReference::Reference(values::resolve_defined_value(
-                        parser,
-                        defined_value,
-                    )?),
-                ));
+            AstObjectSetElement::Object(object) => {
+                set_elements.push(ObjectSetElement::Object(parse_object(
+                    parser, class, object,
+                )?));
             }
             AstObjectSetElement::DefinedType(defined_type) => {
                 set_elements.push(ObjectSetElement::ObjectSet(types::resolve_defined_type(
                     parser,
                     defined_type,
                 )?));
+            }
+            AstObjectSetElement::ObjectFieldReference(ofr) => {
+                let field_ref = parse_object_field_reference(parser, ofr)?;
+                set_elements.push(ObjectSetElement::ObjectFieldReference(field_ref));
             }
         }
     }

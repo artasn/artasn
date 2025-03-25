@@ -98,6 +98,22 @@ fn find_matching_object_in_set<'a>(
     for element in set {
         let object = match element {
             ObjectSetElement::Object(object) => object.resolve(parser.context)?,
+            ObjectSetElement::ObjectFieldReference(ofr) => {
+                let object = resolve_information_object(parser, &ofr.object_ref)?;
+                let field = object.find_field(&ofr.field)?;
+                match field {
+                    ObjectField::Object(object) => object.resolve(parser.context)?,
+                    other => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting object field reference, found {} field reference",
+                                other.get_name()
+                            )),
+                            loc: ofr.field.loc,
+                        })
+                    }
+                }
+            }
             ObjectSetElement::ObjectSet(set) => {
                 let set = class::resolve_information_object_set(parser, set)?;
                 match find_matching_object_in_set(parser, set, primary_key, primary_key_value)? {
@@ -171,28 +187,30 @@ fn find_component_from_series<'a>(
     for (component, component_value) in structure.iter().zip(structure_value) {
         if component.name.element == search_component.element {
             let is_search_terminal = component_series.len() == 1;
-            if let UntaggedType::BuiltinType(builtin) = &component.component_type.ty { if let BuiltinType::Structure(structure) = builtin {
-                if is_search_terminal {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "component reference cannot be to a {}",
-                            structure.ty
-                        )),
-                        loc: search_component.loc,
-                    });
-                } else {
-                    let structure_value =
-                        match component_value.value.resolve(parser.context)?.value {
-                            BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
-                            _ => unreachable!(),
-                        };
-                    return find_component_from_series(
-                        parser,
-                        (&structure.components, &structure_value.components),
-                        &component_series[1..],
-                    );
+            if let UntaggedType::BuiltinType(builtin) = &component.component_type.ty {
+                if let BuiltinType::Structure(structure) = builtin {
+                    if is_search_terminal {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "component reference cannot be to a {}",
+                                structure.ty
+                            )),
+                            loc: search_component.loc,
+                        });
+                    } else {
+                        let structure_value =
+                            match component_value.value.resolve(parser.context)?.value {
+                                BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
+                                _ => unreachable!(),
+                            };
+                        return find_component_from_series(
+                            parser,
+                            (&structure.components, &structure_value.components),
+                            &component_series[1..],
+                        );
+                    }
                 }
-            } }
+            }
             let resolved_type = component.component_type.resolve(parser.context)?;
             match &resolved_type.ty {
                 ty @ (BuiltinType::Structure(_)
@@ -1070,13 +1088,6 @@ pub fn parse_value(
     ))
 }
 
-pub(crate) fn resolve_valuereference(
-    parser: &AstParser<'_>,
-    valref: &AstElement<AstValueReference>,
-) -> Result<AstElement<QualifiedIdentifier>> {
-    parser.resolve_symbol(&valref.as_ref().map(|valref| &valref.0))
-}
-
 pub(crate) fn resolve_defined_value(
     parser: &AstParser<'_>,
     defined_value: &AstElement<AstDefinedValue>,
@@ -1164,7 +1175,7 @@ pub fn parse_value_assignment(
                             return Ok(Some(match &value_assignment.element.value.element {
                                 AstValue::BuiltinValue(builtin) => match &builtin.element {
                                     AstBuiltinValue::BracedTokenStream(tokens) => {
-                                        let object = class::parse_information_object(
+                                        let object = class::parse_object_tokens(
                                             parser,
                                             tokens,
                                             class.resolve(parser.context)?,

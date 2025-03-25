@@ -287,6 +287,7 @@ fn parse_builtin_type(
     parameters: &[(&String, &Parameter)],
 ) -> Result<UntaggedType> {
     Ok(UntaggedType::BuiltinType(match &builtin.element {
+        AstBuiltinType::Any(_) => BuiltinType::Any,
         AstBuiltinType::Boolean(_) => BuiltinType::Boolean,
         AstBuiltinType::Integer(_) => BuiltinType::Integer(IntegerType {
             named_values: None, // TODO
@@ -516,9 +517,35 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                 (
                     AstParameter::ObjectSetParameter(ast),
                     AstParameterDecl::ObjectSetParameterDecl(_decl),
-                ) => Parameter::ObjectSet {
-                    set_ref: resolve_defined_type(parser, &ast.element.0)?,
-                },
+                ) => {
+                    if ast.element.0.element.external_module.is_none() {
+                        if let Some(param) = parameters.iter().find_map(|(name, param)| {
+                            if *name == &ast.element.0.element.ty.element.0 {
+                                Some(param)
+                            } else {
+                                None
+                            }
+                        }) {
+                            match param {
+                                object_set @ Parameter::ObjectSet { .. } => {
+                                    return Ok((*object_set).clone())
+                                }
+                                other => {
+                                    return Err(Error {
+                                        kind: ErrorKind::Ast(format!(
+                                            "expecting object set, but found {}",
+                                            other.get_name(),
+                                        )),
+                                        loc: parameter.loc,
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    Parameter::ObjectSet {
+                        set_ref: resolve_defined_type(parser, &ast.element.0)?,
+                    }
+                }
                 (param, decl) => {
                     return Err(Error {
                         kind: ErrorKind::Ast(format!(

@@ -143,32 +143,20 @@ impl Compiler {
         let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
         match parser {
             ParseResult::Ok(program) => {
-                if token_stream.cursor() < source.len() {
-                    Err(CompileError {
-                        phase: CompilePhase::Parse,
-                        error: Error {
-                            loc: Loc::at(token_stream.cursor()),
-                            kind: ErrorKind::ExpectingEoi,
-                        },
-                        path,
-                        source,
-                    })
+                if let Some(existing_source) =
+                    self.sources.iter_mut().find(|source| source.path == path)
+                {
+                    existing_source.code = source;
+                    existing_source.program = program;
                 } else {
-                    if let Some(existing_source) =
-                        self.sources.iter_mut().find(|source| source.path == path)
-                    {
-                        existing_source.code = source;
-                        existing_source.program = program;
-                    } else {
-                        self.sources.push(SourceFile {
-                            path,
-                            code: source,
-                            program,
-                        });
-                    }
-
-                    Ok(())
+                    self.sources.push(SourceFile {
+                        path,
+                        code: source,
+                        program,
+                    });
                 }
+
+                Ok(())
             }
             ParseResult::Fail(error) | ParseResult::Error(error) => Err(CompileError {
                 phase: CompilePhase::Parse,
