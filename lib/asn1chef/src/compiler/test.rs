@@ -400,3 +400,10 @@ json_compile_test!(
     "ImportTestIntermediate",
     "ImportTestRemote"
 );
+json_compile_test!(
+    test_cyclic_import,
+    "../../test-data/compile/import/",
+    "CyclicImportTest",
+    "CyclicImportTestIntermediate",
+    "CyclicImportTestRemote"
+);

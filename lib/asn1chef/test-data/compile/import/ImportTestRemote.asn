@@ -1,4 +1,4 @@
-ImportByProxyRemote DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+ImportTestRemote DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 
 ProxiedType ::= SEQUENCE {
     foo INTEGER,

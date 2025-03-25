@@ -1,0 +1,19 @@
+CyclicImportTestIntermediate DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+IMPORTS MainType, mainValue FROM CyclicImportTest
+    RemoteType, remoteValue FROM CyclicImportTestRemote;
+
+IntermediateType ::= INTEGER
+intermediateValue IntermediateType ::= 9001
+
+value SEQUENCE {
+    main MainType,
+    intermediate IntermediateType,
+    remote RemoteType
+} ::= {
+    main mainValue,
+    intermediate intermediateValue,
+    remote remoteValue
+}
+
+END

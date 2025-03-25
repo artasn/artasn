@@ -1,6 +1,6 @@
-ImportByProxyIntermediate DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+ImportTestIntermediate DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 
-IMPORTS ProxiedType, ProxiedUndeclaredType FROM ImportByProxyRemote;
+IMPORTS ProxiedType, ProxiedUndeclaredType FROM ImportTestRemote;
 
 DirectType ::= INTEGER
 direct-value DirectType ::= 15

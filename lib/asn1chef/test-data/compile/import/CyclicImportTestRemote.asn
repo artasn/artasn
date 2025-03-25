@@ -1,0 +1,19 @@
+CyclicImportTestRemote DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+IMPORTS MainType, mainValue FROM CyclicImportTest
+    IntermediateType, intermediateValue FROM CyclicImportTestIntermediate;
+
+RemoteType ::= BOOLEAN
+remoteValue RemoteType ::= TRUE
+
+value SEQUENCE {
+    main MainType,
+    intermediate IntermediateType,
+    remote RemoteType
+} ::= {
+    main mainValue,
+    intermediate intermediateValue,
+    remote remoteValue
+}
+
+END
