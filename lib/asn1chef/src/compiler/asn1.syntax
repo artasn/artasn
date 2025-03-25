@@ -353,7 +353,9 @@ variant ParameterDecl = ObjectSetParameterDecl {
     class_type = UppercaseReference
     operator :
     name = TypeReference
-} | ValueParameterDecl {
+} | ValueParameterDecl | TypeParameterDecl | error { "expecting a type, value, or information object set parameter declaration" };
+
+rule ValueParameterDecl {
     captures {
         ty = Type
         name = ValueReference
@@ -361,13 +363,15 @@ variant ParameterDecl = ObjectSetParameterDecl {
     ty = Type
     operator :
     name = ValueReference
-} | TypeParameterDecl {
+}
+
+rule TypeParameterDecl {
     captures {
         name = TypeReference
     }
     name = TypeReference
     return name
-} | error { "expecting a type, value, or information object set parameter declaration" };
+}
 
 rule TypeAssignment {
     captures {
@@ -506,12 +510,24 @@ variant ContentsConstraint = EncodedBy {
 } | error { "expecting 'CONTAINING ...' or 'CONTAINING ... ENCODED BY ...'" };
 
 rule UserDefinedConstraint {
+    captures {
+        parameters = repeated: UserDefinedConstraintParameter
+    }
     keyword CONSTRAINED
     persist
     keyword BY
     operator {
+    optional {
+        parameters = UserDefinedConstraintParameter
+    }
+    optional repeated {
+        operator ,
+        parameters = UserDefinedConstraintParameter
+    }
     operator }
 }
+
+variant UserDefinedConstraintParameter = ValueParameterDecl | Type;
 
 rule SizeConstraint {
     captures {
@@ -792,15 +808,17 @@ rule Extensible {
     operator ...
 }
 
-variant StructureComponentGroup = Extensible | VersionedComponentGroup {
+variant StructureComponentGroup = Extensible | ComponentExtensionGroup {
     captures {
-        version = Number
+        version = optional: Number
         components = repeated: StructureComponent
     }
     operator [[
     persist
-    version = Number
-    operator :
+    optional {
+        version = Number
+        operator :
+    }
     components = StructureComponent
     optional repeated {
         operator ,

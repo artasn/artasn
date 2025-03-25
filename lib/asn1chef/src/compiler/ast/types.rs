@@ -135,7 +135,7 @@ pub(crate) fn flatten_structure_components(
         .filter_map(|component_group| match &component_group.element {
             AstStructureComponentGroup::Extensible(_) => None,
             AstStructureComponentGroup::StructureComponent(component) => Some(vec![component]),
-            AstStructureComponentGroup::VersionedComponentGroup(group) => {
+            AstStructureComponentGroup::ComponentExtensionGroup(group) => {
                 Some(group.element.components.iter().collect())
             }
         })
