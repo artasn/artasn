@@ -6,15 +6,15 @@ ifndef $(MODE)
 	MODE=--release
 endif
 
-PROG=asn1chef
+PROG=artasn
 WASM_TARGET=wasm32-unknown-unknown 
 
 clean:
 	rm -rf target
 
-build: build-cli build-editor
+build: build-cli build-playground
 
-.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-cli-deb build-libweb build-webfs build-asn1-extension build-vscode-web build-editor dev-editor test
+.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-cli-deb build-libweb build-webfs build-asn1-extension build-vscode-web build-playground dev-playground test
 
 .install-cargo:
 	$(shell which cargo > /dev/null || (echo "Rust and Cargo are required to build $(PROG). Visit https://rustup.rs/ to do so") && exit 1)
@@ -24,15 +24,15 @@ build-cli: .install-cargo
 	$(CARGO) build --package cli $(MODE) && \
 	cd ..
 
-BUILD_CLI_DIR=/tmp/asn1chef/build-cli-deb
+BUILD_CLI_DIR=/tmp/artasn/build-cli-deb
 build-cli-deb: build-cli
 	rm -rf $(BUILD_CLI_DIR) && \
 	mkdir -p $(BUILD_CLI_DIR) && \
 	mkdir -p $(BUILD_CLI_DIR)/usr/local/bin && \
 	cp -r ./lib/cli/DEBIAN $(BUILD_CLI_DIR) && \
-	cp ./lib/target/release/asn1chef $(BUILD_CLI_DIR)/usr/local/bin/ && \
+	cp ./lib/target/release/artasn $(BUILD_CLI_DIR)/usr/local/bin/ && \
 	dpkg-deb --build $(BUILD_CLI_DIR) && \
-	cp -r $(BUILD_CLI_DIR).deb ./asn1chef.deb && \
+	cp -r $(BUILD_CLI_DIR).deb ./artasn.deb && \
 	rm -rf $(BUILD_CLI_DIR) $(BUILD_CLI_DIR).deb
 
 .install-wasm: .install-cargo
@@ -45,11 +45,11 @@ build-libweb: .install-cargo .install-wasm .install-wasm-pack
 	cd web/libweb && \
 	wasm-pack build $(MODE) --target web --no-pack && \
 	cd .. && \
-	rm -rf editor/src/wasm && \
-	cp -r libweb/pkg editor/src/wasm && \
-	python3 libweb/patch_js.py editor/src/wasm/libasn1chef.js && \
-	mkdir -p editor/public/static && \
-	mv editor/src/wasm/libasn1chef_bg.wasm editor/public/static && \
+	rm -rf playground/src/wasm && \
+	cp -r libweb/pkg playground/src/wasm && \
+	python3 libweb/patch_js.py playground/src/wasm/libartasn.js && \
+	mkdir -p playground/public/static && \
+	mv playground/src/wasm/libartasn_bg.wasm playground/public/static && \
 	cd ..
 
 build-webfs:
@@ -59,17 +59,17 @@ build-webfs:
 	cd ../webfs-extension && \
 	yarn && \
 	yarn build && \
-	rm -rf ../editor/public/static/extensions/webfs && \
-	mkdir -p ../editor/public/static/extensions/webfs && \
-	cp -r package.json package.nls.json dist ../editor/public/static/extensions/webfs/
+	rm -rf ../playground/public/static/extensions/webfs && \
+	mkdir -p ../playground/public/static/extensions/webfs && \
+	cp -r package.json package.nls.json dist ../playground/public/static/extensions/webfs/
 
 build-asn1-extension:
 	cd web/asn1-extension && \
 	yarn && \
 	yarn build && \
-	rm -rf ../editor/public/static/extensions/asn1 && \
-	mkdir -p ../editor/public/static/extensions/asn1 && \
-	cp -r package.json package.nls.json config icons dist ../editor/public/static/extensions/asn1/
+	rm -rf ../playground/public/static/extensions/asn1 && \
+	mkdir -p ../playground/public/static/extensions/asn1 && \
+	cp -r package.json package.nls.json config icons dist ../playground/public/static/extensions/asn1/
 
 build-vscode-web:
 	cd web/vscode-web && \
@@ -77,9 +77,9 @@ build-vscode-web:
 	yarn build && \
 	cd ../..
 
-build-editor: build-libweb build-webfs build-asn1-extension
+build-playground: build-libweb build-webfs build-asn1-extension
 	export NODE_OPTIONS=--openssl-legacy-provider && \
-	cd web/editor && \
+	cd web/playground && \
 	yarn && \
 	rm -rf public/static/vs && \
 	cp -r node_modules/vscode-web/dist public/static/vs && \
@@ -91,9 +91,9 @@ build-editor: build-libweb build-webfs build-asn1-extension
 	yarn build && \
 	cd ../..
 
-dev-editor: build-editor
+dev-playground: build-playground
 	export NODE_OPTIONS=--openssl-legacy-provider && \
-	cd web/editor && \
+	cd web/playground && \
 	yarn dev
 
 test:

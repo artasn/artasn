@@ -3,8 +3,8 @@ use std::{
     mem, ptr,
 };
 
-use asn1chef::compiler::ast::name_and_oid_to_module_ident;
-use asn1chef::compiler::parser::*;
+use artasn::compiler::ast::name_and_oid_to_module_ident;
+use artasn::compiler::parser::*;
 
 #[repr(C)]
 pub struct GetModuleDependenciesResult {

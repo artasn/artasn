@@ -1,7 +1,3 @@
 [workspace]
-members = [
-    "asn1chef",
-    "cli", "ecn",
-    "parsegen",
-]
+members = ["artasn", "artasn-ecn", "cli", "parsegen"]
 resolver = "2"

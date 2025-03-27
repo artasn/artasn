@@ -1,0 +1,53 @@
+ObjectSetParameterTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+ALGORITHM-IDENTIFIER ::= TYPE-IDENTIFIER
+
+AlgorithmIdentifier{ALGORITHM-IDENTIFIER:InfoObjectSet} ::= SEQUENCE {
+    algorithm  ALGORITHM-IDENTIFIER.&id   ({InfoObjectSet}),
+    parameters ALGORITHM-IDENTIFIER.&Type ({InfoObjectSet}{@algorithm}) OPTIONAL
+}
+
+id-hash1 OBJECT IDENTIFIER ::= { joint-iso-itu-t artasn(1337) test(47) hash(1) }
+id-hash2 OBJECT IDENTIFIER ::= { joint-iso-itu-t artasn(1337) test(47) hash(2) }
+
+HashAlgorithms ALGORITHM-IDENTIFIER ::= {
+    {NULL         IDENTIFIED BY id-hash1} |
+    {Hash2-Params IDENTIFIED BY id-hash2},
+    ...
+}
+
+Hash2-Params ::= SEQUENCE {
+    salt OCTET STRING (SIZE(8)),
+    rounds INTEGER
+}
+
+HashAlgorithmIdentifier ::= AlgorithmIdentifier{{HashAlgorithms}}
+
+algo-hash1 AlgorithmIdentifier{{HashAlgorithms}} ::= {
+   algorithm id-hash1,
+   parameters NULL : NULL
+}
+
+-- A request sent to a server to hash something.
+HashRequest ::= SEQUENCE {
+    identifier AlgorithmIdentifier{{HashAlgorithms}},
+    data OCTET STRING (SIZE(1..MAX))
+}
+
+hash1-request-example HashRequest ::= {
+    identifier algo-hash1,
+    data '0123456789ABCDEF'H
+}
+
+hash2-request-example HashRequest ::= {
+    identifier {
+        algorithm id-hash2,
+        parameters Hash2-Params : {
+            salt '1337DEADBEEF1337'H,
+            rounds 16
+        }
+    },
+    data '0123456789ABCDEF'H
+}
+
+END

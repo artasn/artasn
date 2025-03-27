@@ -2,7 +2,7 @@
 name = "standard-modules"
 version = "0.1.0"
 description = ""
-authors = ["asn1chef"]
+authors = ["artasn"]
 license = "MIT"
 
 [tool.poetry.dependencies]

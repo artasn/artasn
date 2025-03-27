@@ -1,0 +1,104 @@
+name: ArtASN Playground CI
+
+on:
+  push:
+    branches: [ 'master' ]
+  pull_request:
+    branches: [ 'master' ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+    - name: Install system dependencies
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: pkg-config build-essential libkrb5-dev libx11-dev libxkbfile-dev
+        version: 1.0
+
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: wasm32-unknown-unknown
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: yarn
+        cache-dependency-path: '**/yarn.lock'
+
+    - name: Install Yarn
+      run: npm install --global yarn
+
+    - name: Run Tests
+      run: make test
+
+    - name: Build CLI
+      run: make build-cli build-cli-deb
+
+    - name: Archive CLI Binary Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: artasn-cli
+        path: lib/target/release/artasn
+        overwrite: true
+
+    - name: Archive CLI Debian Package Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: artasn-cli-deb
+        path: artasn.deb
+        overwrite: true
+
+    - name: Build VSCode Web
+      run: make build-vscode-web
+
+    - name: Archive VSCode Web Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vscode-web
+        path: web/vscode-web/dist/
+        overwrite: true
+
+    - name: Build Playground
+      run: make build-playground
+
+    - name: Archive Playground Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: playground
+        path: web/playground/dist/
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Playground Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: playground
+          path: playground
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload Playground Artifact to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './playground'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

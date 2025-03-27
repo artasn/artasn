@@ -4,7 +4,7 @@
   "description": "ASN.1 language support for VSCode Web",
   "icon": "./icons/ASN1-128x128.png",
   "version": "1.0.0",
-  "publisher": "asn1chef",
+  "publisher": "artasn",
   "license": "MIT",
   "categories": [
     "Programming Languages"

@@ -1,7 +1,0 @@
-ModuleWithOID { joint-iso-itu-t asn1chef(1337) test(47) module(4) with-oid(0) }
-DEFINITIONS AUTOMATIC TAGS ::= BEGIN
-    
-WithType ::= INTEGER
-withValue WithType ::= 5
-
-END

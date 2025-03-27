@@ -7,7 +7,7 @@ edition = "2021"
 default = ["console_error_panic_hook"]
 
 [dependencies]
-asn1chef = { path = "../../lib/asn1chef"  }
+artasn = { path = "../../lib/artasn"  }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 hex = "0.4.3"
 js-sys = "0.3.77"
@@ -22,5 +22,5 @@ wasm-bindgen = "0.2.84"
 wasm-bindgen-test = "0.3.34"
 
 [lib]
-name = "libasn1chef"
+name = "libartasn"
 crate-type = ["cdylib", "staticlib"]

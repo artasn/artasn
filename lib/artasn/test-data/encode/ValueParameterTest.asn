@@ -1,0 +1,51 @@
+ValueParameterTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+IntegerMessage{INTEGER:default} ::= SEQUENCE {
+    int INTEGER DEFAULT default,
+    data OCTET STRING
+}
+IntegerMessage1 ::= IntegerMessage{1}
+
+integer-message IntegerMessage1 ::= {
+    data '1337'H
+}
+integer-message-override IntegerMessage1 ::= {
+    int 2,
+    data '1337'H
+}
+
+-- Priority ::= ENUMERATED {
+--     low,
+--     normal,
+--     high
+-- }
+
+-- PrioritizedMessage{Priority:default-priority} ::= SEQUENCE {
+--     priority Priority DEFAULT default-priority,
+--     data OCTET STRING
+-- }
+
+-- NormalPriorityMessage ::= PrioritizedMessage{normal}
+-- priority-message NormalPriorityMessage ::= {
+--     data '1337'H
+-- }
+-- priority-message-override NormalPriorityMessage ::= {
+--     priority high,
+--     data '1337'H
+-- }
+
+-- DataMessage{Data, Data:default-data} ::= SEQUENCE {
+--     id OBJECT IDENTIFIER,
+--     data Data DEFAULT default-data
+-- }
+-- OctetStringMessage ::= DataMessage{OCTET STRING, '1337'H}
+
+-- data-message OctetStringMessage ::= {
+--     id { joint-iso-itu-t artasn(1337) test(47) data-message-1(0) }
+-- }
+-- data-message-override OctetStringMessage ::= {
+--     id { joint-iso-itu-t artasn(1337) test(47) data-message-1(0) },
+--     data '7331'H
+-- }
+
+END

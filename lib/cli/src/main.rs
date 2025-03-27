@@ -1,6 +1,6 @@
 use std::{fmt::Display, fs, time::Instant};
 
-use asn1chef::{
+use artasn::{
     compiler::{options::CompilerConfig, Compiler, Context},
     encoding::{EncodeMode, TransferSyntax},
     module::QualifiedIdentifier,
@@ -9,9 +9,9 @@ use asn1chef::{
 use clap::{Parser, ValueEnum};
 
 #[derive(Debug, Parser)]
-#[command(name = "asn1chef")]
+#[command(name = "artasn")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "CLI for ASN.1Chef", long_about = None)]
+#[command(about = "CLI for ArtASN", long_about = None)]
 struct Cli {
     /// Path to the config JSON file
     #[arg(long, short = 'c')]

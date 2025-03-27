@@ -1,6 +1,6 @@
 use std::{collections::HashSet, num::ParseIntError, panic};
 
-use asn1chef::{
+use artasn::{
     compiler::{options::CompilerConfig, CompileError, Compiler, Context},
     module,
     types::*,
@@ -70,7 +70,7 @@ impl TryInto<module::ModuleIdentifier> for ModuleIdentifier {
         Ok(module::ModuleIdentifier {
             name: self.name,
             oid: match self.oid {
-                Some(oid) => Some(Oid::parse_string(oid)?)),
+                Some(oid) => Some(Oid::parse_string(&oid)?),
                 None => None,
             },
         })
@@ -159,7 +159,7 @@ fn serialize_tagged_type(context: &Context, tagged_type: &TaggedType) -> JsValue
             Reflect::set(
                 &obj,
                 &"class".into(),
-                &ocf.class_type.as_ref().element.into(),
+                &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&ocf.class_type.as_ref().element)).unwrap(),
             )
             .unwrap();
             Reflect::set(&obj, &"field".into(), &ocf.field.as_ref().element.into()).unwrap();
@@ -167,8 +167,8 @@ fn serialize_tagged_type(context: &Context, tagged_type: &TaggedType) -> JsValue
                 &obj,
                 &"kind".into(),
                 &(match &ocf.kind {
-                    ObjectClassFieldReferenceKind::Value => "value",
-                    ObjectClassFieldReferenceKind::OpenType => "openType",
+                    ObjectClassFieldReferenceKind::ValueLike => "value",
+                    ObjectClassFieldReferenceKind::TypeLike => "openType",
                 })
                 .into(),
             )
@@ -208,14 +208,6 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
                 )
                 .unwrap();
                 Reflect::set(&obj, &"optional".into(), &component.optional.into()).unwrap();
-                if let Some(default_value) = component.default_value.as_ref() {
-                    Reflect::set(
-                        &obj,
-                        &"defaultValue".into(),
-                        &serialize_typed_value(context, &default_value.element),
-                    )
-                    .unwrap();
-                }
                 components.push(&obj.into());
             }
             Reflect::set(&obj, &"components".into(), &components.into()).unwrap();

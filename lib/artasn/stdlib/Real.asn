@@ -1,0 +1,40 @@
+Real DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+SpecialReal ::= ENUMERATED {
+    plus-infinity (0),
+    minus-infinity (1),
+    not-a-number (2)
+}
+
+-- REAL
+Real ::= [UNIVERSAL 9] SEQUENCE {
+    mantissa INTEGER,
+    base INTEGER (2 | 10),
+    exponent INTEGER,
+    artasn-special SpecialReal OPTIONAL
+    -- the `artasn-special` component is not part of the standard definition of REAL,
+    -- and is used internally by artasn for special values
+}
+
+plus-infinity Real ::= {
+    mantissa 0,
+    base 2,
+    exponent 0,
+    artasn-special plus-infinity
+}
+
+minus-infinity Real ::= {
+    mantissa 0,
+    base 2,
+    exponent 0,
+    artasn-special minus-infinity
+}
+
+not-a-number Real ::= {
+    mantissa 0,
+    base 2,
+    exponent 0,
+    artasn-special not-a-number
+}
+
+END

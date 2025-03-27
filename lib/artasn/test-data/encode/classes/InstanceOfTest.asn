@@ -1,0 +1,32 @@
+InstanceOfTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+OTHER-NAME ::= TYPE-IDENTIFIER
+
+id-utf8-name OBJECT IDENTIFIER ::= { joint-iso-itu-t artasn(1337) test(47) name(0) utf8(0) }
+utf8Name OTHER-NAME ::= { UTF8String IDENTIFIED BY id-utf8-name }
+
+id-numeric-name OBJECT IDENTIFIER ::= { joint-iso-itu-t artasn(1337) test(47) name(0) numeric(1) }
+numericName OTHER-NAME ::= { NumericString IDENTIFIED BY id-numeric-name }
+
+OtherNames OTHER-NAME ::= { utf8Name | numericName }
+
+-- Based on PKIX1Implicit-2009
+GeneralName ::= CHOICE {
+    otherName                 [0] INSTANCE OF OTHER-NAME,
+    rfc822Name                [1] IA5String,
+    dNSName                   [2] IA5String,
+    uniformResourceIdentifier [3] IA5String,
+    iPAddress                 [4] OCTET STRING,
+    registeredID              [5] OBJECT IDENTIFIER
+}
+
+other-name-utf8 GeneralName ::= otherName : {
+    type-id utf8Name.&id,
+    value utf8Name.&Type : "Hello, world!"
+}
+other-name-numeric GeneralName ::= otherName : {
+    type-id id-numeric-name,
+    value numericName.&Type : "0123456789"
+}
+
+END

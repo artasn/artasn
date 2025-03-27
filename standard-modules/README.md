@@ -38,4 +38,4 @@ Once you have downloaded all modules, the next step is to generate the package r
 
 Run `poetry run python generate-package-registry.py`.
 This will generate a directory at `data/package-registry`.
-The contents of this directory should be statically served from a web server, for use with ASN.1⬢Chef.
+The contents of this directory should be statically served from a web server, for use with ArtASN.

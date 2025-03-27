@@ -1,0 +1,31 @@
+{
+    "options": {
+        "productConfiguration": {
+            "nameShort": "VSCode Web",
+            "nameLong": "VSCode Web",
+            "applicationName": "code-web",
+            "dataFolderName": ".vscode-web",
+            "version": "1.92.0",
+            "extensionEnabledApiProposals": {
+                "artasn.webfs-extension": [
+                    "fileSearchProvider",
+                    "textSearchProvider"
+                ]
+            }
+        },
+        "initialColorTheme": {
+            "themeType": "light"
+        },
+        "additionalBuiltinExtensions": [
+            "static/extensions/theme-defaults",
+            "static/extensions/theme-seti",
+            "static/extensions/webfs",
+            "static/extensions/asn1"
+        ]
+    },
+    "folderUri": {
+        "scheme": "webfs",
+        "path": "/"
+    },
+    "domElementId": "vs-editor"
+}

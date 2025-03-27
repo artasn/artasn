@@ -1,4 +1,4 @@
-use asn1chef::{encoding::*, module, values::*};
+use artasn::{encoding::*, module, values::*};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
@@ -251,7 +251,7 @@ pub fn compiler_decode_value(
     };
 
     let libweb = unsafe { Box::from_raw(libweb_ptr) };
-    let values = match decoder(ts, &value_binary, &libweb.context, &mode) {
+    let values = match decoder(ts, &mode, &value_binary, &libweb.context) {
         Ok(values) => values,
         Err(err) => {
             let _ = Box::into_raw(libweb);
@@ -306,7 +306,13 @@ pub unsafe fn compiler_encode_value(
         match value_decl.value.resolve(&libweb.context) {
             Ok(value) => {
                 libweb.buffer.clear();
-                match encoder(ts, &mut libweb.buffer, &libweb.context, &value) {
+                match encoder(
+                    ts,
+                    EncodeMode::Normal,
+                    &mut libweb.buffer,
+                    &libweb.context,
+                    &value,
+                ) {
                     Ok(()) => {
                         let mut reverse = Vec::with_capacity(libweb.buffer.len());
                         for b in libweb.buffer.iter().rev() {

@@ -1,0 +1,108 @@
+ValueSetTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+-- TODO: enforce constraints for classes/objects with value sets
+
+CLASS-TYPE ::= CLASS {
+    &id      OBJECT IDENTIFIER UNIQUE,
+    &Numbers INTEGER DEFAULT { 1 | 2 | 3, ... }
+} WITH SYNTAX {
+    &id
+    [WITH NUMBERS &Numbers]
+}
+
+one INTEGER ::= 1
+
+class-1 CLASS-TYPE ::= {
+    { joint-iso-itu-t artasn(1337) test(47) class(0) 1 }
+}
+class-2 CLASS-TYPE ::= {
+    { joint-iso-itu-t artasn(1337) test(47) class(0) 2 }
+    WITH NUMBERS { 2 | 3, ... }
+}
+class-3 CLASS-TYPE ::= {
+    { joint-iso-itu-t artasn(1337) test(47) class(0) 3 }
+    WITH NUMBERS { one }
+}
+
+Classes CLASS-TYPE ::= { class-1 | class-2 | class-3 }
+
+IdentifiedNumbers ::= SEQUENCE {
+    id      CLASS-TYPE.&id      ({Classes}),
+    number  CLASS-TYPE.&Numbers ({Classes}{@id})
+    -- TODO: support the following:
+    -- numbers SEQUENCE OF
+    --         CLASS-TYPE.&Numbers ({Classes}{@id})
+}
+
+class-1-compliant-1 IdentifiedNumbers ::= {
+    id class-1.&id,
+    number 1
+    -- numbers { 1, 2, 3 }
+}
+class-1-compliant-2 IdentifiedNumbers ::= {
+    id class-1.&id,
+    number 2
+    -- numbers { 2 }
+}
+class-1-compliant-3 IdentifiedNumbers ::= {
+    id class-1.&id,
+    number 3
+    -- numbers { }
+}
+class-1-noncompliant-1 IdentifiedNumbers ::= {
+    id class-1.&id,
+    number 0
+    -- numbers { 0, 1, 2 }
+}
+class-1-noncompliant-2 IdentifiedNumbers ::= {
+    id class-1.&id,
+    number 4
+    -- numbers { 2, 3, 4 }
+}
+
+class-2-compliant-1 IdentifiedNumbers ::= {
+    id class-2.&id,
+    number 2
+    -- numbers { 2, 3 }
+}
+class-2-compliant-2 IdentifiedNumbers ::= {
+    id class-2.&id,
+    number 3
+    -- numbers { 2 }
+}
+-- class-2-compliant-3 IdentifiedNumbers ::= {
+--     id class-2.&id,
+--     numbers { 3 }
+-- }
+class-2-noncompliant-1 IdentifiedNumbers ::= {
+    id class-2.&id,
+    number 1
+    -- numbers { 1, 2 }
+}
+class-2-noncompliant-2 IdentifiedNumbers ::= {
+    id class-2.&id,
+    number 4
+    -- numbers { 3, 4 }
+}
+
+class-3-compliant-1 IdentifiedNumbers ::= {
+    id class-3.&id,
+    number 1
+    -- numbers { 1 }
+}
+-- class-3-compliant-2 IdentifiedNumbers ::= {
+--     id class-3.&id,
+--     numbers { }
+-- }
+class-3-noncompliant-1 IdentifiedNumbers ::= {
+    id class-3.&id,
+    number 0
+    -- numbers { 0 }
+}
+class-3-noncompliant-2 IdentifiedNumbers ::= {
+    id class-3.&id,
+    number 2
+    -- numbers { 2 }
+}
+
+END

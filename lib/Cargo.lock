@@ -68,7 +68,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1fd03a028ef38ba2276dce7e33fcd6369c158a1bca17946c4b1b701891c1ff7"
 
 [[package]]
-name = "asn1chef"
+name = "artasn"
 version = "0.1.0"
 dependencies = [
  "hex",
@@ -83,6 +83,18 @@ dependencies = [
  "serde_json",
  "syn",
  "widestring",
+]
+
+[[package]]
+name = "artasn-ecn"
+version = "0.1.0"
+dependencies = [
+ "artasn",
+ "lazy_static",
+ "num",
+ "parsegen",
+ "regex",
+ "syn",
 ]
 
 [[package]]
@@ -150,7 +162,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 name = "cli"
 version = "0.1.0"
 dependencies = [
- "asn1chef",
+ "artasn",
  "clap",
  "hex",
 ]
@@ -188,18 +200,6 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
-]
-
-[[package]]
-name = "ecn"
-version = "0.1.0"
-dependencies = [
- "asn1chef",
- "lazy_static",
- "num",
- "parsegen",
- "regex",
- "syn",
 ]
 
 [[package]]
