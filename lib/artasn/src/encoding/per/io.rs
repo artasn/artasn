@@ -2,6 +2,8 @@ use std::io::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Alignment {
+    // Don't align the value, even if using aligned PER.
+    None,
     // The bits are aligned to the start of a byte boundary, so padding bits are appended to the right.
     Start,
     // The bits are aligned to the end of a byte bondary, so padding bits are appended to the left.
@@ -73,7 +75,13 @@ impl<W: Write> BitWriter<W> {
         }
     }
 
-    pub fn finish(&mut self) {
+    pub fn align(&mut self) {
+        if self.aligned {
+            self.force_align();
+        }
+    }
+
+    pub fn force_align(&mut self) {
         while self.bit_cursor > 0 {
             self.write_bit(false);
         }
@@ -169,25 +177,25 @@ mod test {
     pub fn test_bit_writer_write_int() {
         let buf = exec_test(|mut writer| {
             writer.write_int(6, 3, Alignment::Start);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0xC0], vec![0xC0]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(6, 3, Alignment::End);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0x06], vec![0xC0]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(2000, 11, Alignment::Start);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0xfa, 0x00], vec![0xfa, 0x00]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(2000, 11, Alignment::End);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0x07, 0xd0], vec![0xfa, 0x00]));
     }

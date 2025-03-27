@@ -31,6 +31,16 @@ fn parse_constraint(
     for element_set in element_sets {
         match &element_set.element {
             AstConstraintElement::Extensible(ast) => {
+                if last_element_kind.is_none() {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "extensibility operator '...' must appear after the base set of constraints"
+                                .to_string(),
+                        ),
+                        loc: ast.loc,
+                    });
+                }
+
                 if extensible {
                     return Err(Error {
                         kind: ErrorKind::Ast(
@@ -40,6 +50,7 @@ fn parse_constraint(
                         loc: ast.loc,
                     });
                 }
+
                 extensible = true;
                 last_element_kind = Some(ElementKind::Extensiblity);
                 constraint.push(vec![AstElement::new(SubtypeElement::Extensible, ast.loc)]);
@@ -68,6 +79,7 @@ fn parse_constraint(
 
     Ok(Constraint {
         elements: constraint,
+        loc: ast_constraint.loc,
     })
 }
 

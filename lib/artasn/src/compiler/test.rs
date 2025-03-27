@@ -114,7 +114,15 @@ fn test_encode_value(
         );
     }
 
-    println!("validated encoding of value '{}'", ident);
+    println!(
+        "validated encoding of value '{}' ({})",
+        ident,
+        expected_encodings
+            .iter()
+            .map(|(syntax, _)| syntax.get_name())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 fn compare_constructed_decoded_value_to_json_values(

@@ -5,7 +5,7 @@ use num::BigInt;
 use crate::{
     compiler::{parser::Result, Context},
     encoding::per::MAX_VLQ_LEN,
-    types::{ConstraintCheckMode, IntegerInclusion},
+    types::{Bound, ConstraintCheckMode, IntegerInclusion, SubtypeElement},
     values::{BuiltinValue, ResolvedValue},
 };
 
@@ -63,13 +63,12 @@ fn write_length_determinant<W: Write>(
 ) {
     let (length_min, length_max) = length_range;
     match (length_min, length_max) {
-        (Some(min), Some(max)) if min == max => {
-        }
+        (Some(min), Some(max)) if min == max => {}
         (_, None) => {
             write_vlq(length, writer);
         }
         (low, Some(high @ ..65536)) => {
-            write_int(writer, length, low.unwrap_or(0), high, Alignment::Start);
+            write_int(writer, length, low.unwrap_or(0), high, Alignment::None);
         }
         (_, Some(length_max @ 65536..)) => {
             if length_max <= 127 {
@@ -96,12 +95,27 @@ pub fn per_encode_value<W: Write>(
             writer.write_bit(*b);
         }
         BuiltinValue::OctetString(octet_string) => {
-            let (size_bounds, inclusion) = match &typed_value.ty.constraint {
-                Some(constraint) => {
+            let (mut size_bounds, inclusion, is_extensible) = match &typed_value.ty.constraint {
+                Some(constraint)
+                    if constraint
+                        .find(|element| matches!(element, SubtypeElement::SingleValue(_)))
+                        .is_none() =>
+                {
+                    // TODO: only include size bounds that aren't extensions
                     let size_bounds = match constraint.size_bounds(context)? {
-                        Some((min, max)) => {
-                            let min = min.map(|min| min.try_into().expect("size out of bounds"));
-                            let max = max.map(|max| max.try_into().expect("size out of bounds"));
+                        Some(bounds) => {
+                            let min = match bounds.lower_bound {
+                                Bound::Integer(int) => {
+                                    Some(int.try_into().expect("size out of bounds"))
+                                }
+                                Bound::Unbounded => None,
+                            };
+                            let max = match bounds.upper_bound {
+                                Some(Bound::Integer(int)) => {
+                                    Some(int.try_into().expect("size out of bounds"))
+                                }
+                                None | Some(Bound::Unbounded) => None,
+                            };
                             (min, max)
                         }
                         None => (None, None),
@@ -111,20 +125,36 @@ pub fn per_encode_value<W: Write>(
                         ConstraintCheckMode::Size,
                         &BigInt::from(octet_string.len()),
                     )?;
-                    (size_bounds, inclusion)
+                    let is_extensible = constraint.is_extensible(None);
+                    (size_bounds, inclusion, is_extensible)
                 }
-                None => ((None, None), None),
+                _ => ((None, None), None, false),
             };
-            if let Some(inclusion) = inclusion { match inclusion {
-                IntegerInclusion::Included { is_extension: _ } => {
-                    todo!("extension bits");
+            if let Some(inclusion) = inclusion {
+                match inclusion {
+                    IntegerInclusion::Included { is_extension } => {
+                        if is_extension {
+                            // write extension marker bit, 1-byte aligned
+                            writer.write_int(1, 1, Alignment::Start);
+
+                            // when the size is an element of extended constraints, the length is encoded as a VLQ,
+                            // which, for length determinants, is what happens when there are no size bounds at all
+                            // so, to emulate this, pretend like there aren't actually any size bounds
+                            size_bounds = (None, None);
+                        } else if is_extensible {
+                            // write non-extension market bit
+                            writer.write_bit(false);
+                        }
+                    }
+                    IntegerInclusion::NotIncluded => {
+                        panic!("per_encode_value on OCTET STRING with illegal size")
+                    }
                 }
-                IntegerInclusion::NotIncluded => {
-                    panic!("per_encode_value on OCTET STRING with illegal size")
-                }
-            } }
+            }
 
             write_length_determinant(writer, octet_string.len() as u64, size_bounds);
+            writer.align();
+
             writer.write_bytes(octet_string);
         }
         other => todo!("{other:#?}"),
@@ -133,21 +163,20 @@ pub fn per_encode_value<W: Write>(
     Ok(())
 }
 
-// TODO
-// #[cfg(test)]
-// mod test {
-//     use crate::compiler::test::json_test;
+#[cfg(test)]
+mod test {
+    use crate::compiler::test::json_test;
 
-//     json_test!(
-//         test_per_encode_octet_string,
-//         "../../../test-data/encode/per/PerOctetStringTest"
-//     );
-//     json_test!(
-//         test_per_encode_boolean,
-//         "../../../test-data/encode/per/PerBooleanTest"
-//     );
-//     json_test!(
-//         test_per_encode_integer,
-//         "../../../test-data/encode/per/PerIntegerTest"
-//     );
-// }
+    json_test!(
+        test_per_encode_octet_string,
+        "../../../test-data/encode/per/PerOctetStringTest"
+    );
+    // json_test!(
+    //     test_per_encode_boolean,
+    //     "../../../test-data/encode/per/PerBooleanTest"
+    // );
+    // json_test!(
+    //     test_per_encode_integer,
+    //     "../../../test-data/encode/per/PerIntegerTest"
+    // );
+}

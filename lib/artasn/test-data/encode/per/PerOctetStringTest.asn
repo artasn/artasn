@@ -64,11 +64,11 @@ esros1-4 ExtensibleSizeRangeOctetString1 ::= 'AABBCC'H
 esros1-5 ExtensibleSizeRangeOctetString1 ::= 'AABBCCDD'H
 
 ExtensibleSizeRangeOctetString2 ::= OCTET STRING (SIZE(0..2, ..., 2<..4))
-esros2-1 ExtensibleSizeRangeOctetString1 ::= ''H
-esros2-2 ExtensibleSizeRangeOctetString1 ::= 'AA'H
-esros2-3 ExtensibleSizeRangeOctetString1 ::= 'AABB'H
-esros2-4 ExtensibleSizeRangeOctetString1 ::= 'AABBCC'H
-esros2-5 ExtensibleSizeRangeOctetString1 ::= 'AABBCCDD'H
+esros2-1 ExtensibleSizeRangeOctetString2 ::= ''H
+esros2-2 ExtensibleSizeRangeOctetString2 ::= 'AA'H
+esros2-3 ExtensibleSizeRangeOctetString2 ::= 'AABB'H
+esros2-4 ExtensibleSizeRangeOctetString2 ::= 'AABBCC'H
+esros2-5 ExtensibleSizeRangeOctetString2 ::= 'AABBCCDD'H
 
 ExtensibleSizeRangeOctetString3 ::= OCTET STRING (SIZE(0..2), ..., SIZE(2<..4))
 esros3-1 ExtensibleSizeRangeOctetString3 ::= ''H
@@ -77,7 +77,7 @@ esros3-3 ExtensibleSizeRangeOctetString3 ::= 'AABB'H
 esros3-4 ExtensibleSizeRangeOctetString3 ::= 'AABBCC'H
 esros3-5 ExtensibleSizeRangeOctetString3 ::= 'AABBCCDD'H
 
-ExtensibleSizeRangeOctetString4 ::= OCTET STRING (SIZE(0, ..., 1 | 2), ..., SIZE(2<..4, ...) | SIZE(5))
+ExtensibleSizeRangeOctetString4 ::= OCTET STRING (SIZE(0..1, ..., 2), ..., SIZE(2<..4, ...) | SIZE(5))
 esros4-1 ExtensibleSizeRangeOctetString4 ::= ''H
 esros4-2 ExtensibleSizeRangeOctetString4 ::= 'AA'H
 esros4-3 ExtensibleSizeRangeOctetString4 ::= 'AABB'H

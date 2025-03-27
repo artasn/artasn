@@ -66,9 +66,7 @@ fn parse_structure_components(
         .enumerate()
         .map(|(i, component)| {
             let forbidden_ident = match component.element.name.element.0.as_str() {
-                "artasn-special" if parser.module != REAL_IDENT.module => {
-                    Some("artasn-special")
-                }
+                "artasn-special" if parser.module != REAL_IDENT.module => Some("artasn-special"),
                 "artasn-external" if parser.module != EXTERNAL_IDENT.module => {
                     Some("artasn-external")
                 }

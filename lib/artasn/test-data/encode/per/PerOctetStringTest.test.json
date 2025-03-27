@@ -205,29 +205,29 @@
         {
             "name": "esros2-2",
             "per": {
-                "aligned": "10AA",
-                "unaligned": "1AA0"
+                "aligned": "20AA",
+                "unaligned": "3540"
             }
         },
         {
             "name": "esros2-3",
             "per": {
-                "aligned": "20AABB",
-                "unaligned": "2AABB0"
+                "aligned": "40AABB",
+                "unaligned": "555760"
             }
         },
         {
             "name": "esros2-4",
             "per": {
-                "aligned": "30AABBCC",
-                "unaligned": "3AABBCC0"
+                "aligned": "8003AABBCC",
+                "unaligned": "81D55DE600"
             }
         },
         {
             "name": "esros2-5",
             "per": {
-                "aligned": "40AABBCCDD",
-                "unaligned": "4AABBCCDD0"
+                "aligned": "8004AABBCCDD",
+                "unaligned": "82555DE66E80"
             }
         },
         {
@@ -269,8 +269,8 @@
         {
             "name": "esros4-2",
             "per": {
-                "aligned": "8001AA",
-                "unaligned": "80D500"
+                "aligned": "40AA",
+                "unaligned": "6A80"
             }
         },
         {

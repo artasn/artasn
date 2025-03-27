@@ -360,7 +360,7 @@ fn per_encode_value(
 
     let mut bit_writer = BitWriter::new(aligned, Cursor::new(buf));
     per::per_encode_value(&mut bit_writer, context, typed_value)?;
-    bit_writer.finish();
+    bit_writer.force_align();
 
     Ok(())
 }

@@ -1,11 +1,11 @@
 pub(crate) mod class;
 pub(crate) mod constraints;
+pub(crate) mod extra;
 pub(crate) mod object_id;
 pub(crate) mod types;
 pub(crate) mod util;
 pub(crate) mod values;
 pub(crate) mod verify;
-pub(crate) mod extra;
 
 use class::ObjectClassAssignmentParseMode;
 use types::TypeAssignmentParseMode;
