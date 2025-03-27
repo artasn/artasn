@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/artasn/artasn/actions/workflows/artasn.yml/badge.svg)](https://github.com/artasn/artasn/actions/workflows/artasn.yml)
 
-ArtASN is an experimental suite of tools for working with [Abstract Syntax Notation One (ASN.1)](https://en.wikipedia.org/wiki/ASN.1).
+ArtASN ("Artisan") is an experimental suite of tools for working with [Abstract Syntax Notation One (ASN.1)](https://en.wikipedia.org/wiki/ASN.1).
 Module compilation, encoding values defined in ASN.1 syntax, decoding values into their respective ASN.1 types, and dependencies (such as on standard modules declared in standards from IETF or ITU-T) are supported via a CLI and the [ArtASN Playground](#artasn-playground).
 
 ### ArtASN Playground

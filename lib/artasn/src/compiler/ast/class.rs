@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    extra::{AstBracedTokenStream, AstSyntaxTokenLiteral},
+    extra::AstSyntaxTokenLiteral,
     types::{self, TypeContext},
     values::{self, ParseValueAssignmentStage},
     AstParser,

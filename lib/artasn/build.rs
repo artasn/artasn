@@ -16,7 +16,7 @@ fn main() {
         &syntax,
         GEN_FILE,
         syn::parse_quote! {
-            use crate::compiler::ast::extra::{AstSyntaxTokenLiteral, AstBracedTokenStream};
+            use crate::compiler::ast::extra::AstSyntaxTokenLiteral;
 
             enum_str! {
                 pub enum Keyword {

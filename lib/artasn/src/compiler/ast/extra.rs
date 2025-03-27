@@ -1,68 +1,6 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct AstBracedTokenStream(pub Vec<Token>);
-
-impl Parseable for AstBracedTokenStream {
-    fn parse(context: ParseContext) -> ParseResult<Self> {
-        let mut tokens = Vec::new();
-        match context.tokens.try_parse(
-            TokenKind::Operator,
-            Some(TokenData::Operator(Operator::OpenBrace)),
-            Some(OperatorMode::Single),
-        ) {
-            Ok(token) => tokens.push(token),
-            Err(err) => return ParseResult::Fail(err),
-        };
-
-        let mut brace_depth = 1;
-        loop {
-            let next_token = match context.tokens.try_next(None) {
-                Ok(token) => token,
-                Err(err) => return ParseResult::Fail(err),
-            };
-
-            match next_token.kind {
-                TokenKind::Operator => {
-                    let op = match next_token.data.as_ref().unwrap() {
-                        TokenData::Operator(op) => op,
-                        _ => unreachable!(),
-                    };
-                    match op {
-                        Operator::OpenBrace => brace_depth += 1,
-                        Operator::CloseBrace => brace_depth -= 1,
-                        _ => (),
-                    }
-                }
-                TokenKind::Eoi => {
-                    return ParseResult::Fail(Error {
-                        loc: next_token.loc,
-                        kind: ErrorKind::ExpectingOther {
-                            expecting: vec![(
-                                TokenKind::Operator,
-                                Some(TokenData::Operator(Operator::CloseBrace)),
-                            )],
-                            found: next_token,
-                        },
-                    })
-                }
-                _ => (),
-            }
-
-            tokens.push(next_token);
-            if brace_depth == 0 {
-                let last_token = tokens.last().unwrap();
-                let loc = Loc::new(
-                    tokens[0].loc.offset,
-                    (last_token.loc.offset + last_token.loc.len) - tokens[0].loc.offset,
-                );
-                return ParseResult::Ok(AstElement::new(AstBracedTokenStream(tokens), loc));
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct AstSyntaxTokenLiteral {
     pub token: std::string::String,
 }
