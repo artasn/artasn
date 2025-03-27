@@ -1,333 +1,367 @@
 {
-    "module": "PerOctetStringTest",
+    "module": "PerBitStringTest",
     "tests": [
         "Encode",
         "PER"
     ],
     "values": [
         {
-            "name": "uos-1",
+            "name": "ubs-1",
             "per": "00"
         },
         {
-            "name": "uos-2",
+            "name": "ubs-2",
             "per": "00"
         },
         {
-            "name": "uos-3",
+            "name": "ubs-3",
+            "per": "0800"
+        },
+        {
+            "name": "ubs-4",
+            "per": "101337"
+        },
+        {
+            "name": "ubs-5",
+            "per": "0180"
+        },
+        {
+            "name": "ubs-6",
             "per": "0100"
         },
         {
-            "name": "uos-4",
-            "per": "021337"
+            "name": "ubs-7",
+            "per": "04A0"
         },
         {
-            "name": "uos-5",
-            "per": "01A0"
+            "name": "ubs-8",
+            "per": "08AA"
         },
         {
-            "name": "zsos",
+            "name": "ubs-9",
+            "per": "09AA80"
+        },
+        {
+            "name": "zsbs1",
             "per": ""
         },
         {
-            "name": "cos",
-            "per": "021337"
+            "name": "zsbs2",
+            "per": ""
         },
         {
-            "name": "obos-1",
+            "name": "cbs1",
+            "per": "101337"
+        },
+        {
+            "name": "cbs2",
+            "per": "05A8"
+        },
+        {
+            "name": "obbs-1",
             "per": "00"
         },
         {
-            "name": "obos-2",
-            "per": "AA"
+            "name": "obbs-2",
+            "per": "80"
         },
         {
-            "name": "obos-3",
-            "per": "FF"
-        },
-        {
-            "name": "sros1-1",
+            "name": "srbs1-1",
             "per": "00"
         },
         {
-            "name": "sros1-2",
+            "name": "srbs1-2",
             "per": {
-                "aligned": "20AA",
-                "unaligned": "3540"
+                "aligned": "2080",
+                "unaligned": "30"
             }
         },
         {
-            "name": "sros1-3",
+            "name": "srbs1-3",
             "per": {
-                "aligned": "40AABB",
-                "unaligned": "555760"
+                "aligned": "4080",
+                "unaligned": "50"
             }
         },
         {
-            "name": "sros1-4",
+            "name": "srbs1-4",
             "per": {
-                "aligned": "60AABBCC",
-                "unaligned": "75577980"
+                "aligned": "60A0",
+                "unaligned": "74"
             }
         },
         {
-            "name": "sros1-5",
+            "name": "srbs1-5",
             "per": {
-                "aligned": "80AABBCCDD",
-                "unaligned": "9557799BA0"
+                "aligned": "80A0",
+                "unaligned": "94"
             }
         },
         {
-            "name": "sros2-1",
+            "name": "srbs1-6",
             "per": {
-                "aligned": "00AABB",
-                "unaligned": "2AAEC0"
+                "aligned": "80A0",
+                "unaligned": "94"
             }
         },
         {
-            "name": "sros2-2",
+            "name": "srbs2-1",
             "per": {
-                "aligned": "40AABBCC",
-                "unaligned": "6AAEF300"
+                "aligned": "0080",
+                "unaligned": "20"
             }
         },
         {
-            "name": "sros2-3",
+            "name": "srbs2-2",
             "per": {
-                "aligned": "80AABBCCDD",
-                "unaligned": "AAAEF33740"
+                "aligned": "40A0",
+                "unaligned": "68"
             }
         },
         {
-            "name": "sros3-1",
+            "name": "srbs2-3",
             "per": {
-                "aligned": "00AA",
+                "aligned": "80A0",
+                "unaligned": "A8"
+            }
+        },
+        {
+            "name": "srbs2-4",
+            "per": {
+                "aligned": "80A0",
+                "unaligned": "A8"
+            }
+        },
+        {
+            "name": "srbs3-1",
+            "per": {
+                "aligned": "",
                 "unaligned": "1540"
             }
         },
         {
-            "name": "sros3-2",
+            "name": "srbs3-2",
             "per": {
                 "aligned": "20AABB",
                 "unaligned": "355760"
             }
         },
         {
-            "name": "sros3-3",
+            "name": "srbs3-3",
             "per": {
                 "aligned": "A0001122334455",
                 "unaligned": "A0022446688AA0"
             }
         },
         {
-            "name": "sros3-4",
+            "name": "srbs3-4",
             "per": {
                 "aligned": "C000112233445566",
                 "unaligned": "C0022446688AACC0"
             }
         },
         {
-            "name": "smos1-1",
+            "name": "smbs1-1",
             "per": "00"
         },
         {
-            "name": "smos1-2",
+            "name": "smbs1-2",
             "per": "01AA"
         },
         {
-            "name": "smos1-3",
+            "name": "smbs1-3",
             "per": "02AABB"
         },
         {
-            "name": "smos2-1",
+            "name": "smbs2-1",
             "per": "02AABB"
         },
         {
-            "name": "smos2-2",
+            "name": "smbs2-2",
             "per": "03AABBCC"
         },
         {
-            "name": "smos2-3",
+            "name": "smbs2-3",
             "per": "04AABBCCDD"
         },
         {
-            "name": "ezsos1",
+            "name": "ezsbs1",
             "per": "00"
         },
         {
-            "name": "ezsos2",
+            "name": "ezsbs2",
             "per": "00"
         },
         {
-            "name": "cosos-1",
+            "name": "cbsbs-1",
             "per": "021337"
         },
         {
-            "name": "cosos-2",
+            "name": "cbsbs-2",
             "per": "01AA"
         },
         {
-            "name": "esros1-1",
+            "name": "esrbs1-1",
             "per": "00"
         },
         {
-            "name": "esros1-2",
+            "name": "esrbs1-2",
             "per": {
                 "aligned": "10AA",
                 "unaligned": "1AA0"
             }
         },
         {
-            "name": "esros1-3",
+            "name": "esrbs1-3",
             "per": {
                 "aligned": "20AABB",
                 "unaligned": "2AABB0"
             }
         },
         {
-            "name": "esros1-4",
+            "name": "esrbs1-4",
             "per": {
                 "aligned": "30AABBCC",
                 "unaligned": "3AABBCC0"
             }
         },
         {
-            "name": "esros1-5",
+            "name": "esrbs1-5",
             "per": {
                 "aligned": "40AABBCCDD",
                 "unaligned": "4AABBCCDD0"
             }
         },
         {
-            "name": "esros2-1",
+            "name": "esrbs2-1",
             "per": "00"
         },
         {
-            "name": "esros2-2",
+            "name": "esrbs2-2",
             "per": {
                 "aligned": "20AA",
                 "unaligned": "3540"
             }
         },
         {
-            "name": "esros2-3",
+            "name": "esrbs2-3",
             "per": {
                 "aligned": "40AABB",
                 "unaligned": "555760"
             }
         },
         {
-            "name": "esros2-4",
+            "name": "esrbs2-4",
             "per": {
                 "aligned": "8003AABBCC",
                 "unaligned": "81D55DE600"
             }
         },
         {
-            "name": "esros2-5",
+            "name": "esrbs2-5",
             "per": {
                 "aligned": "8004AABBCCDD",
                 "unaligned": "82555DE66E80"
             }
         },
         {
-            "name": "esros3-1",
+            "name": "esrbs3-1",
             "per": "00"
         },
         {
-            "name": "esros3-2",
+            "name": "esrbs3-2",
             "per": {
                 "aligned": "20AA",
                 "unaligned": "3540"
             }
         },
         {
-            "name": "esros3-3",
+            "name": "esrbs3-3",
             "per": {
                 "aligned": "40AABB",
                 "unaligned": "555760"
             }
         },
         {
-            "name": "esros3-4",
+            "name": "esrbs3-4",
             "per": {
                 "aligned": "8003AABBCC",
                 "unaligned": "81D55DE600"
             }
         },
         {
-            "name": "esros3-5",
+            "name": "esrbs3-5",
             "per": {
                 "aligned": "8004AABBCCDD",
                 "unaligned": "82555DE66E80"
             }
         },
         {
-            "name": "esros4-1",
+            "name": "esrbs4-1",
             "per": "00"
         },
         {
-            "name": "esros4-2",
+            "name": "esrbs4-2",
             "per": {
                 "aligned": "40AA",
                 "unaligned": "6A80"
             }
         },
         {
-            "name": "esros4-3",
+            "name": "esrbs4-3",
             "per": {
                 "aligned": "8002AABB",
                 "unaligned": "81555D80"
             }
         },
         {
-            "name": "esros4-4",
+            "name": "esrbs4-4",
             "per": {
                 "aligned": "8003AABBCC",
                 "unaligned": "81D55DE600"
             }
         },
         {
-            "name": "esros4-5",
+            "name": "esrbs4-5",
             "per": {
                 "aligned": "8004AABBCCDD",
                 "unaligned": "82555DE66E80"
             }
         },
         {
-            "name": "esros4-6",
+            "name": "esrbs4-6",
             "per": {
                 "aligned": "8005AABBCCDDEE",
                 "unaligned": "82D55DE66EF700"
             }
         },
         {
-            "name": "esros5-1",
+            "name": "esrbs5-1",
             "per": "00"
         },
         {
-            "name": "esros5-2",
+            "name": "esrbs5-2",
             "per": {
                 "aligned": "10AA",
                 "unaligned": "1AA0"
             }
         },
         {
-            "name": "esros5-3",
+            "name": "esrbs5-3",
             "per": {
                 "aligned": "8002AABB",
                 "unaligned": "81555D80"
             }
         },
         {
-            "name": "esros5-4",
+            "name": "esrbs5-4",
             "per": {
                 "aligned": "30AABBCC",
                 "unaligned": "3AABBCC0"
             }
         },
         {
-            "name": "esros5-5",
+            "name": "esrbs5-5",
             "per": {
                 "aligned": "40AABBCCDD",
                 "unaligned": "4AABBCCDD0"

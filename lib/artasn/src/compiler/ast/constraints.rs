@@ -31,6 +31,16 @@ fn parse_constraint(
     for element_set in element_sets {
         match &element_set.element {
             AstConstraintElement::Extensible(ast) => {
+                if last_element_kind.is_none() {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "extensibility operator '...' must appear after the base set of constraints"
+                                .to_string(),
+                        ),
+                        loc: ast.loc,
+                    });
+                }
+
                 if extensible {
                     return Err(Error {
                         kind: ErrorKind::Ast(
@@ -40,6 +50,7 @@ fn parse_constraint(
                         loc: ast.loc,
                     });
                 }
+
                 extensible = true;
                 last_element_kind = Some(ElementKind::Extensiblity);
                 constraint.push(vec![AstElement::new(SubtypeElement::Extensible, ast.loc)]);
@@ -68,6 +79,7 @@ fn parse_constraint(
 
     Ok(Constraint {
         elements: constraint,
+        loc: ast_constraint.loc,
     })
 }
 
@@ -648,7 +660,21 @@ fn parse_constrained_type(
             },
             _ => Vec::new(),
         },
-        _ => Vec::new(),
+        AstConstrainedType::TypeWithConstraint(twc) => {
+            let component_type = match &constrained_type.ty {
+                BuiltinType::StructureOf(of) => of.component_type.resolve(parser.context)?,
+                _ => unreachable!(),
+            };
+
+            let component_constraint = parse_type_constraint(
+                parser,
+                &twc.element.0.element.ty,
+                &component_type,
+                parameters,
+            )?;
+
+            vec![(String::new(), component_constraint)]
+        }
     };
     Ok(PendingConstraint {
         constraint,
@@ -859,6 +885,17 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
                             .expect("pending constraint component not found in type");
                         apply_pending_constraint(&mut component.component_type, pending);
                     }
+                }
+                BuiltinType::StructureOf(of) => {
+                    if pending.component_constraints.len() != 1 {
+                        panic!(
+                            "expecting 1 component constraint, found {}",
+                            pending.component_constraints.len()
+                        );
+                    }
+                    let (_, component_constraint) =
+                        pending.component_constraints.into_iter().next().unwrap();
+                    apply_pending_constraint(&mut of.component_type, component_constraint);
                 }
                 BuiltinType::Choice(choice) => {
                     for (alternative_name, pending) in pending.component_constraints {

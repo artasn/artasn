@@ -1,7 +1,11 @@
 use std::io::Write;
 
+use num::BigInt;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Alignment {
+    // Don't align the value, even if using aligned PER.
+    None,
     // The bits are aligned to the start of a byte boundary, so padding bits are appended to the right.
     Start,
     // The bits are aligned to the end of a byte bondary, so padding bits are appended to the left.
@@ -36,6 +40,23 @@ impl<W: Write> BitWriter<W> {
         for bit_pos in (0..bits).rev() {
             let bit = (int >> bit_pos) & 1;
             self.write_bit(bit == 1);
+        }
+
+        if self.aligned && alignment == Alignment::Start {
+            self.align();
+        }
+    }
+
+    pub fn write_bigint(&mut self, int: &BigInt, bits: u64, alignment: Alignment) {
+        if self.aligned && alignment == Alignment::End && bits % 8 != 0 {
+            let align_bits = 8 - (bits % 8);
+            for _ in 0..align_bits {
+                self.write_bit(false);
+            }
+        }
+
+        for bit_pos in (0..bits).rev() {
+            self.write_bit(int.bit(bit_pos));
         }
 
         if self.aligned && alignment == Alignment::Start && bits % 8 != 0 {
@@ -73,7 +94,13 @@ impl<W: Write> BitWriter<W> {
         }
     }
 
-    pub fn finish(&mut self) {
+    pub fn align(&mut self) {
+        if self.aligned {
+            self.force_align();
+        }
+    }
+
+    pub fn force_align(&mut self) {
         while self.bit_cursor > 0 {
             self.write_bit(false);
         }
@@ -169,25 +196,25 @@ mod test {
     pub fn test_bit_writer_write_int() {
         let buf = exec_test(|mut writer| {
             writer.write_int(6, 3, Alignment::Start);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0xC0], vec![0xC0]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(6, 3, Alignment::End);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0x06], vec![0xC0]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(2000, 11, Alignment::Start);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0xfa, 0x00], vec![0xfa, 0x00]));
 
         let buf = exec_test(|mut writer| {
             writer.write_int(2000, 11, Alignment::End);
-            writer.finish();
+            writer.force_align();
         });
         assert_eq!(buf, (vec![0x07, 0xd0], vec![0xfa, 0x00]));
     }

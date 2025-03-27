@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use super::{per::BitWriter, *};
+use super::*;
 use crate::{
     compiler::{parser::Result, Context},
     values::{Oid, ResolvedValue},
@@ -358,9 +358,14 @@ fn per_encode_value(
         other => panic!("illegal TransferSyntax (expecting Packed): {:?}", other),
     };
 
-    let mut bit_writer = BitWriter::new(aligned, Cursor::new(buf));
-    per::per_encode_value(&mut bit_writer, context, typed_value)?;
-    bit_writer.finish();
+    let writer = per::BitWriter::new(aligned, Cursor::new(buf));
+    let mut encoder = per::PerEncoder {
+        context,
+        writer,
+        tmp_buf: Vec::with_capacity(per::TMP_BUF_CAPACITY),
+    };
+    per::per_encode_value(&mut encoder, typed_value)?;
+    encoder.writer.force_align();
 
     Ok(())
 }

@@ -41,33 +41,29 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         let mut keywords = None;
         let mut operators = None;
         for item in &extra.items {
-            match item {
-                Item::Macro(item_macro) => {
-                    if item_macro
-                        .mac
-                        .path
-                        .get_ident()
-                        .as_ref()
-                        .unwrap()
-                        .to_string()
-                        == "enum_str"
-                    {
-                        let macro_body_tokens = &item_macro.mac.tokens;
-                        let item_enum: ItemEnum = parse2(macro_body_tokens.clone()).unwrap();
-                        let enum_name = item_enum.ident.to_string();
-                        let str_enum = parse_str_enum(item_enum);
-                        if enum_name == "Keyword" {
-                            keywords = Some(str_enum);
-                        } else if enum_name == "Operator" {
-                            operators = Some(str_enum);
-                        } else {
-                            panic!();
-                        }
+            if let Item::Macro(item_macro) = item {
+                if *item_macro
+                    .mac
+                    .path
+                    .get_ident()
+                    .as_ref()
+                    .unwrap()
+                    == "enum_str"
+                {
+                    let macro_body_tokens = &item_macro.mac.tokens;
+                    let item_enum: ItemEnum = parse2(macro_body_tokens.clone()).unwrap();
+                    let enum_name = item_enum.ident.to_string();
+                    let str_enum = parse_str_enum(item_enum);
+                    if enum_name == "Keyword" {
+                        keywords = Some(str_enum);
+                    } else if enum_name == "Operator" {
+                        operators = Some(str_enum);
                     } else {
                         panic!();
                     }
+                } else {
+                    panic!();
                 }
-                _ => (),
             }
         }
         (keywords.unwrap(), operators.unwrap())
@@ -126,16 +122,13 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
 
         for i in 0..filtered_items.len() {
             let item = &filtered_items[i];
-            match item {
-                Item::Const(item_const) => {
-                    if item_const.ident.to_string() == "EXTRA_PLACEHOLDER" {
-                        filtered_items.remove(i);
-                        for extra_item in extra.items.iter().rev().cloned() {
-                            filtered_items.insert(i, extra_item);
-                        }
+            if let Item::Const(item_const) = item {
+                if item_const.ident == "EXTRA_PLACEHOLDER" {
+                    filtered_items.remove(i);
+                    for extra_item in extra.items.iter().rev().cloned() {
+                        filtered_items.insert(i, extra_item);
                     }
                 }
-                _ => (),
             }
         }
 

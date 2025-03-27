@@ -60,7 +60,10 @@ RangeIntegerList5 ::= SEQUENCE OF INTEGER (MIN..2)
 ril5 RangeIntegerList5 ::= { -5, -4, -3, -2, -1, 0, 1, 2 }
 
 RangeIntegerList6 ::= SEQUENCE OF INTEGER (-2..MAX)
-ril6 RangeIntegerList6 ::= { -2, -1, 0, 1, 2, 3, 4, 5 }
+ril6 RangeIntegerList6 ::= { -2, -1, 0, 1, 2, 3, 4, 5, 253, 254, 255, 256, 257 }
+
+RangeIntegerList7 ::= SEQUENCE OF INTEGER (-10000..-1000)
+ril7 RangeIntegerList7 ::= { -10000, -9000, -8000, -7000, -6000, -5000, -4000, -3000, -2000, -1000 }
 
 InfiniteRangeIntegerList ::= SEQUENCE OF INTEGER (MIN..MAX)
 iril InfiniteRangeIntegerList ::= { -1000, -10, -2, -1, 0, 1, 2, 10, 1000 }

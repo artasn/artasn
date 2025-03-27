@@ -37,7 +37,7 @@ fn write_vlq(mut n: u64, buf: &mut Vec<u8>) -> usize {
     index
 }
 
-pub(crate) fn write_tlv_len(len: u64, buf: &mut Vec<u8>) {
+fn write_tlv_len(len: u64, buf: &mut Vec<u8>) {
     if len < 0x80 {
         buf.push(len as u8);
     } else {
@@ -48,28 +48,14 @@ pub(crate) fn write_tlv_len(len: u64, buf: &mut Vec<u8>) {
 }
 
 fn ber_encode_integer(buf: &mut Vec<u8>, num: &BigInt) {
-    const SIGN_MASK: u8 = 0b1000_0000;
-
     if num == &BigInt::ZERO {
         // fast encode for 0
         buf.push(0x00);
     } else {
-        let sign = num.sign();
-        let bytes = num.to_signed_bytes_le();
-
         // write the bytes in little-endian order,
         // such that when the DER is reversed after encoding,
         // the bytes are in big-endian order
-        buf.extend_from_slice(&bytes);
-
-        let msb = bytes[bytes.len() - 1];
-        if sign != Sign::Minus && msb & SIGN_MASK == SIGN_MASK {
-            // when the sign bit is set in the msb, but the number is positive, add a padding byte without the sign bit
-            buf.push(0x00);
-        } else if sign == Sign::Minus && msb & SIGN_MASK != SIGN_MASK {
-            // when the sign bit is not set in the msb, but the number is negative, add a padding byte containing the sign bit
-            buf.push(0xff);
-        }
+        buf.extend_from_slice(&num.to_signed_bytes_le());
     }
 }
 

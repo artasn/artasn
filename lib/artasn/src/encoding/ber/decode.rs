@@ -83,7 +83,7 @@ fn get_component_by_tag<'a>(
     })
 }
 
-pub fn type_eq_tlv(
+fn type_eq_tlv(
     context: &Context,
     resolved_type: &ResolvedType,
     tlv_tag: &TlvTag,

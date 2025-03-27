@@ -1,0 +1,19 @@
+PerNullTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Null ::= NULL
+null Null ::= NULL
+
+NullList ::= SEQUENCE OF NULL
+null-list-1 NullList ::= {}
+null-list-2 NullList ::= { NULL }
+null-list-3 NullList ::= { NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+
+ConstrainedNull ::= NULL (NULL)
+constrained-null ConstrainedNull ::= NULL
+
+ConstrainedNullList ::= SEQUENCE OF ConstrainedNull
+constrained-null-list-1 ConstrainedNullList ::= {}
+constrained-null-list-2 ConstrainedNullList ::= { NULL }
+constrained-null-list-3 ConstrainedNullList ::= { NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+
+END

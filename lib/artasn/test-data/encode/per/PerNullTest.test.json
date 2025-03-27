@@ -1,0 +1,41 @@
+{
+    "module": "PerNullTest",
+    "tests": [
+        "Encode",
+        "PER"
+    ],
+    "values": [
+        {
+            "name": "null",
+            "per": ""
+        },
+        {
+            "name": "null-list-1",
+            "per": "00"
+        },
+        {
+            "name": "null-list-2",
+            "per": "01"
+        },
+        {
+            "name": "null-list-3",
+            "per": "07"
+        },
+        {
+            "name": "constrained-null",
+            "per": ""
+        },
+        {
+            "name": "constrained-null-list-1",
+            "per": "00"
+        },
+        {
+            "name": "constrained-null-list-2",
+            "per": "01"
+        },
+        {
+            "name": "constrained-null-list-3",
+            "per": "07"
+        }
+    ]
+}

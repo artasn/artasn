@@ -1,0 +1,104 @@
+PerBitStringTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+UnconstrainedBitString ::= BIT STRING
+ubs-1 UnconstrainedBitString ::= ''B
+ubs-2 UnconstrainedBitString ::= ''H
+ubs-3 UnconstrainedBitString ::= '00'H
+ubs-4 UnconstrainedBitString ::= '1337'H
+ubs-5 UnconstrainedBitString ::= '1'B
+ubs-6 UnconstrainedBitString ::= '0'B
+ubs-7 UnconstrainedBitString ::= '1010'B
+ubs-8 UnconstrainedBitString ::= '10101010'B
+ubs-9 UnconstrainedBitString ::= '101010101'B
+
+ZeroSizeBitString ::= BIT STRING (SIZE(0))
+zsbs1 ZeroSizeBitString ::= ''B
+zsbs2 ZeroSizeBitString ::= ''H
+
+ConstBitString1 ::= BIT STRING ('1337'H)
+cbs1 ConstBitString1 ::= '1337'H
+
+ConstBitString2 ::= BIT STRING ('10101'B)
+cbs2 ConstBitString2 ::= '10101'B
+
+OneBitBitString ::= BIT STRING (SIZE(1))
+obbs-1 OneBitBitString ::= '0'B
+obbs-2 OneBitBitString ::= '1'B
+
+SizeRangeBitString1 ::= BIT STRING (SIZE(0..4))
+srbs1-1 SizeRangeBitString1 ::= ''B
+srbs1-2 SizeRangeBitString1 ::= '1'B
+srbs1-3 SizeRangeBitString1 ::= '10'B
+srbs1-4 SizeRangeBitString1 ::= '101'B
+srbs1-5 SizeRangeBitString1 ::= '1010'B
+srbs1-6 SizeRangeBitString1 ::= 'A'H
+
+SizeRangeBitString2 ::= BIT STRING (SIZE(2..4))
+srbs2-1 SizeRangeBitString2 ::= '10'B
+srbs2-2 SizeRangeBitString2 ::= '101'B
+srbs2-3 SizeRangeBitString2 ::= '1010'B
+srbs2-4 SizeRangeBitString2 ::= 'A'H
+
+SizeRangeBitString3 ::= BIT STRING (SIZE(1..<3 | 5<..7))
+srbs3-1 SizeRangeBitString3 ::= '1'B
+srbs3-2 SizeRangeBitString3 ::= '10'B
+srbs3-3 SizeRangeBitString3 ::= '101010'B
+srbs3-4 SizeRangeBitString3 ::= '1010101'B
+
+SizeMaxBitString1 ::= BIT STRING (SIZE(0..MAX))
+smbs1-1 SizeMaxBitString1 ::= ''B
+smbs1-2 SizeMaxBitString1 ::= '1010'B
+smbs1-3 SizeMaxBitString1 ::= 'AABB'H
+
+SizeMaxBitString2 ::= BIT STRING (SIZE(2..MAX))
+smbs2-1 SizeMaxBitString2 ::= '10'B
+smbs2-2 SizeMaxBitString2 ::= '1010'B
+smbs2-3 SizeMaxBitString2 ::= 'AABBCCDD'H
+
+ExtensibleZeroSizeBitString1 ::= BIT STRING (SIZE(0, ...))
+ezsbs1 ExtensibleZeroSizeBitString1 ::= ''B
+
+ExtensibleZeroSizeBitString2 ::= BIT STRING (SIZE(0), ...)
+ezsbs2 ExtensibleZeroSizeBitString1 ::= ''B
+
+ConstOrSizedBitString ::= BIT STRING('1010'B | SIZE(1))
+cbsbs-1 ConstOrSizedBitString ::= '1010'B
+cbsbs-2 ConstOrSizedBitString ::= '1'B
+
+ExtensibleSizeRangeBitString1 ::= BIT STRING (SIZE(0..4, ...))
+esrbs1-1 ExtensibleSizeRangeBitString1 ::= ''B
+esrbs1-2 ExtensibleSizeRangeBitString1 ::= '1'B
+esrbs1-3 ExtensibleSizeRangeBitString1 ::= '10'B
+esrbs1-4 ExtensibleSizeRangeBitString1 ::= '101'B
+esrbs1-5 ExtensibleSizeRangeBitString1 ::= '1010'B
+
+ExtensibleSizeRangeBitString2 ::= BIT STRING (SIZE(0..2, ..., 2<..4))
+esrbs2-1 ExtensibleSizeRangeBitString2 ::= ''B
+esrbs2-2 ExtensibleSizeRangeBitString2 ::= '1'B
+esrbs2-3 ExtensibleSizeRangeBitString2 ::= '10'B
+esrbs2-4 ExtensibleSizeRangeBitString2 ::= '101'B
+esrbs2-5 ExtensibleSizeRangeBitString2 ::= '1010'B
+
+ExtensibleSizeRangeBitString3 ::= BIT STRING (SIZE(0..2), ..., SIZE(2<..4))
+esrbs3-1 ExtensibleSizeRangeBitString3 ::= ''B
+esrbs3-2 ExtensibleSizeRangeBitString3 ::= '1'B
+esrbs3-3 ExtensibleSizeRangeBitString3 ::= '10'B
+esrbs3-4 ExtensibleSizeRangeBitString3 ::= '101'B
+esrbs3-5 ExtensibleSizeRangeBitString3 ::= '1010'B
+
+ExtensibleSizeRangeBitString4 ::= BIT STRING (SIZE(0..1, ..., 2), ..., SIZE(2<..4, ...) | SIZE(5))
+esrbs4-1 ExtensibleSizeRangeBitString4 ::= ''B
+esrbs4-2 ExtensibleSizeRangeBitString4 ::= '1'B
+esrbs4-3 ExtensibleSizeRangeBitString4 ::= '10'B
+esrbs4-4 ExtensibleSizeRangeBitString4 ::= '101'B
+esrbs4-5 ExtensibleSizeRangeBitString4 ::= '1010'B
+esrbs4-6 ExtensibleSizeRangeBitString4 ::= '10101'B
+
+ExtensibleSizeRangeBitString5 ::= BIT STRING (SIZE(0..1, ..., 2) | SIZE(3..4))
+esrbs5-1 ExtensibleSizeRangeBitString5 ::= ''B
+esrbs5-2 ExtensibleSizeRangeBitString5 ::= '1'B
+esrbs5-3 ExtensibleSizeRangeBitString5 ::= '10'B
+esrbs5-4 ExtensibleSizeRangeBitString5 ::= '101'B
+esrbs5-5 ExtensibleSizeRangeBitString5 ::= '1010'B
+
+END

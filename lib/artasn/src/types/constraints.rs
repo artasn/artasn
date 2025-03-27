@@ -1,8 +1,8 @@
-use num::BigInt;
+use num::{bigint::Sign, BigInt};
 
 use crate::{
     compiler::{
-        parser::{AstElement, Error, ErrorKind, Result},
+        parser::{AstElement, Error, ErrorKind, Loc, Result},
         Context,
     },
     module::QualifiedIdentifier,
@@ -60,6 +60,7 @@ macro_rules! resolve_integer {
 #[derive(Debug, Clone)]
 pub struct Constraint {
     pub elements: Vec<Vec<AstElement<SubtypeElement>>>,
+    pub loc: Loc,
 }
 
 #[derive(Debug, Clone)]
@@ -130,19 +131,19 @@ pub struct ValueRange {
 }
 
 impl ValueRange {
-    pub fn lower_value(&self, context: &Context) -> Result<Option<BigInt>> {
+    pub fn lower_value(&self, context: &Context) -> Result<Bound> {
         Ok(match &self.lower {
-            RangeLowerBound::Min => None,
-            RangeLowerBound::Eq(value) => Some(resolve_integer!(context, value).clone()),
-            RangeLowerBound::Gt(value) => Some(resolve_integer!(context, value) + 1),
+            RangeLowerBound::Min => Bound::Unbounded,
+            RangeLowerBound::Eq(value) => Bound::Integer(resolve_integer!(context, value).clone()),
+            RangeLowerBound::Gt(value) => Bound::Integer(resolve_integer!(context, value) + 1),
         })
     }
 
-    pub fn upper_value(&self, context: &Context) -> Result<Option<BigInt>> {
+    pub fn upper_value(&self, context: &Context) -> Result<Bound> {
         Ok(match &self.upper {
-            RangeUpperBound::Max => None,
-            RangeUpperBound::Eq(value) => Some(resolve_integer!(context, value).clone()),
-            RangeUpperBound::Lt(value) => Some(resolve_integer!(context, value) - 1),
+            RangeUpperBound::Max => Bound::Unbounded,
+            RangeUpperBound::Eq(value) => Bound::Integer(resolve_integer!(context, value).clone()),
+            RangeUpperBound::Lt(value) => Bound::Integer(resolve_integer!(context, value) - 1),
         })
     }
 }
@@ -173,6 +174,63 @@ pub enum IntegerInclusion {
     Included { is_extension: bool },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Bound {
+    /// Represents an unbounded range element, which is either `MIN` or `MAX`.
+    Unbounded,
+    /// Represents an integer value in either a single value or range constraint.
+    Integer(BigInt),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConstraintBounds {
+    /// The lower bound of the constraint.
+    pub lower_bound: Bound,
+    /// The 'unextended' upper bound of the constraint.
+    /// Any higher bounds defined as extensions to the original constraint are not included.
+    /// If the entire constraint is an extension, for example:
+    ///
+    /// ```asn1
+    /// O ::= OCTET STRING (SIZE(10..20), ..., SIZE(20<..30))
+    /// ```
+    ///
+    /// If this instance of ConstraintBounds represented exclusively the second SIZE constraint,
+    /// `upper_bound` would be `None` because the entire subtype element is an extension.
+    pub upper_bound: Option<Bound>,
+    /// The upper bound of the constraint.
+    /// This includes bounds defined as extensions to the original constraint.
+    pub extended_upper_bound: Bound,
+}
+
+impl ConstraintBounds {
+    /// Applies the values of another `ConstraintBounds` to this one.
+    /// If the applied constraint contains any lower or higher bounds,
+    /// they are applied to the bounds of this `ConstraintBounds`.
+    pub(crate) fn apply_bounds(&mut self, other_bounds: &ConstraintBounds) {
+        macro_rules! apply_bound {
+            ( $other_bound:expr, $op:tt, $bound:expr ) => {{
+                match (&$other_bound, &$bound) {
+                    (Bound::Unbounded, _) => $bound = Bound::Unbounded,
+                    (other_bound @ Bound::Integer(other_bound_value), Bound::Integer(bound)) => {
+                        if other_bound_value $op bound {
+                            $bound = other_bound.clone();
+                        }
+                    }
+                    _ => (),
+                }
+            }};
+        }
+
+        apply_bound!(other_bounds.lower_bound, <, self.lower_bound);
+        match (&other_bounds.upper_bound, &mut self.upper_bound) {
+            (Some(other_bound), Some(bound)) => apply_bound!(*other_bound, >, *bound),
+            (other_bound @ Some(_), None) => self.upper_bound = other_bound.clone(),
+            _ => (),
+        }
+        apply_bound!(other_bounds.extended_upper_bound, >, self.extended_upper_bound);
+    }
+}
+
 impl Constraint {
     pub fn find<F: Fn(&SubtypeElement) -> bool>(&self, f: F) -> Option<&SubtypeElement> {
         self.flatten().iter().find_map(|subtype| {
@@ -190,35 +248,61 @@ impl Constraint {
 
     /// Returns the `(lower, upper)` bounds of the constraint.
     /// If there are no single value or range constraints, None is returned.
-    /// If the lower bound is `MIN`, the first element of the returned tuple is None.
-    /// If the upper bound is `MAX`, the second element of the returned tuple is None.
-    pub fn integer_value_bounds(
+    pub fn integer_value_bounds(&self, context: &Context) -> Result<Option<ConstraintBounds>> {
+        self.extensible_integer_value_bound(context, false)
+    }
+
+    fn extensible_integer_value_bound(
         &self,
         context: &Context,
-    ) -> Result<Option<(Option<BigInt>, Option<BigInt>)>> {
-        let mut bounds = None;
+        mut is_extension: bool,
+    ) -> Result<Option<ConstraintBounds>> {
+        let mut bounds: Option<ConstraintBounds> = None;
 
         for subtype in self.flatten() {
             match &subtype.element {
+                SubtypeElement::Extensible => {
+                    is_extension = true;
+                }
                 SubtypeElement::SingleValue(single_value) => {
                     let single_value = resolve_integer!(context, single_value);
                     match &mut bounds {
-                        Some((lower_bound, upper_bound)) => {
-                            match lower_bound {
-                                Some(lower_bound) if &single_value < lower_bound => {
+                        Some(constraint_bounds) => {
+                            match &mut constraint_bounds.lower_bound {
+                                Bound::Integer(lower_bound) if &single_value < lower_bound => {
                                     *lower_bound = single_value.clone();
                                 }
                                 _ => (),
                             };
-                            match upper_bound {
-                                Some(upper_bound) if &single_value > upper_bound => {
-                                    *upper_bound = single_value.clone();
+                            if !is_extension {
+                                match &mut constraint_bounds.upper_bound {
+                                    Some(Bound::Integer(upper_bound))
+                                        if &single_value > upper_bound =>
+                                    {
+                                        *upper_bound = single_value.clone();
+                                    }
+                                    _ => (),
+                                };
+                            }
+                            match &mut constraint_bounds.extended_upper_bound {
+                                Bound::Integer(extended_upper_bound)
+                                    if &single_value > extended_upper_bound =>
+                                {
+                                    *extended_upper_bound = single_value.clone();
                                 }
                                 _ => (),
                             };
                         }
                         None => {
-                            bounds = Some((Some(single_value.clone()), Some(single_value.clone())))
+                            bounds = Some(ConstraintBounds {
+                                lower_bound: Bound::Integer(single_value.clone()),
+                                upper_bound: if is_extension {
+                                    None
+                                } else {
+                                    Some(Bound::Integer(single_value.clone()))
+                                },
+                                extended_upper_bound: Bound::Integer(single_value.clone()),
+                            })
                         }
                     }
                 }
@@ -226,27 +310,56 @@ impl Constraint {
                     let (lower_value, upper_value) =
                         (range.lower_value(context)?, range.upper_value(context)?);
                     match &mut bounds {
-                        Some((lower_bound, upper_bound)) => {
-                            if lower_value.is_none() {
-                                *lower_bound = None;
-                            } else if let (Some(lower_value), Some(lower_bound)) =
-                                (lower_value, lower_bound)
+                        Some(constraint_bounds) => {
+                            if lower_value == Bound::Unbounded {
+                                constraint_bounds.lower_bound = Bound::Unbounded;
+                            } else if let (
+                                Bound::Integer(lower_value),
+                                Bound::Integer(lower_bound),
+                            ) = (lower_value, &mut constraint_bounds.lower_bound)
                             {
                                 if &lower_value < lower_bound {
                                     *lower_bound = lower_value;
                                 }
                             }
-                            if upper_value.is_none() {
-                                *upper_bound = None;
-                            } else if let (Some(upper_value), Some(upper_bound)) =
-                                (upper_value, upper_bound)
+
+                            if !is_extension {
+                                if upper_value == Bound::Unbounded {
+                                    constraint_bounds.upper_bound = Some(Bound::Unbounded);
+                                } else if let (
+                                    Bound::Integer(upper_value),
+                                    Some(Bound::Integer(upper_bound)),
+                                ) =
+                                    (upper_value.clone(), &mut constraint_bounds.upper_bound)
+                                {
+                                    if &upper_value > upper_bound {
+                                        *upper_bound = upper_value;
+                                    }
+                                }
+                            }
+                            if upper_value == Bound::Unbounded {
+                                constraint_bounds.extended_upper_bound = Bound::Unbounded;
+                            } else if let (
+                                Bound::Integer(upper_value),
+                                Bound::Integer(extended_upper_bound),
+                            ) = (upper_value, &mut constraint_bounds.extended_upper_bound)
                             {
-                                if &upper_value > upper_bound {
-                                    *upper_bound = upper_value.clone();
+                                if &upper_value > extended_upper_bound {
+                                    *extended_upper_bound = upper_value.clone();
                                 }
                             }
                         }
-                        None => bounds = Some((lower_value, upper_value)),
+                        None => {
+                            bounds = Some(ConstraintBounds {
+                                lower_bound: lower_value,
+                                upper_bound: if is_extension {
+                                    None
+                                } else {
+                                    Some(upper_value.clone())
+                                },
+                                extended_upper_bound: upper_value.clone(),
+                            })
+                        }
                     }
                 }
                 _ => (),
@@ -256,39 +369,34 @@ impl Constraint {
         Ok(bounds)
     }
 
-    pub fn size_bounds(
-        &self,
-        context: &Context,
-    ) -> Result<Option<(Option<BigInt>, Option<BigInt>)>> {
-        let mut bounds = None;
+    pub fn size_bounds(&self, context: &Context) -> Result<Option<ConstraintBounds>> {
+        let mut bounds: Option<ConstraintBounds> = None;
+        let mut extensible = false;
         for subtype in self.flatten() {
-            if let SubtypeElement::Size(constraint) = &subtype.element {
-                let size_bounds = constraint.integer_value_bounds(context)?;
-                if let Some(size_bounds) = size_bounds {
-                    let (lower_size, upper_size) = size_bounds;
-                    match &mut bounds {
-                        Some((lower_bound, upper_bound)) => {
-                            if lower_size.is_none() {
-                                *lower_bound = None;
-                            } else if let (Some(lower_size), Some(lower_bound)) =
-                                (lower_size, lower_bound)
-                            {
-                                if &lower_size < lower_bound {
-                                    *lower_bound = lower_size;
-                                }
+            match &subtype.element {
+                SubtypeElement::Extensible => extensible = true,
+                SubtypeElement::Size(constraint) => {
+                    let size_bounds =
+                        constraint.extensible_integer_value_bound(context, extensible)?;
+                    if let Some(size_bounds) = size_bounds {
+                        match &mut bounds {
+                            Some(bounds) => {
+                                bounds.apply_bounds(&size_bounds);
                             }
-                            if upper_size.is_none() {
-                                *upper_bound = None;
-                            } else if let (Some(upper_size), Some(upper_bound)) =
-                                (upper_size, upper_bound)
-                            {
-                                if &upper_size > upper_bound {
-                                    *upper_bound = upper_size.clone();
-                                }
-                            }
+                            None => bounds = Some(size_bounds),
                         }
-                        None => bounds = Some((lower_size, upper_size)),
                     }
+                }
+                _ => (),
+            }
+        }
+        if let Some(bounds) = &bounds {
+            if let Bound::Integer(lower_bound) = &bounds.lower_bound {
+                if lower_bound.sign() == Sign::Minus {
+                    return Err(Error {
+                        kind: ErrorKind::Ast("illegal negative SIZE constraint".to_string()),
+                        loc: self.loc,
+                    });
                 }
             }
         }
@@ -319,10 +427,27 @@ impl Constraint {
     }
 
     /// Returns true if the constraint is extensible.
-    /// If `mode` is [`ConstraintCheckMode::Value`], extensibility of `SIZE` constraints are not included.
-    /// If `mode` is [`ConstraintCheckMode::Size`], extensibility of `SIZE` constraints are included (as well as value constraints).
-    pub fn is_extensible(_mode: ConstraintCheckMode) {
-        todo!()
+    /// If `mode` is `None`, extensibility of any constraints are included.
+    /// If `mode` is [`ConstraintCheckMode::Value`], extensibility of value constraints only are included.
+    /// If `mode` is [`ConstraintCheckMode::Size`], extensibility of `SIZE` constraints only are included.
+    pub fn is_extensible(&self, mode: Option<ConstraintCheckMode>) -> bool {
+        for element in self.flatten() {
+            match &element.element {
+                SubtypeElement::Size(size) => {
+                    if matches!(mode, None | Some(ConstraintCheckMode::Size)) && size.is_extensible(None) {
+                        return true;
+                    }
+                }
+                SubtypeElement::Extensible => {
+                    if matches!(mode, None | Some(ConstraintCheckMode::Value)) {
+                        return true;
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        false
     }
 
     pub fn includes_integer(
@@ -340,6 +465,9 @@ impl Constraint {
         let mut has_matching_constraint = false;
         let mut is_extension = false;
         for element in self.flatten() {
+            if let SubtypeElement::Extensible = &element.element {
+                is_extension = true;
+            }
             match mode {
                 ConstraintCheckMode::Value => match &element.element {
                     SubtypeElement::SingleValue(single_value) => {
@@ -377,22 +505,21 @@ impl Constraint {
                             }
                         }
                     }
-                    SubtypeElement::Extensible => is_extension = true,
                     _ => (),
                 },
                 ConstraintCheckMode::Size => {
                     if let SubtypeElement::Size(size_constraint) = &element.element {
                         has_matching_constraint = true;
                         if let Some(IntegerInclusion::Included {
-                                is_extension: is_size_constraint_extension,
-                            }) = size_constraint.includes_integer(
+                            is_extension: is_size_constraint_extension,
+                        }) = size_constraint.includes_integer(
                             context,
                             ConstraintCheckMode::Value,
                             value,
                         )? {
                             return Ok(Some(IntegerInclusion::Included {
                                 is_extension: is_extension || is_size_constraint_extension,
-                            }))
+                            }));
                         }
                     }
                 }
@@ -421,6 +548,7 @@ mod test {
             Compiler, Context,
         },
         module::ModuleIdentifier,
+        types::{Bound, ConstraintBounds},
     };
 
     use super::Constraint;
@@ -501,31 +629,51 @@ mod test {
             parse_constraint(&mut context, "I ::= INTEGER (-2..2)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some((-2).into()), Some(2.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer((-2).into()),
+                upper_bound: Some(Bound::Integer(2.into())),
+                extended_upper_bound: Bound::Integer(2.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (-2<..2)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some((-1).into()), Some(2.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer((-1).into()),
+                upper_bound: Some(Bound::Integer(2.into())),
+                extended_upper_bound: Bound::Integer(2.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (-2..<2)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some((-2).into()), Some(1.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer((-2).into()),
+                upper_bound: Some(Bound::Integer(1.into())),
+                extended_upper_bound: Bound::Integer(1.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (-2<..<2)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some((-1).into()), Some(1.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer((-1).into()),
+                upper_bound: Some(Bound::Integer(1.into())),
+                extended_upper_bound: Bound::Integer(1.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (10)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some(10.into()), Some(10.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(10.into()),
+                upper_bound: Some(Bound::Integer(10.into())),
+                extended_upper_bound: Bound::Integer(10.into()),
+            })
         );
         assert_eq!(
             parse_constraint(
@@ -534,25 +682,41 @@ mod test {
             )
             .integer_value_bounds(&context)
             .unwrap(),
-            Some((Some(2.into()), Some(100.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(2.into()),
+                upper_bound: Some(Bound::Integer(100.into())),
+                extended_upper_bound: Bound::Integer(100.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (MIN..MAX)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((None, None))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Unbounded,
+                upper_bound: Some(Bound::Unbounded),
+                extended_upper_bound: Bound::Unbounded,
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (MIN..0 | 10..20)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((None, Some(20.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Unbounded,
+                upper_bound: Some(Bound::Integer(20.into())),
+                extended_upper_bound: Bound::Integer(20.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "I ::= INTEGER (-20..-10 | 0..MAX)")
                 .integer_value_bounds(&context)
                 .unwrap(),
-            Some((Some((-20).into()), None))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer((-20).into()),
+                upper_bound: Some(Bound::Unbounded),
+                extended_upper_bound: Bound::Unbounded,
+            })
         );
     }
 
@@ -563,31 +727,51 @@ mod test {
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(0..2))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some(0.into()), Some(2.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(0.into()),
+                upper_bound: Some(Bound::Integer(2.into())),
+                extended_upper_bound: Bound::Integer(2.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(0<..2))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some(1.into()), Some(2.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(1.into()),
+                upper_bound: Some(Bound::Integer(2.into())),
+                extended_upper_bound: Bound::Integer(2.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(0..<2))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some(0.into()), Some(1.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(0.into()),
+                upper_bound: Some(Bound::Integer(1.into())),
+                extended_upper_bound: Bound::Integer(1.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(0<..<2))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some(1.into()), Some(1.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(1.into()),
+                upper_bound: Some(Bound::Integer(1.into())),
+                extended_upper_bound: Bound::Integer(1.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(1))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some(1.into()), Some(1.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(1.into()),
+                upper_bound: Some(Bound::Integer(1.into())),
+                extended_upper_bound: Bound::Integer(1.into()),
+            })
         );
         assert_eq!(
             parse_constraint(
@@ -596,25 +780,72 @@ mod test {
             )
             .size_bounds(&context)
             .unwrap(),
-            Some((Some(2.into()), Some(100.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(2.into()),
+                upper_bound: Some(Bound::Integer(100.into())),
+                extended_upper_bound: Bound::Integer(100.into()),
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(MIN..MAX))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((None, None))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Unbounded,
+                upper_bound: Some(Bound::Unbounded),
+                extended_upper_bound: Bound::Unbounded,
+            })
         );
         assert_eq!(
             parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(MIN..0 | 10..20))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((None, Some(20.into())))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Unbounded,
+                upper_bound: Some(Bound::Integer(20.into())),
+                extended_upper_bound: Bound::Integer(20.into()),
+            })
         );
         assert_eq!(
-            parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(-20..-10 | 0..MAX))")
+            parse_constraint(&mut context, "O ::= OCTET STRING (SIZE(10..20 | 30..MAX))")
                 .size_bounds(&context)
                 .unwrap(),
-            Some((Some((-20).into()), None))
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(10.into()),
+                upper_bound: Some(Bound::Unbounded),
+                extended_upper_bound: Bound::Unbounded,
+            })
+        );
+    }
+
+    #[test]
+    pub fn test_extensible_size_bounds() {
+        let mut context = Context::new();
+        assert_eq!(
+            parse_constraint(
+                &mut context,
+                "O ::= OCTET STRING (SIZE(0..10, ..., 20..30))"
+            )
+            .size_bounds(&context)
+            .unwrap(),
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(0.into()),
+                upper_bound: Some(Bound::Integer(10.into())),
+                extended_upper_bound: Bound::Integer(30.into()),
+            })
+        );
+        assert_eq!(
+            parse_constraint(
+                &mut context,
+                "O ::= OCTET STRING (SIZE(0..10), ..., SIZE(20..30))"
+            )
+            .size_bounds(&context)
+            .unwrap(),
+            Some(ConstraintBounds {
+                lower_bound: Bound::Integer(0.into()),
+                upper_bound: Some(Bound::Integer(10.into())),
+                extended_upper_bound: Bound::Integer(30.into()),
+            })
         );
     }
 }
