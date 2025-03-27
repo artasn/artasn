@@ -3,6 +3,7 @@ extern UppercaseReference
 extern ValueReference
 extern Number
 extern StringLiteral
+extern BracedTokenStream
 
 rule Program {
     captures {
@@ -208,7 +209,7 @@ rule DefinedEncodingObjectSetModule {
 }
 
 // 17.1.5
-variant EncodingObject = DefinedEncodingObject | EncodeStructure;
+variant EncodingObject = DefinedEncodingObject | EncodeStructure | BracedTokenStream;
 
 // 17.5.1
 rule EncodeStructure {

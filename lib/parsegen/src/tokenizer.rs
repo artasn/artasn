@@ -48,7 +48,9 @@ enum_str! {
 
 enum_str! {
     pub enum Operator {
-        _Placeholder = "_",
+        _Placeholder = "",
+        OpenBrace = "[",
+        CloseBrace = "]",
     }
 }
 

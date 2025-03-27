@@ -76,8 +76,8 @@ fn write_length_determinant<W: Write>(
                 writer.write_byte(length as u8);
             } else if length_max <= 16383 {
                 let mut length_bits = length as u16;
+                length_bits &= 0xbfff; // ensure bit 14 is zero
                 length_bits |= 1 << 15;
-                length_bits &= 0 << 14;
                 writer.write_int(length_bits as u64, 16, Alignment::End);
             } else {
                 todo!("encode fragmented values");

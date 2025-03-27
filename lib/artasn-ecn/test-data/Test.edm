@@ -17,9 +17,77 @@ legacyProtocolMessagesEncoding #LegacyProtocolMessages ::= {
     ENCODE STRUCTURE {
         message-id {
             ENCODING {
-                ENCODING-SPACE SIZE 8
+                ENCODING-SPACE
+                SIZE 8
+            }
+        },
+        messages {
+            ENCODE STRUCTURE {
+                STRUCTURED WITH {
+                    ALTERNATIVE
+                    DETERMINED BY field-to-be-used
+                    USING message-id
+                }
+            }
+            WITH PER-BASIC-UNALIGNED
+        }
+    }
+    WITH PER-BASIC-UNALIGNED
+}
+
+message1Encoding #Message1 ::= {
+    ENCODE STRUCTURE {
+        b   b-encoding
+            OPTIONAL-ENCODING {
+                PRESENCE
+                DETERMINED BY field-to-be-used
+                USING b-flag
+            },
+        c octet-aligned-seq-of-with-ext-determinant{< c-len >},
+        d octet-aligned-seq-of-until-end-of-container 
+            OPTIONAL-ENCODING USE-SET
+    }
+    WITH PER-BASIC-UNALIGNED
+}
+
+b-encoding #B ::= {
+    ENCODE STRUCTURE {
+        -- Components
+        b3 {
+            ENCODING {
+                ALIGNED TO NEXT nibble 
+                ENCODING-SPACE SIZE 2 MULTIPLE OF bit
             }
         }
+        -- Structure
+        STRUCTURED WITH {
+            ALIGNED TO NEXT octet 
+            ENCODING-SPACE SIZE self-delimiting-values
+            MULTIPLE OF bit
+        }
+    }
+    -- The rest 
+    WITH PER-BASIC-UNALIGNED
+}
+
+octet-aligned-seq-of-with-ext-determinant{< REFERENCE : len >} #REPETITION ::= {
+	REPETITION-ENCODING {
+		ALIGNED TO NEXT octet
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		MULTIPLE OF repetitions
+		DETERMINED BY field-to-be-used
+		USING len
+    }
+}
+
+octet-aligned-seq-of-until-end-of-container #REPETITION ::= {
+	REPETITION-ENCODING {
+		ALIGNED TO NEXT octet
+		REPETITION-SPACE
+		SIZE variable-with-determinant
+		DETERMINED BY container
+		USING OUTER
     }
 }
 
