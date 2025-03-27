@@ -407,23 +407,16 @@ rule Constraint {
 
 rule SubtypeConstraint {
     captures {
-        element_sets = repeated: SubtypeElementSet
-        extensible = bool
+        element_sets = repeated: ConstraintElement
     }
-    element_sets = SubtypeElementSet
+    element_sets = ConstraintElement
     optional repeated {
         operator ,
-        operator ...
-        extensible = true
-        operator ,
-        element_sets = SubtypeElementSet
-    }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
+        element_sets = ConstraintElement
     }
 }
+
+variant ConstraintElement = Extensible | SubtypeElementSet;
 
 rule SubtypeElementSet {
     captures {

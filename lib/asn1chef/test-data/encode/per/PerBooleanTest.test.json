@@ -1,0 +1,89 @@
+{
+    "module": "PerBooleanTest",
+    "tests": [
+        "Encode",
+        "PER"
+    ],
+    "values": [
+        {
+            "name": "ub-1",
+            "per": "00"
+        },
+        {
+            "name": "ub-2",
+            "per": "80"
+        },
+        {
+            "name": "ubl-1",
+            "per": "08AA"
+        },
+        {
+            "name": "ubl-2",
+            "per": "0855"
+        },
+        {
+            "name": "ubl-3",
+            "per": "08FF"
+        },
+        {
+            "name": "ubl-4",
+            "per": "08F0"
+        },
+        {
+            "name": "ubl-5",
+            "per": "08F0"
+        },
+        {
+            "name": "ubl-6",
+            "per": "080F"
+        },
+        {
+            "name": "ubl-7",
+            "per": "0180"
+        },
+        {
+            "name": "ubl-8",
+            "per": "0280"
+        },
+        {
+            "name": "ubl-9",
+            "per": "09FF80"
+        },
+        {
+            "name": "ubl-10",
+            "per": "09FE80"
+        },
+        {
+            "name": "tb",
+            "per": "80"
+        },
+        {
+            "name": "etb",
+            "per": "80"
+        },
+        {
+            "name": "fb",
+            "per": "00"
+        },
+        {
+            "name": "efb",
+            "per": "00"
+        },
+        {
+            "name": "ebb1-1",
+            "per": "80"
+        },
+        {
+            "name": "ebb1-2",
+            "per": "00"
+        },
+        {
+            "name": "ebb2-1",
+            "per": "80"
+        },
+        {
+            "name": "ebb2-2",
+            "per": "00"
+        }
+    ]
+}

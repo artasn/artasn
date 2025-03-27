@@ -1,0 +1,95 @@
+PerOctetStringTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+UnconstrainedOctetString ::= OCTET STRING
+uos-1 UnconstrainedOctetString ::= ''H
+uos-2 UnconstrainedOctetString ::= ''B
+uos-3 UnconstrainedOctetString ::= '00'H
+uos-4 UnconstrainedOctetString ::= '1337'H
+uos-5 UnconstrainedOctetString ::= '1010'B
+
+ZeroSizeOctetString ::= OCTET STRING (SIZE(0))
+zsos ZeroSizeOctetString ::= ''H
+
+ConstOctetString ::= OCTET STRING ('1337'H)
+cos ConstOctetString ::= '1337'H
+
+OneByteOctetString ::= OCTET STRING (SIZE(1))
+obos-1 OneByteOctetString ::= '00'H
+obos-2 OneByteOctetString ::= 'AA'H
+obos-3 OneByteOctetString ::= 'FF'H
+
+SizeRangeOctetString1 ::= OCTET STRING (SIZE(0..4))
+sros1-1 SizeRangeOctetString1 ::= ''H
+sros1-2 SizeRangeOctetString1 ::= 'AA'H
+sros1-3 SizeRangeOctetString1 ::= 'AABB'H
+sros1-4 SizeRangeOctetString1 ::= 'AABBCC'H
+sros1-5 SizeRangeOctetString1 ::= 'AABBCCDD'H
+
+SizeRangeOctetString2 ::= OCTET STRING (SIZE(2..4))
+sros2-1 SizeRangeOctetString2 ::= 'AABB'H
+sros2-2 SizeRangeOctetString2 ::= 'AABBCC'H
+sros2-3 SizeRangeOctetString2 ::= 'AABBCCDD'H
+
+SizeRangeOctetString3 ::= OCTET STRING (SIZE(1..<3 | 5<..7))
+sros3-1 SizeRangeOctetString3 ::= 'AA'H
+sros3-2 SizeRangeOctetString3 ::= 'AABB'H
+sros3-3 SizeRangeOctetString3 ::= '001122334455'H
+sros3-4 SizeRangeOctetString3 ::= '00112233445566'H
+
+SizeMaxOctetString1 ::= OCTET STRING (SIZE(0..MAX))
+smos1-1 SizeMaxOctetString1 ::= ''H
+smos1-2 SizeMaxOctetString1 ::= 'AA'H
+smos1-3 SizeMaxOctetString1 ::= 'AABB'H
+
+SizeMaxOctetString2 ::= OCTET STRING (SIZE(2..MAX))
+smos2-1 SizeMaxOctetString2 ::= 'AABB'H
+smos2-2 SizeMaxOctetString2 ::= 'AABBCC'H
+smos2-3 SizeMaxOctetString2 ::= 'AABBCCDD'H
+
+ExtensibleZeroSizeOctetString1 ::= OCTET STRING (SIZE(0, ...))
+ezsos1 ExtensibleZeroSizeOctetString1 ::= ''H
+
+ExtensibleZeroSizeOctetString2 ::= OCTET STRING (SIZE(0), ...)
+ezsos2 ExtensibleZeroSizeOctetString1 ::= ''H
+
+ConstOrSizedOctetString ::= OCTET STRING('1337'H | SIZE(1))
+cosos-1 ConstOrSizedOctetString ::= '1337'H
+cosos-2 ConstOrSizedOctetString ::= 'AA'H
+
+ExtensibleSizeRangeOctetString1 ::= OCTET STRING (SIZE(0..4, ...))
+esros1-1 ExtensibleSizeRangeOctetString1 ::= ''H
+esros1-2 ExtensibleSizeRangeOctetString1 ::= 'AA'H
+esros1-3 ExtensibleSizeRangeOctetString1 ::= 'AABB'H
+esros1-4 ExtensibleSizeRangeOctetString1 ::= 'AABBCC'H
+esros1-5 ExtensibleSizeRangeOctetString1 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString2 ::= OCTET STRING (SIZE(0..2, ..., 2<..4))
+esros2-1 ExtensibleSizeRangeOctetString1 ::= ''H
+esros2-2 ExtensibleSizeRangeOctetString1 ::= 'AA'H
+esros2-3 ExtensibleSizeRangeOctetString1 ::= 'AABB'H
+esros2-4 ExtensibleSizeRangeOctetString1 ::= 'AABBCC'H
+esros2-5 ExtensibleSizeRangeOctetString1 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString3 ::= OCTET STRING (SIZE(0..2), ..., SIZE(2<..4))
+esros3-1 ExtensibleSizeRangeOctetString3 ::= ''H
+esros3-2 ExtensibleSizeRangeOctetString3 ::= 'AA'H
+esros3-3 ExtensibleSizeRangeOctetString3 ::= 'AABB'H
+esros3-4 ExtensibleSizeRangeOctetString3 ::= 'AABBCC'H
+esros3-5 ExtensibleSizeRangeOctetString3 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString4 ::= OCTET STRING (SIZE(0, ..., 1 | 2), ..., SIZE(2<..4, ...) | SIZE(5))
+esros4-1 ExtensibleSizeRangeOctetString4 ::= ''H
+esros4-2 ExtensibleSizeRangeOctetString4 ::= 'AA'H
+esros4-3 ExtensibleSizeRangeOctetString4 ::= 'AABB'H
+esros4-4 ExtensibleSizeRangeOctetString4 ::= 'AABBCC'H
+esros4-5 ExtensibleSizeRangeOctetString4 ::= 'AABBCCDD'H
+esros4-6 ExtensibleSizeRangeOctetString4 ::= 'AABBCCDDEE'H
+
+ExtensibleSizeRangeOctetString5 ::= OCTET STRING (SIZE(0..1, ..., 2) | SIZE(3..4))
+esros5-1 ExtensibleSizeRangeOctetString5 ::= ''H
+esros5-2 ExtensibleSizeRangeOctetString5 ::= 'AA'H
+esros5-3 ExtensibleSizeRangeOctetString5 ::= 'AABB'H
+esros5-4 ExtensibleSizeRangeOctetString5 ::= 'AABBCC'H
+esros5-5 ExtensibleSizeRangeOctetString5 ::= 'AABBCCDD'H
+
+END

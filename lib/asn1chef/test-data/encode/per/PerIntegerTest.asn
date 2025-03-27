@@ -1,0 +1,80 @@
+PerIntegerTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+UnconstrainedInteger ::= INTEGER
+ui-1 UnconstrainedInteger ::= 0
+ui-2 UnconstrainedInteger ::= 1
+ui-3 UnconstrainedInteger ::= 127
+ui-4 UnconstrainedInteger ::= 128
+ui-5 UnconstrainedInteger ::= 255
+ui-6 UnconstrainedInteger ::= 256
+ui-7 UnconstrainedInteger ::= 9999999999
+ui-8 UnconstrainedInteger ::= -1
+ui-9 UnconstrainedInteger ::= -127
+ui-10 UnconstrainedInteger ::= -128
+ui-11 UnconstrainedInteger ::= -255
+ui-12 UnconstrainedInteger ::= -256
+ui-13 UnconstrainedInteger ::= -9999999999
+
+UnconstrainedIntegerList ::= SEQUENCE OF UnconstrainedInteger
+ui-list UnconstrainedIntegerList ::= { ui-1, ui-2, ui-3, ui-4, ui-5, ui-6, ui-7, ui-8, ui-9, ui-10, ui-11, ui-12, ui-13 }
+
+ConstInteger ::= INTEGER (100)
+const-integer ConstInteger ::= 100
+
+ExtensibleConstInteger ::= INTEGER (100, ...)
+extensible-const-integer ExtensibleConstInteger ::= 100
+
+BinaryInteger1 ::= INTEGER (0 | 1)
+bi1-1 BinaryInteger1 ::= 0
+bi1-2 BinaryInteger1 ::= 1
+
+BinaryInteger2 ::= INTEGER (100 | 150)
+bi2-1 BinaryInteger2 ::= 100
+bi2-2 BinaryInteger2 ::= 150
+
+BinaryInteger3 ::= INTEGER (-1000 | 1000)
+bi3-1 BinaryInteger3 ::= -1000
+bi3-2 BinaryInteger3 ::= 1000
+
+ExtensibleBinaryInteger1 ::= INTEGER (0, ..., 1)
+ebi1-1 ExtensibleBinaryInteger1 ::= 0
+ebi1-2 ExtensibleBinaryInteger1 ::= 1
+
+ExtensibleBinaryInteger2 ::= INTEGER (0 | 1, ...)
+ebi2-1 ExtensibleBinaryInteger1 ::= 0
+ebi2-2 ExtensibleBinaryInteger1 ::= 1
+
+RangeIntegerList1 ::= SEQUENCE OF INTEGER (0..10)
+ril1 RangeIntegerList1 ::= { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+RangeIntegerList2 ::= SEQUENCE OF INTEGER (-5..5)
+ril2 RangeIntegerList2 ::= { -5, -4, -3, -2, 1, 0, 1, 2, 3, 4, 5 }
+
+RangeIntegerList3 ::= SEQUENCE OF INTEGER (-5<..<5)
+ril3 RangeIntegerList3 ::= { -4, -3, -2, 1, 0, 1, 2, 3, 4 }
+
+RangeIntegerList4 ::= SEQUENCE OF INTEGER (-1..2)
+ril4 RangeIntegerList4 ::= { -1, 0, 1, 2 }
+
+RangeIntegerList5 ::= SEQUENCE OF INTEGER (MIN..2)
+ril5 RangeIntegerList5 ::= { -5, -4, -3, -2, -1, 0, 1, 2 }
+
+RangeIntegerList6 ::= SEQUENCE OF INTEGER (-2..MAX)
+ril6 RangeIntegerList6 ::= { -2, -1, 0, 1, 2, 3, 4, 5 }
+
+InfiniteRangeIntegerList ::= SEQUENCE OF INTEGER (MIN..MAX)
+iril InfiniteRangeIntegerList ::= { -1000, -10, -2, -1, 0, 1, 2, 10, 1000 }
+
+ExtensibleRangeIntegerList1 ::= SEQUENCE OF INTEGER (0..10, ...)
+eril1 ExtensibleRangeIntegerList1 ::= { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+ExtensibleRangeIntegerList2 ::= SEQUENCE OF INTEGER (0..5, ..., 5..10)
+eril2 ExtensibleRangeIntegerList2 ::= { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+ExtensibleRangeIntegerList3 ::= SEQUENCE OF INTEGER (0..5 | 5..10, ...)
+eril3 ExtensibleRangeIntegerList3 ::= { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+ExtensibleRangeIntegerList4 ::= SEQUENCE OF INTEGER (0..2, ..., 2<..5 | 5<..8 | 8<..10)
+eril4 ExtensibleRangeIntegerList4 ::= { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+END

@@ -12,7 +12,7 @@ use crate::{
     values::*,
 };
 
-pub(crate) fn write_vlq(mut n: u64, buf: &mut Vec<u8>) -> usize {
+fn write_vlq(mut n: u64, buf: &mut Vec<u8>) -> usize {
     const CARRY_BIT: u8 = 0b1000_0000;
     const MASK: u8 = 0b0111_1111;
 
@@ -190,6 +190,7 @@ fn ber_encode_real(buf: &mut Vec<u8>, mut mantissa: BigInt, base: i64, mut expon
 }
 
 fn ber_encode_structure(
+    mode: EncodeMode,
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -203,7 +204,7 @@ fn ber_encode_structure(
             continue;
         }
         let typed_value = component.value.resolve(context)?;
-        ber_encode_value(buf, context, &typed_value)?;
+        ber_encode_value(mode, buf, context, &typed_value)?;
     }
 
     Ok(())
@@ -211,6 +212,7 @@ fn ber_encode_structure(
 
 /// See X.690 clause 8.18 and its subclauses to see what is being encoded here.
 fn ber_encode_external(
+    mode: EncodeMode,
     buf: &mut Vec<u8>,
     context: &Context,
     components: &[StructureValueComponent],
@@ -221,21 +223,21 @@ fn ber_encode_external(
     {
         // if the "encoding" component is present, then EXTERNAL is defined as the X.208 version;
         // the X.690 encoding maps one-to-one with X.208 EXTERNAL, and can be encoded as a normal structure
-        ber_encode_structure(buf, context, components)?;
+        ber_encode_structure(mode, buf, context, components)?;
     } else {
         let data_value = components
             .iter()
             .find(|component| component.name.element == "data-value")
             .expect("missing data-value");
         let data_value = data_value.value.resolve(context)?;
-        ber_encode_value(buf, context, &data_value)?;
+        ber_encode_value(mode, buf, context, &data_value)?;
 
         if let Some(data_value_descriptor) = components
             .iter()
             .find(|component| component.name.element == "data-value-descriptor")
         {
             let data_value_descriptor = data_value_descriptor.value.resolve(context)?;
-            ber_encode_value(buf, context, &data_value_descriptor)?;
+            ber_encode_value(mode, buf, context, &data_value_descriptor)?;
         }
 
         let (direct_reference, indirect_reference) =
@@ -260,10 +262,10 @@ fn ber_encode_external(
                 _ => unreachable!(),
             };
         if let Some(indirect_reference) = indirect_reference {
-            ber_encode_value(buf, context, &indirect_reference)?;
+            ber_encode_value(mode, buf, context, &indirect_reference)?;
         }
         if let Some(direct_reference) = direct_reference {
-            ber_encode_value(buf, context, &direct_reference)?;
+            ber_encode_value(mode, buf, context, &direct_reference)?;
         }
     }
     Ok(())
@@ -329,6 +331,7 @@ fn is_external_type(ty: &BuiltinType) -> bool {
 /// Regardless of the TransferSyntax provided, the output will always be valid DER.
 /// Since DER is always valid BER and valid CER, this is always acceptable.
 pub fn ber_encode_value(
+    mode: EncodeMode,
     buf: &mut Vec<u8>,
     context: &Context,
     typed_value: &ResolvedValue,
@@ -460,20 +463,20 @@ pub fn ber_encode_value(
                     );
                 }
             } else if is_external_type(&typed_value.ty.ty) {
-                ber_encode_external(buf, context, &structure.components)?
+                ber_encode_external(mode, buf, context, &structure.components)?
             } else {
-                ber_encode_structure(buf, context, &structure.components)?;
+                ber_encode_structure(mode, buf, context, &structure.components)?;
             }
         }
         BuiltinValue::SequenceOf(structure) | BuiltinValue::SetOf(structure) => {
             for element in structure.iter().rev() {
                 let resolved = element.resolve(context)?;
-                ber_encode_value(buf, context, &resolved)?;
+                ber_encode_value(mode, buf, context, &resolved)?;
             }
         }
         BuiltinValue::Choice(choice) => {
             let value = choice.value.resolve(context)?;
-            ber_encode_value(buf, context, &value)?;
+            ber_encode_value(mode, buf, context, &value)?;
         }
         BuiltinValue::CharacterString(tag_type, str) => {
             ber_encode_character_string(buf, *tag_type, str);
@@ -553,7 +556,13 @@ pub fn ber_encode_value(
 
             let contained_value = containing.value.resolve(context)?;
             let encoder = ts.get_codec().encoder.unwrap();
-            encoder(ts, buf, context, &contained_value)?;
+            encoder(
+                ts,
+                EncodeMode::ContentsConstraint,
+                buf,
+                context,
+                &contained_value,
+            )?;
 
             match &resolved_type.ty {
                 // write the bit string unused bits count

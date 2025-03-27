@@ -2,7 +2,7 @@ use std::{fmt::Display, fs, time::Instant};
 
 use asn1chef::{
     compiler::{options::CompilerConfig, Compiler, Context},
-    encoding::TransferSyntax,
+    encoding::{EncodeMode, TransferSyntax},
     module::QualifiedIdentifier,
     values::ValueResolve,
 };
@@ -216,14 +216,14 @@ fn main() {
         };
 
         let mut buf = Vec::with_capacity(64 * 1024);
-        match encoder(ts, &mut buf, &context, &value) {
+        match encoder(ts, EncodeMode::Normal, &mut buf, &context, &value) {
             Ok(()) => (),
             Err(err) => exit_with_error(format_args!(
                 "failed to encode value: {}",
                 err.kind.message()
             )),
         }
-        let hex = hex::encode_upper(buf.into_iter().rev().collect::<Vec<u8>>());
+        let hex = hex::encode_upper(buf);
         if !args.silent {
             println!("encoded in {}\n", elapsed_to_string(&start));
         }

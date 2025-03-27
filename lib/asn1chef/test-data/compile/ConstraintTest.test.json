@@ -1,10 +1,8 @@
 [
     "compile error: value violates constraints of type at ConstraintTest.asn:5:41",
     "compile error: value violates constraints of type at ConstraintTest.asn:6:37",
-    "compile error: value violates constraints of type at ConstraintTest.asn:10:41",
     "compile error: value violates constraints of type at ConstraintTest.asn:11:37",
     "compile error: value violates constraints of type at ConstraintTest.asn:12:43",
-    "compile error: value violates constraints of type at ConstraintTest.asn:16:41",
     "compile error: value violates constraints of type at ConstraintTest.asn:17:37",
     "compile error: value violates constraints of type at ConstraintTest.asn:18:43",
     "compile error: value violates constraints of type at ConstraintTest.asn:24:49",

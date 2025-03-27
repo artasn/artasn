@@ -60,11 +60,11 @@ macro_rules! resolve_integer {
 #[derive(Debug, Clone)]
 pub struct Constraint {
     pub elements: Vec<Vec<AstElement<SubtypeElement>>>,
-    pub extensible: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum SubtypeElement {
+    Extensible,
     SingleValue(AstElement<TypedValue>),
     ValueRange(ValueRange),
     Size(Constraint),
@@ -165,6 +165,12 @@ pub enum RangeUpperBound {
 pub enum ConstraintCheckMode {
     Value,
     Size,
+}
+
+#[derive(Debug, Clone)]
+pub enum IntegerInclusion {
+    NotIncluded,
+    Included { is_extension: bool },
 }
 
 impl Constraint {
@@ -289,22 +295,6 @@ impl Constraint {
         Ok(bounds)
     }
 
-    pub fn is_size_extensible(&self) -> bool {
-        if self.extensible {
-            return true;
-        }
-
-        for subtype in self.flatten() {
-            if let SubtypeElement::Size(constraint) = &subtype.element {
-                if constraint.extensible {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
     pub fn includes_value(
         &self,
         context: &Context,
@@ -328,12 +318,19 @@ impl Constraint {
         })
     }
 
+    /// Returns true if the constraint is extensible.
+    /// If `mode` is [`ConstraintCheckMode::Value`], extensibility of `SIZE` constraints are not included.
+    /// If `mode` is [`ConstraintCheckMode::Size`], extensibility of `SIZE` constraints are included (as well as value constraints).
+    pub fn is_extensible(_mode: ConstraintCheckMode) {
+        todo!()
+    }
+
     pub fn includes_integer(
         &self,
         context: &Context,
         mode: ConstraintCheckMode,
         value: &BigInt,
-    ) -> Result<Option<bool>> {
+    ) -> Result<Option<IntegerInclusion>> {
         macro_rules! cmp_constant {
             ( $value:expr, $op:tt, $constant:expr ) => {{
                 $value $op &resolve_integer!(context, $constant)
@@ -341,13 +338,14 @@ impl Constraint {
         }
 
         let mut has_matching_constraint = false;
+        let mut is_extension = false;
         for element in self.flatten() {
             match mode {
                 ConstraintCheckMode::Value => match &element.element {
                     SubtypeElement::SingleValue(single_value) => {
                         has_matching_constraint = true;
                         if cmp_constant!(value, ==, single_value) {
-                            return Ok(Some(true));
+                            return Ok(Some(IntegerInclusion::Included { is_extension }));
                         }
                     }
                     SubtypeElement::ValueRange(range) => {
@@ -375,21 +373,26 @@ impl Constraint {
                                 }
                             };
                             if meets_upper {
-                                return Ok(Some(true));
+                                return Ok(Some(IntegerInclusion::Included { is_extension }));
                             }
                         }
                     }
+                    SubtypeElement::Extensible => is_extension = true,
                     _ => (),
                 },
                 ConstraintCheckMode::Size => {
                     if let SubtypeElement::Size(size_constraint) = &element.element {
                         has_matching_constraint = true;
-                        if let Some(result) = size_constraint.includes_integer(
+                        if let Some(IntegerInclusion::Included {
+                                is_extension: is_size_constraint_extension,
+                            }) = size_constraint.includes_integer(
                             context,
                             ConstraintCheckMode::Value,
                             value,
                         )? {
-                            return Ok(Some(result));
+                            return Ok(Some(IntegerInclusion::Included {
+                                is_extension: is_extension || is_size_constraint_extension,
+                            }))
                         }
                     }
                 }
@@ -401,7 +404,7 @@ impl Constraint {
         // Otherwise, if there are constraints found for the given ConstraintCheckMode,
         // but none of then matched, Some(false) should be returned
         Ok(if has_matching_constraint {
-            Some(false)
+            Some(IntegerInclusion::NotIncluded)
         } else {
             None
         })

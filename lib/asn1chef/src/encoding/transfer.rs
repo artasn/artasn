@@ -1,4 +1,6 @@
-use super::*;
+use std::io::Cursor;
+
+use super::{per::BitWriter, *};
 use crate::{
     compiler::{parser::Result, Context},
     values::{Oid, ResolvedValue},
@@ -40,22 +42,35 @@ pub enum TransferSyntax {
     Octet(OctetEncodingKind),
 }
 
+impl Display for TransferSyntax {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.get_name())
+    }
+}
+
 type EncodeFunc = fn(
     syntax: &TransferSyntax,
+    mode: EncodeMode,
     buf: &mut Vec<u8>,
     context: &Context,
     typed_value: &ResolvedValue,
 ) -> Result<()>;
 type DecodeFunc = fn(
     syntax: &TransferSyntax,
+    mode: &DecodeMode,
     buf: &[u8],
     context: &Context,
-    mode: &DecodeMode,
 ) -> DecodeResult<Vec<DecodedValue>>;
 
 pub struct TransferSyntaxCodec {
     pub encoder: Option<EncodeFunc>,
     pub decoder: Option<DecodeFunc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncodeMode {
+    Normal,
+    ContentsConstraint,
 }
 
 impl TransferSyntaxCodec {
@@ -131,7 +146,10 @@ lazy_static::lazy_static! {
                 0, // aligned
             ]),
             name: "PER",
-            codec: TransferSyntaxCodec::unsupported(),
+            codec: TransferSyntaxCodec {
+                encoder: Some(per_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::BasicUnaligned),
@@ -143,7 +161,10 @@ lazy_static::lazy_static! {
                 1, // unaligned
             ]),
             name: "UPER",
-            codec: TransferSyntaxCodec::unsupported(),
+            codec: TransferSyntaxCodec {
+                encoder: Some(per_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
@@ -155,7 +176,10 @@ lazy_static::lazy_static! {
                 0, // aligned
             ]),
             name: "CPER",
-            codec: TransferSyntaxCodec::unsupported(),
+            codec: TransferSyntaxCodec {
+                encoder: Some(per_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
@@ -167,7 +191,10 @@ lazy_static::lazy_static! {
                 1, // unaligned
             ]),
             name: "CUPER",
-            codec: TransferSyntaxCodec::unsupported(),
+            codec: TransferSyntaxCodec {
+                encoder: Some(per_encode_value),
+                decoder: None,
+            },
         },
         TransferSyntaxData {
             syntax: TransferSyntax::Xml(XmlEncodingKind::Basic),
@@ -283,6 +310,7 @@ impl TransferSyntax {
 
 fn ber_encode_value(
     syntax: &TransferSyntax,
+    mode: EncodeMode,
     buf: &mut Vec<u8>,
     context: &Context,
     typed_value: &ResolvedValue,
@@ -291,18 +319,48 @@ fn ber_encode_value(
         TransferSyntax::Basic(_) => (),
         other => panic!("illegal TransferSyntax (expecting Basic): {:?}", other),
     };
-    ber::ber_encode_value(buf, context, typed_value)
+
+    let buf_start = buf.len();
+    ber::ber_encode_value(mode, buf, context, typed_value)?;
+    if mode == EncodeMode::Normal {
+        buf[buf_start..].reverse();
+    }
+
+    Ok(())
 }
 
 fn ber_decode_value(
     syntax: &TransferSyntax,
+    mode: &DecodeMode,
     buf: &[u8],
     context: &Context,
-    mode: &DecodeMode,
 ) -> DecodeResult<Vec<DecodedValue>> {
     let kind = match syntax {
         TransferSyntax::Basic(kind) => *kind,
         other => panic!("illegal TransferSyntax (expecting Basic): {:?}", other),
     };
+
     ber::ber_decode_value(kind, buf, context, mode)
+}
+
+fn per_encode_value(
+    syntax: &TransferSyntax,
+    _mode: EncodeMode,
+    buf: &mut Vec<u8>,
+    context: &Context,
+    typed_value: &ResolvedValue,
+) -> Result<()> {
+    let aligned = match syntax {
+        TransferSyntax::Packed(kind) => match kind {
+            PackedEncodingKind::BasicAligned | PackedEncodingKind::CanonicalAligned => true,
+            PackedEncodingKind::BasicUnaligned | PackedEncodingKind::CanonicalUnaligned => false,
+        },
+        other => panic!("illegal TransferSyntax (expecting Packed): {:?}", other),
+    };
+
+    let mut bit_writer = BitWriter::new(aligned, Cursor::new(buf));
+    per::per_encode_value(&mut bit_writer, context, typed_value)?;
+    bit_writer.finish();
+
+    Ok(())
 }

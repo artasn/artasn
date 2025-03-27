@@ -504,14 +504,21 @@ impl BuiltinType {
             },
             None => None,
         };
+        let size_ok = size_ok.map(|inclusion| match inclusion {
+            IntegerInclusion::Included { .. } => true,
+            IntegerInclusion::NotIncluded => false,
+        });
         let value_ok = match constraint {
             Some(constraint) => match &typed_value.value {
                 BuiltinValue::Boolean(_) | BuiltinValue::OctetString(_) => {
                     constraint.includes_value(context, valref)?
                 }
-                BuiltinValue::Integer(value) => {
-                    constraint.includes_integer(context, ConstraintCheckMode::Value, value)?
-                }
+                BuiltinValue::Integer(value) => constraint
+                    .includes_integer(context, ConstraintCheckMode::Value, value)?
+                    .map(|inclusion| match inclusion {
+                        IntegerInclusion::Included { .. } => true,
+                        IntegerInclusion::NotIncluded => false,
+                    }),
                 _ => None,
             },
             None => None,

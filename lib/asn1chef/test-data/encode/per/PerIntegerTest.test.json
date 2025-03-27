@@ -1,0 +1,128 @@
+{
+    "module": "PerIntegerTest",
+    "tests": [
+        "Encode",
+        "PER"
+    ],
+    "values": [
+        {
+            "name": "ui-1",
+            "per": "0100"
+        },
+        {
+            "name": "ui-2",
+            "per": "0101"
+        },
+        {
+            "name": "ui-list",
+            "per": "0D01000101017F0200800200FF0201000502540BE3FF01FF0181018002FF0102FF0005FDABF41C01"
+        },
+        {
+            "name": "const-integer",
+            "per": ""
+        },
+        {
+            "name": "extensible-const-integer",
+            "per": "00"
+        },
+        {
+            "name": "bi1-1",
+            "per": "00"
+        },
+        {
+            "name": "bi1-2",
+            "per": "80"
+        },
+        {
+            "name": "bi2-1",
+            "per": "00"
+        },
+        {
+            "name": "bi2-2",
+            "per": "C8"
+        },
+        {
+            "name": "bi3-1",
+            "per": "0000"
+        },
+        {
+            "name": "bi3-2",
+            "per": {
+                "aligned": "07D0",
+                "unaligned": "FA00"
+            }
+        },
+        {
+            "name": "ebi1-1",
+            "per": "00"
+        },
+        {
+            "name": "ebi1-2",
+            "per": {
+                "aligned": "800101",
+                "unaligned": "808080"
+            }
+        },
+        {
+            "name": "ebi2-1",
+            "per": "00"
+        },
+        {
+            "name": "ebi2-2",
+            "per": {
+                "aligned": "800101",
+                "unaligned": "808080"
+            }
+        },
+        {
+            "name": "ril1",
+            "per": "0B0123456789A0"
+        },
+        {
+            "name": "ril2",
+            "per": "0B0123656789A0"
+        },
+        {
+            "name": "ril3",
+            "per": "090125456780"
+        },
+        {
+            "name": "ril4",
+            "per": "041B"
+        },
+        {
+            "name": "ril5",
+            "per": "0801FB01FC01FD01FE01FF010001010102"
+        },
+        {
+            "name": "ril6",
+            "per": "0801000101010201030104010501060107"
+        },
+        {
+            "name": "iril",
+            "per": "0902FC1801F601FE01FF010001010102010A0203E8"
+        },
+        {
+            "name": "eril1",
+            "per": "0B00443214C74254"
+        },
+        {
+            "name": "eril2",
+            "per": {
+                "aligned": "0B01234580010680010780010880010980010A",
+                "unaligned": "0B01234580834041E0211010980850"
+            }
+        },
+        {
+            "name": "eril3",
+            "per": "0B00443214C74254"
+        },
+        {
+            "name": "eril4",
+            "per": {
+                "aligned": "0B0540010380010480010580010680010780010880010980010A",
+                "unaligned": "0B054040E0209010580834041E02110109808500"
+            }
+        }
+    ]
+}

@@ -19,23 +19,55 @@ fn parse_constraint(
     parameters: &[(&String, &Parameter)],
     ctx: ConstraintContext,
 ) -> Result<Constraint> {
+    enum ElementKind {
+        Extensiblity,
+        SubtypeElementSet,
+    }
+
     let element_sets = &ast_constraint.element.0.element.element_sets;
     let mut constraint = Vec::with_capacity(element_sets.len());
+    let mut extensible = false;
+    let mut last_element_kind = None;
     for element_set in element_sets {
-        let element_set = &element_set.element.0;
-        let mut elements = Vec::with_capacity(element_set.len());
-        for element in element_set {
-            elements.push(AstElement::new(
-                parse_subtype_element(parser, element, constrained_type, parameters, ctx)?,
-                element.loc,
-            ));
-        }
-        constraint.push(elements);
+        match &element_set.element {
+            AstConstraintElement::Extensible(ast) => {
+                if extensible {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "extensibility operator '...' can only appear once in a constraint"
+                                .to_string(),
+                        ),
+                        loc: ast.loc,
+                    });
+                }
+                extensible = true;
+                last_element_kind = Some(ElementKind::Extensiblity);
+                constraint.push(vec![AstElement::new(SubtypeElement::Extensible, ast.loc)]);
+            }
+            AstConstraintElement::SubtypeElementSet(element_set) => {
+                if matches!(last_element_kind, Some(ElementKind::SubtypeElementSet)) {
+                    return Err(Error {
+                        kind: ErrorKind::Ast("expecting intersection operator '|' before subtype constraint, but found operator ','".to_string()),
+                        loc: element_set.loc,
+                    });
+                }
+
+                let element_set = &element_set.element.0;
+                let mut elements = Vec::with_capacity(element_set.len());
+                for element in element_set {
+                    elements.push(AstElement::new(
+                        parse_subtype_element(parser, element, constrained_type, parameters, ctx)?,
+                        element.loc,
+                    ));
+                }
+                last_element_kind = Some(ElementKind::SubtypeElementSet);
+                constraint.push(elements);
+            }
+        };
     }
 
     Ok(Constraint {
         elements: constraint,
-        extensible: ast_constraint.element.0.element.extensible,
     })
 }
 
@@ -54,18 +86,20 @@ fn resolve_value_parameter(
                     None
                 }
             });
-            if let Some(param) = param { match param {
-                Parameter::Value { value, .. } => return Ok(Some(value.clone())),
-                other => {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "expecting value parameter, but found {} parameter",
-                            other.get_name()
-                        )),
-                        loc: constraint_value.loc,
-                    })
+            if let Some(param) = param {
+                match param {
+                    Parameter::Value { value, .. } => return Ok(Some(value.clone())),
+                    other => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting value parameter, but found {} parameter",
+                                other.get_name()
+                            )),
+                            loc: constraint_value.loc,
+                        })
+                    }
                 }
-            } }
+            }
         }
         _ => (),
     }
@@ -81,13 +115,15 @@ fn resolve_named_number(
         AstValue::DefinedValue(defined_value)
             if defined_value.element.external_module.is_none() =>
         {
-            if let BuiltinType::Integer(integer) = &constrained_type.ty { if let Some(named_values) = &integer.named_values {
-                for named_value in named_values {
-                    if defined_value.element.value.element.0 == named_value.name.element {
-                        return Ok(Some(named_value.value.clone()));
+            if let BuiltinType::Integer(integer) = &constrained_type.ty {
+                if let Some(named_values) = &integer.named_values {
+                    for named_value in named_values {
+                        if defined_value.element.value.element.0 == named_value.name.element {
+                            return Ok(Some(named_value.value.clone()));
+                        }
                     }
                 }
-            } }
+            }
         }
         _ => (),
     }
@@ -446,13 +482,15 @@ fn parse_type_with_constraint(
                     AstConstraint(AstElement::new(
                         AstSubtypeConstraint {
                             element_sets: vec![AstElement::new(
-                                AstSubtypeElementSet(vec![AstElement::new(
-                                    AstSubtypeElement::SizeConstraint(size_constraint.clone()),
+                                AstConstraintElement::SubtypeElementSet(AstElement::new(
+                                    AstSubtypeElementSet(vec![AstElement::new(
+                                        AstSubtypeElement::SizeConstraint(size_constraint.clone()),
+                                        loc,
+                                    )]),
                                     loc,
-                                )]),
+                                )),
                                 loc,
                             )],
-                            extensible: false,
                         },
                         loc,
                     )),

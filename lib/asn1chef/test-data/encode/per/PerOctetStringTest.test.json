@@ -1,0 +1,337 @@
+{
+    "module": "PerOctetStringTest",
+    "tests": [
+        "Encode",
+        "PER"
+    ],
+    "values": [
+        {
+            "name": "uos-1",
+            "per": "00"
+        },
+        {
+            "name": "uos-2",
+            "per": "00"
+        },
+        {
+            "name": "uos-3",
+            "per": "0100"
+        },
+        {
+            "name": "uos-4",
+            "per": "021337"
+        },
+        {
+            "name": "uos-5",
+            "per": "01A0"
+        },
+        {
+            "name": "zsos",
+            "per": ""
+        },
+        {
+            "name": "cos",
+            "per": "021337"
+        },
+        {
+            "name": "obos-1",
+            "per": "00"
+        },
+        {
+            "name": "obos-2",
+            "per": "AA"
+        },
+        {
+            "name": "obos-3",
+            "per": "FF"
+        },
+        {
+            "name": "sros1-1",
+            "per": "00"
+        },
+        {
+            "name": "sros1-2",
+            "per": {
+                "aligned": "20AA",
+                "unaligned": "3540"
+            }
+        },
+        {
+            "name": "sros1-3",
+            "per": {
+                "aligned": "40AABB",
+                "unaligned": "555760"
+            }
+        },
+        {
+            "name": "sros1-4",
+            "per": {
+                "aligned": "60AABBCC",
+                "unaligned": "75577980"
+            }
+        },
+        {
+            "name": "sros1-5",
+            "per": {
+                "aligned": "80AABBCCDD",
+                "unaligned": "9557799BA0"
+            }
+        },
+        {
+            "name": "sros2-1",
+            "per": {
+                "aligned": "00AABB",
+                "unaligned": "2AAEC0"
+            }
+        },
+        {
+            "name": "sros2-2",
+            "per": {
+                "aligned": "40AABBCC",
+                "unaligned": "6AAEF300"
+            }
+        },
+        {
+            "name": "sros2-3",
+            "per": {
+                "aligned": "80AABBCCDD",
+                "unaligned": "AAAEF33740"
+            }
+        },
+        {
+            "name": "sros3-1",
+            "per": {
+                "aligned": "00AA",
+                "unaligned": "1540"
+            }
+        },
+        {
+            "name": "sros3-2",
+            "per": {
+                "aligned": "20AABB",
+                "unaligned": "355760"
+            }
+        },
+        {
+            "name": "sros3-3",
+            "per": {
+                "aligned": "A0001122334455",
+                "unaligned": "A0022446688AA0"
+            }
+        },
+        {
+            "name": "sros3-4",
+            "per": {
+                "aligned": "C000112233445566",
+                "unaligned": "C0022446688AACC0"
+            }
+        },
+        {
+            "name": "smos1-1",
+            "per": "00"
+        },
+        {
+            "name": "smos1-2",
+            "per": "01AA"
+        },
+        {
+            "name": "smos1-3",
+            "per": "02AABB"
+        },
+        {
+            "name": "smos2-1",
+            "per": "02AABB"
+        },
+        {
+            "name": "smos2-2",
+            "per": "03AABBCC"
+        },
+        {
+            "name": "smos2-3",
+            "per": "04AABBCCDD"
+        },
+        {
+            "name": "ezsos1",
+            "per": "00"
+        },
+        {
+            "name": "ezsos2",
+            "per": "00"
+        },
+        {
+            "name": "cosos-1",
+            "per": "021337"
+        },
+        {
+            "name": "cosos-2",
+            "per": "01AA"
+        },
+        {
+            "name": "esros1-1",
+            "per": "00"
+        },
+        {
+            "name": "esros1-2",
+            "per": {
+                "aligned": "10AA",
+                "unaligned": "1AA0"
+            }
+        },
+        {
+            "name": "esros1-3",
+            "per": {
+                "aligned": "20AABB",
+                "unaligned": "2AABB0"
+            }
+        },
+        {
+            "name": "esros1-4",
+            "per": {
+                "aligned": "30AABBCC",
+                "unaligned": "3AABBCC0"
+            }
+        },
+        {
+            "name": "esros1-5",
+            "per": {
+                "aligned": "40AABBCCDD",
+                "unaligned": "4AABBCCDD0"
+            }
+        },
+        {
+            "name": "esros2-1",
+            "per": "00"
+        },
+        {
+            "name": "esros2-2",
+            "per": {
+                "aligned": "10AA",
+                "unaligned": "1AA0"
+            }
+        },
+        {
+            "name": "esros2-3",
+            "per": {
+                "aligned": "20AABB",
+                "unaligned": "2AABB0"
+            }
+        },
+        {
+            "name": "esros2-4",
+            "per": {
+                "aligned": "30AABBCC",
+                "unaligned": "3AABBCC0"
+            }
+        },
+        {
+            "name": "esros2-5",
+            "per": {
+                "aligned": "40AABBCCDD",
+                "unaligned": "4AABBCCDD0"
+            }
+        },
+        {
+            "name": "esros3-1",
+            "per": "00"
+        },
+        {
+            "name": "esros3-2",
+            "per": {
+                "aligned": "20AA",
+                "unaligned": "3540"
+            }
+        },
+        {
+            "name": "esros3-3",
+            "per": {
+                "aligned": "40AABB",
+                "unaligned": "555760"
+            }
+        },
+        {
+            "name": "esros3-4",
+            "per": {
+                "aligned": "8003AABBCC",
+                "unaligned": "81D55DE600"
+            }
+        },
+        {
+            "name": "esros3-5",
+            "per": {
+                "aligned": "8004AABBCCDD",
+                "unaligned": "82555DE66E80"
+            }
+        },
+        {
+            "name": "esros4-1",
+            "per": "00"
+        },
+        {
+            "name": "esros4-2",
+            "per": {
+                "aligned": "8001AA",
+                "unaligned": "80D500"
+            }
+        },
+        {
+            "name": "esros4-3",
+            "per": {
+                "aligned": "8002AABB",
+                "unaligned": "81555D80"
+            }
+        },
+        {
+            "name": "esros4-4",
+            "per": {
+                "aligned": "8003AABBCC",
+                "unaligned": "81D55DE600"
+            }
+        },
+        {
+            "name": "esros4-5",
+            "per": {
+                "aligned": "8004AABBCCDD",
+                "unaligned": "82555DE66E80"
+            }
+        },
+        {
+            "name": "esros4-6",
+            "per": {
+                "aligned": "8005AABBCCDDEE",
+                "unaligned": "82D55DE66EF700"
+            }
+        },
+        {
+            "name": "esros5-1",
+            "per": "00"
+        },
+        {
+            "name": "esros5-2",
+            "per": {
+                "aligned": "10AA",
+                "unaligned": "1AA0"
+            }
+        },
+        {
+            "name": "esros5-3",
+            "per": {
+                "aligned": "8002AABB",
+                "unaligned": "81555D80"
+            }
+        },
+        {
+            "name": "esros5-4",
+            "per": {
+                "aligned": "30AABBCC",
+                "unaligned": "3AABBCC0"
+            }
+        },
+        {
+            "name": "esros5-5",
+            "per": {
+                "aligned": "40AABBCCDD",
+                "unaligned": "4AABBCCDD0"
+            }
+        }
+    ]
+}

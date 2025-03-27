@@ -1,0 +1,43 @@
+PerBooleanTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+UnconstrainedBoolean ::= BOOLEAN
+ub-1 UnconstrainedBoolean ::= FALSE
+ub-2 UnconstrainedBoolean ::= TRUE
+
+UnconstrainedBooleanList ::= SEQUENCE OF BOOLEAN
+ubl-1 UnconstrainedBooleanList ::= { TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE }
+ubl-2 UnconstrainedBooleanList ::= { FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE }
+ubl-3 UnconstrainedBooleanList ::= { TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE }
+ubl-4 UnconstrainedBooleanList ::= { TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE }
+ubl-5 UnconstrainedBooleanList ::= { TRUE, TRUE, TRUE, TRUE }
+ubl-6 UnconstrainedBooleanList ::= { FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE }
+ubl-7 UnconstrainedBooleanList ::= { TRUE }
+ubl-8 UnconstrainedBooleanList ::= { TRUE, FALSE }
+ubl-9 UnconstrainedBooleanList ::= { TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE }
+ubl-10 UnconstrainedBooleanList ::= { TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE }
+
+TrueBoolean ::= BOOLEAN (TRUE)
+tb TrueBoolean ::= TRUE
+
+ExtensibleTrueBoolean ::= BOOLEAN (TRUE, ...)
+etb ExtensibleTrueBoolean ::= TRUE
+
+FalseBoolean ::= BOOLEAN (FALSE)
+fb FalseBoolean ::= FALSE
+
+ExtensibleFalseBoolean ::= BOOLEAN (FALSE, ...)
+efb FalseBoolean ::= FALSE
+
+BinaryBoolean ::= BOOLEAN (TRUE | FALSE)
+bb-1 BinaryBoolean ::= TRUE
+bb-2 BinaryBoolean ::= FALSE
+
+ExtensibleBinaryBoolean1 ::= BOOLEAN (TRUE, ..., FALSE)
+ebb1-1 BinaryBoolean ::= TRUE
+ebb1-2 BinaryBoolean ::= FALSE
+
+ExtensibleBinaryBoolean2 ::= BOOLEAN (TRUE | FALSE, ...)
+ebb2-1 BinaryBoolean ::= TRUE
+ebb2-2 BinaryBoolean ::= FALSE
+
+END

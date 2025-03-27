@@ -52,13 +52,25 @@ pub fn compile_module(context: &mut Context, path: &str, source: &str) {
 enum TestMode {
     Encode,
     Decode,
+    #[serde(rename = "DER")]
+    Distinguished,
+    #[serde(rename = "PER")]
+    Packed,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum PackedEncodings {
+    BothAlignments(String),
+    ByAlignment { aligned: String, unaligned: String },
 }
 
 #[derive(Deserialize, Debug)]
 struct ValueTestEntry {
     pub tests: Option<Vec<TestMode>>,
     pub name: String,
-    pub der: String,
+    pub der: Option<String>,
+    pub per: Option<PackedEncodings>,
     pub value: Option<serde_json::Value>,
 }
 
@@ -73,27 +85,34 @@ fn test_encode_value(
     context: &Context,
     ident: &QualifiedIdentifier,
     declared_value: &DeclaredValue,
-    expected_der: &[u8],
+    expected_encodings: &[(TransferSyntax, Vec<u8>)],
 ) {
     let typed_value = declared_value
         .value
         .resolve(context)
         .expect("failed to resolve value");
 
-    let mut buf = Vec::with_capacity(expected_der.len());
-    let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
-    let encoder = der_ts.get_codec().encoder.unwrap();
-    encoder(&der_ts, &mut buf, context, &typed_value)
-        .unwrap_or_else(|err| panic!("failed to encode value '{}': {}", ident, err.kind));
-    let buf = buf.into_iter().rev().collect::<Vec<u8>>();
+    for (syntax, expected_encoding) in expected_encodings {
+        let mut buf = Vec::with_capacity(expected_encoding.len());
+        let encoder = syntax.get_codec().encoder.expect("no encoder");
+        encoder(syntax, EncodeMode::Normal, &mut buf, context, &typed_value).unwrap_or_else(
+            |err| {
+                panic!(
+                    "failed to {} encode value '{}': {}",
+                    syntax, ident, err.kind
+                )
+            },
+        );
 
-    assert!(
-        expected_der == buf.as_slice(),
-        "value    = {}\nexpected = {}\nfound    = {}",
-        ident,
-        hex::encode_upper(expected_der),
-        hex::encode_upper(&buf)
-    );
+        assert!(
+            expected_encoding == buf.as_slice(),
+            "value    = {}\ntransfer syntax = {}\nexpected = {}\nfound    = {}",
+            ident,
+            syntax,
+            hex::encode_upper(expected_encoding),
+            hex::encode_upper(&buf)
+        );
+    }
 
     println!("validated encoding of value '{}'", ident);
 }
@@ -173,7 +192,7 @@ fn test_decode_value(
     context: &Context,
     ident: &QualifiedIdentifier,
     declared_value: &DeclaredValue,
-    der: &[u8],
+    encodings: &[(TransferSyntax, Vec<u8>)],
     json_value: &serde_json::Value,
 ) {
     let mode = DecodeMode::SpecificType {
@@ -190,12 +209,13 @@ fn test_decode_value(
             .expect("failed resolving type"),
     };
 
-    let der_ts = TransferSyntax::Basic(BasicEncodingKind::Distinguished);
-    let decoder = der_ts.get_codec().decoder.unwrap();
-    let values = decoder(&der_ts, der, context, &mode)
-        .unwrap_or_else(|_| panic!("failed to decode value '{}'", ident));
+    for (syntax, encoding) in encodings {
+        let decoder = syntax.get_codec().decoder.expect("no decoder");
+        let values = decoder(syntax, &mode, encoding, context)
+            .unwrap_or_else(|_| panic!("failed to decode value '{}'", ident));
 
-    compare_decoded_values_to_json_values(&values, json_value)
+        compare_decoded_values_to_json_values(&values, json_value)
+    }
 }
 
 pub fn execute_json_test(module_file: &str, data_file: &str) {
@@ -208,10 +228,55 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
         module_file,
     );
 
-    let all_tests = vec![TestMode::Encode, TestMode::Decode];
+    let default_tests = vec![TestMode::Encode, TestMode::Decode];
     for entry in &test_file.values {
         let name = &entry.name;
-        let der = hex::decode(&entry.der).expect("invalid DER hex");
+
+        let mut encodings = Vec::new();
+        if let Some(tests) = test_file.tests.as_ref().or(entry.tests.as_ref()) {
+            if tests.contains(&TestMode::Distinguished) {
+                encodings.push((
+                    TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+                    hex::decode(entry.der.as_ref().expect("missing field 'der'"))
+                        .expect("invalid DER hex"),
+                ));
+            }
+            if tests.contains(&TestMode::Packed) {
+                let per = entry.per.as_ref().expect("missing field 'per'");
+                match per {
+                    PackedEncodings::BothAlignments(hex) => {
+                        let binary = hex::decode(hex).expect("invalid PER hex");
+                        encodings.push((
+                            TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
+                            binary.clone(),
+                        ));
+                        encodings.push((
+                            TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
+                            binary,
+                        ));
+                    }
+                    PackedEncodings::ByAlignment { aligned, unaligned } => {
+                        encodings.push((
+                            TransferSyntax::Packed(PackedEncodingKind::CanonicalAligned),
+                            hex::decode(aligned).expect("invalid CPER hex"),
+                        ));
+                        encodings.push((
+                            TransferSyntax::Packed(PackedEncodingKind::CanonicalUnaligned),
+                            hex::decode(unaligned).expect("invalid CUPER hex"),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // default to DER
+        if encodings.is_empty() {
+            encodings.push((
+                TransferSyntax::Basic(BasicEncodingKind::Distinguished),
+                hex::decode(entry.der.as_ref().expect("missing field 'der'"))
+                    .expect("invalid DER hex"),
+            ));
+        }
 
         let ident = QualifiedIdentifier::new(
             ModuleIdentifier::with_name(test_file.module.clone()),
@@ -225,13 +290,13 @@ pub fn execute_json_test(module_file: &str, data_file: &str) {
             .tests
             .as_ref()
             .or(test_file.tests.as_ref())
-            .unwrap_or(&all_tests);
+            .unwrap_or(&default_tests);
         if tests.contains(&TestMode::Encode) {
-            test_encode_value(&context, &ident, declared_value, &der);
+            test_encode_value(&context, &ident, declared_value, &encodings);
         }
         if tests.contains(&TestMode::Decode) {
             let value = entry.value.as_ref().expect("missing 'value' in test JSON");
-            test_decode_value(&context, &ident, declared_value, &der, value);
+            test_decode_value(&context, &ident, declared_value, &encodings, value);
         }
     }
 }
