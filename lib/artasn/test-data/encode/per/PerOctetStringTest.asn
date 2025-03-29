@@ -7,6 +7,9 @@ uos-3 UnconstrainedOctetString ::= '00'H
 uos-4 UnconstrainedOctetString ::= '1337'H
 uos-5 UnconstrainedOctetString ::= '1010'B
 
+UnconstrainedOctetStringList ::= SEQUENCE OF OCTET STRING
+uosl UnconstrainedOctetStringList ::= { uos-1, uos-2, uos-3, uos-4, uos-5 }
+
 ZeroSizeOctetString ::= OCTET STRING (SIZE(0))
 zsos ZeroSizeOctetString ::= ''H
 
@@ -18,6 +21,9 @@ obos-1 OneByteOctetString ::= '00'H
 obos-2 OneByteOctetString ::= 'AA'H
 obos-3 OneByteOctetString ::= 'FF'H
 
+OneByteOctetStringList ::= SEQUENCE OF OneByteOctetString
+obosl OneByteOctetStringList ::= { obos-1, obos-2, obos-3 }
+
 SizeRangeOctetString1 ::= OCTET STRING (SIZE(0..4))
 sros1-1 SizeRangeOctetString1 ::= ''H
 sros1-2 SizeRangeOctetString1 ::= 'AA'H
@@ -25,10 +31,16 @@ sros1-3 SizeRangeOctetString1 ::= 'AABB'H
 sros1-4 SizeRangeOctetString1 ::= 'AABBCC'H
 sros1-5 SizeRangeOctetString1 ::= 'AABBCCDD'H
 
+SizeRangeOctetString1List ::= SEQUENCE OF SizeRangeOctetString1
+sros1l SizeRangeOctetString1List ::= { sros1-1, sros1-2, sros1-3, sros1-4, sros1-5 }
+
 SizeRangeOctetString2 ::= OCTET STRING (SIZE(2..4))
 sros2-1 SizeRangeOctetString2 ::= 'AABB'H
 sros2-2 SizeRangeOctetString2 ::= 'AABBCC'H
 sros2-3 SizeRangeOctetString2 ::= 'AABBCCDD'H
+
+SizeRangeOctetString2List ::= SEQUENCE OF SizeRangeOctetString2
+sros2l SizeRangeOctetString2List ::= { sros2-1, sros2-2, sros2-3 }
 
 SizeRangeOctetString3 ::= OCTET STRING (SIZE(1..<3 | 5<..7))
 sros3-1 SizeRangeOctetString3 ::= 'AA'H
@@ -36,15 +48,24 @@ sros3-2 SizeRangeOctetString3 ::= 'AABB'H
 sros3-3 SizeRangeOctetString3 ::= '001122334455'H
 sros3-4 SizeRangeOctetString3 ::= '00112233445566'H
 
+SizeRangeOctetString3List ::= SEQUENCE OF SizeRangeOctetString3
+sros3l SizeRangeOctetString3List ::= { sros3-1, sros3-2, sros3-3, sros3-4 }
+
 SizeMaxOctetString1 ::= OCTET STRING (SIZE(0..MAX))
 smos1-1 SizeMaxOctetString1 ::= ''H
 smos1-2 SizeMaxOctetString1 ::= 'AA'H
 smos1-3 SizeMaxOctetString1 ::= 'AABB'H
 
+SizeMaxOctetString1List ::= SEQUENCE OF SizeMaxOctetString1
+smos1l SizeMaxOctetString1List ::= { smos1-1, smos1-2, smos1-3 }
+
 SizeMaxOctetString2 ::= OCTET STRING (SIZE(2..MAX))
 smos2-1 SizeMaxOctetString2 ::= 'AABB'H
 smos2-2 SizeMaxOctetString2 ::= 'AABBCC'H
 smos2-3 SizeMaxOctetString2 ::= 'AABBCCDD'H
+
+SizeMaxOctetString2List ::= SEQUENCE OF SizeMaxOctetString2
+smos2l SizeMaxOctetString2List ::= { smos2-1, smos2-2, smos2-3 }
 
 ExtensibleZeroSizeOctetString1 ::= OCTET STRING (SIZE(0, ...))
 ezsos1 ExtensibleZeroSizeOctetString1 ::= ''H
@@ -56,12 +77,18 @@ ConstOrSizedOctetString ::= OCTET STRING('1337'H | SIZE(1))
 cosos-1 ConstOrSizedOctetString ::= '1337'H
 cosos-2 ConstOrSizedOctetString ::= 'AA'H
 
+ConstOrSizedOctetStringList ::= SEQUENCE OF ConstOrSizedOctetString
+cososl ConstOrSizedOctetStringList ::= { cosos-1, cosos-2 }
+
 ExtensibleSizeRangeOctetString1 ::= OCTET STRING (SIZE(0..4, ...))
 esros1-1 ExtensibleSizeRangeOctetString1 ::= ''H
 esros1-2 ExtensibleSizeRangeOctetString1 ::= 'AA'H
 esros1-3 ExtensibleSizeRangeOctetString1 ::= 'AABB'H
 esros1-4 ExtensibleSizeRangeOctetString1 ::= 'AABBCC'H
 esros1-5 ExtensibleSizeRangeOctetString1 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString1List ::= SEQUENCE OF ExtensibleSizeRangeOctetString1
+esros1l ExtensibleSizeRangeOctetString1List ::= { esros1-1, esros1-2, esros1-3, esros1-4, esros1-5 }
 
 ExtensibleSizeRangeOctetString2 ::= OCTET STRING (SIZE(0..2, ..., 2<..4))
 esros2-1 ExtensibleSizeRangeOctetString2 ::= ''H
@@ -70,12 +97,18 @@ esros2-3 ExtensibleSizeRangeOctetString2 ::= 'AABB'H
 esros2-4 ExtensibleSizeRangeOctetString2 ::= 'AABBCC'H
 esros2-5 ExtensibleSizeRangeOctetString2 ::= 'AABBCCDD'H
 
+ExtensibleSizeRangeOctetString2List ::= SEQUENCE OF ExtensibleSizeRangeOctetString2
+esros2l ExtensibleSizeRangeOctetString2List ::= { esros2-2, esros2-2, esros2-3, esros2-4, esros2-5 }
+
 ExtensibleSizeRangeOctetString3 ::= OCTET STRING (SIZE(0..2), ..., SIZE(2<..4))
 esros3-1 ExtensibleSizeRangeOctetString3 ::= ''H
 esros3-2 ExtensibleSizeRangeOctetString3 ::= 'AA'H
 esros3-3 ExtensibleSizeRangeOctetString3 ::= 'AABB'H
 esros3-4 ExtensibleSizeRangeOctetString3 ::= 'AABBCC'H
 esros3-5 ExtensibleSizeRangeOctetString3 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString3List ::= SEQUENCE OF ExtensibleSizeRangeOctetString3
+esros3l ExtensibleSizeRangeOctetString3List ::= { esros3-3, esros3-2, esros3-3, esros3-4, esros3-5 }
 
 ExtensibleSizeRangeOctetString4 ::= OCTET STRING (SIZE(0..1, ..., 2), ..., SIZE(2<..4, ...) | SIZE(5))
 esros4-1 ExtensibleSizeRangeOctetString4 ::= ''H
@@ -85,11 +118,17 @@ esros4-4 ExtensibleSizeRangeOctetString4 ::= 'AABBCC'H
 esros4-5 ExtensibleSizeRangeOctetString4 ::= 'AABBCCDD'H
 esros4-6 ExtensibleSizeRangeOctetString4 ::= 'AABBCCDDEE'H
 
+ExtensibleSizeRangeOctetString4List ::= SEQUENCE OF ExtensibleSizeRangeOctetString4
+esros4l ExtensibleSizeRangeOctetString4List ::= { esros4-4, esros4-2, esros4-3, esros4-4, esros4-5, esros4-6 }
+
 ExtensibleSizeRangeOctetString5 ::= OCTET STRING (SIZE(0..1, ..., 2) | SIZE(3..4))
 esros5-1 ExtensibleSizeRangeOctetString5 ::= ''H
 esros5-2 ExtensibleSizeRangeOctetString5 ::= 'AA'H
 esros5-3 ExtensibleSizeRangeOctetString5 ::= 'AABB'H
 esros5-4 ExtensibleSizeRangeOctetString5 ::= 'AABBCC'H
 esros5-5 ExtensibleSizeRangeOctetString5 ::= 'AABBCCDD'H
+
+ExtensibleSizeRangeOctetString5List ::= SEQUENCE OF ExtensibleSizeRangeOctetString5
+esros5l ExtensibleSizeRangeOctetString5List ::= { esros5-5, esros5-2, esros5-3, esros5-4, esros5-5 }
 
 END

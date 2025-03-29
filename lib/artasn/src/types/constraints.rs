@@ -434,7 +434,9 @@ impl Constraint {
         for element in self.flatten() {
             match &element.element {
                 SubtypeElement::Size(size) => {
-                    if matches!(mode, None | Some(ConstraintCheckMode::Size)) && size.is_extensible(None) {
+                    if matches!(mode, None | Some(ConstraintCheckMode::Size))
+                        && size.is_extensible(None)
+                    {
                         return true;
                     }
                 }

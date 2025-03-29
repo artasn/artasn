@@ -9,7 +9,7 @@ use super::{TagType, TaggedType};
 
 pub trait ComponentLike: Clone {
     fn name(&self) -> &AstElement<String>;
-    fn component_type(&self) -> &Box<TaggedType>;
+    fn component_type(&self) -> &TaggedType;
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ impl ComponentLike for StructureComponent {
         &self.name
     }
 
-    fn component_type(&self) -> &Box<TaggedType> {
+    fn component_type(&self) -> &TaggedType {
         &self.component_type
     }
 }
@@ -77,7 +77,7 @@ impl ComponentLike for ChoiceAlternative {
         &self.name
     }
 
-    fn component_type(&self) -> &Box<TaggedType> {
+    fn component_type(&self) -> &TaggedType {
         &self.alternative_type
     }
 }

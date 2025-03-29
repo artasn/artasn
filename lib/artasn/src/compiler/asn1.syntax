@@ -454,8 +454,8 @@ rule TableConstraint {
         component_ref = optional: ComponentReference
     }
     operator {
-    persist
     set_name = DefinedType
+    persist
     operator }
     optional {
         component_ref = ComponentReference

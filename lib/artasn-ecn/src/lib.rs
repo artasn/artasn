@@ -18,7 +18,7 @@ mod tests {
                 println!("Success! Wrote AST to /tmp/ecn-ast.txt");
             }
             ParseResult::Fail(err) | ParseResult::Error(err) => {
-                fs::write("/tmp/ecn-ast.txt", err.get_message(source).to_string()).unwrap();
+                fs::write("/tmp/ecn-ast.txt", err.get_message(source)).unwrap();
                 println!("Error! Wrote error message to /tmp/ecn-ast.txt");
             }
         }

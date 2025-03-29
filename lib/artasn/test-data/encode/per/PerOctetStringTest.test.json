@@ -26,6 +26,10 @@
             "per": "01A0"
         },
         {
+            "name": "uosl",
+            "per": "050000010002133701A0"
+        },
+        {
             "name": "zsos",
             "per": ""
         },
@@ -44,6 +48,10 @@
         {
             "name": "obos-3",
             "per": "FF"
+        },
+        {
+            "name": "obosl",
+            "per": "0300AAFF"
         },
         {
             "name": "sros1-1",
@@ -78,6 +86,13 @@
             }
         },
         {
+            "name": "sros1l",
+            "per": {
+                "aligned": "0504AA40AABB60AABBCC80AABBCCDD",
+                "unaligned": "0506A9555DBAABBCC9557799BA"
+            }
+        },
+        {
             "name": "sros2-1",
             "per": {
                 "aligned": "00AABB",
@@ -96,6 +111,13 @@
             "per": {
                 "aligned": "80AABBCCDD",
                 "unaligned": "AAAEF33740"
+            }
+        },
+        {
+            "name": "sros2l",
+            "per": {
+                "aligned": "0300AABB40AABBCC80AABBCCDD",
+                "unaligned": "032AAEDAABBCCAAAEF3374"
             }
         },
         {
@@ -127,6 +149,13 @@
             }
         },
         {
+            "name": "sros3l",
+            "per": {
+                "aligned": "0400AA20AABBA0001122334455C000112233445566",
+                "unaligned": "041546AAEE80089119A22AE001122334455660"
+            }
+        },
+        {
             "name": "smos1-1",
             "per": "00"
         },
@@ -139,6 +168,10 @@
             "per": "02AABB"
         },
         {
+            "name": "smos1l",
+            "per": "030001AA02AABB"
+        },
+        {
             "name": "smos2-1",
             "per": "02AABB"
         },
@@ -149,6 +182,10 @@
         {
             "name": "smos2-3",
             "per": "04AABBCCDD"
+        },
+        {
+            "name": "smos2l",
+            "per": "0302AABB03AABBCC04AABBCCDD"
         },
         {
             "name": "ezsos1",
@@ -165,6 +202,10 @@
         {
             "name": "cosos-2",
             "per": "01AA"
+        },
+        {
+            "name": "cososl",
+            "per": "0202133701AA"
         },
         {
             "name": "esros1-1",
@@ -196,6 +237,13 @@
             "per": {
                 "aligned": "40AABBCCDD",
                 "unaligned": "4AABBCCDD0"
+            }
+        },
+        {
+            "name": "esros1l",
+            "per": {
+                "aligned": "0501AA20AABB30AABBCC40AABBCCDD",
+                "unaligned": "0501AA2AABB3AABBCC4AABBCCDD0"
             }
         },
         {
@@ -231,6 +279,13 @@
             }
         },
         {
+            "name": "esros2l",
+            "per": {
+                "aligned": "0520AA20AA40AABB8003AABBCC8004AABBCCDD",
+                "unaligned": "053546A9555DC0EAAEF3209557799BA0"
+            }
+        },
+        {
             "name": "esros3-1",
             "per": "00"
         },
@@ -260,6 +315,13 @@
             "per": {
                 "aligned": "8004AABBCCDD",
                 "unaligned": "82555DE66E80"
+            }
+        },
+        {
+            "name": "esros3l",
+            "per": {
+                "aligned": "0540AABB20AA40AABB8003AABBCC8004AABBCCDD",
+                "unaligned": "05555766A9555DC0EAAEF3209557799BA0"
             }
         },
         {
@@ -302,6 +364,13 @@
             }
         },
         {
+            "name": "esros4l",
+            "per": {
+                "aligned": "068003AABBCC40AA8002AABB8003AABBCC8004AABBCCDD8005AABBCCDDEE",
+                "unaligned": "0681D55DE635502AABB81D55DE6412AAEF33760B557799BBDC"
+            }
+        },
+        {
             "name": "esros5-1",
             "per": "00"
         },
@@ -331,6 +400,13 @@
             "per": {
                 "aligned": "40AABBCCDD",
                 "unaligned": "4AABBCCDD0"
+            }
+        },
+        {
+            "name": "esros5l",
+            "per": {
+                "aligned": "0540AABBCCDD10AA8002AABB30AABBCC40AABBCCDD",
+                "unaligned": "054AABBCCDD1AA81555D9D55DE62555DE66E80"
             }
         }
     ]

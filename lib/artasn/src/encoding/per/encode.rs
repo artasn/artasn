@@ -4,39 +4,11 @@ use num::BigInt;
 
 use crate::{
     compiler::{parser::Result, Context},
-    encoding::per::MAX_VLQ_LEN,
-    types::{Bound, ConstraintCheckMode, IntegerInclusion, ResolvedType, SubtypeElement},
-    values::{BuiltinValue, ResolvedValue, ValueResolve},
+    types::*,
+    values::*,
 };
 
 use super::{Alignment, BitWriter, PerEncoder};
-
-fn write_vlq<W: Write>(mut n: u64, writer: &mut BitWriter<W>) -> usize {
-    const CARRY_BIT: u8 = 0b1000_0000;
-    const MASK: u8 = 0b0111_1111;
-
-    if n < 0x80 {
-        writer.write_byte(n as u8);
-        return 1;
-    }
-
-    let mut vlq_buf = [0u8; MAX_VLQ_LEN];
-    let mut index = 0;
-
-    while n >= 0x80 {
-        vlq_buf[index] = (n & MASK as u64) as u8 | CARRY_BIT;
-        index += 1;
-        n >>= 7;
-    }
-
-    vlq_buf[index] = n as u8 | CARRY_BIT;
-    vlq_buf[0] &= MASK;
-    index += 1;
-    for i in (0..index).rev() {
-        writer.write_byte(vlq_buf[i]);
-    }
-    index
-}
 
 fn write_int<W: Write>(
     writer: &mut BitWriter<W>,
@@ -52,31 +24,50 @@ fn write_int<W: Write>(
     writer.write_int(int, bit_count, alignment);
 }
 
+fn write_per_vlq<W: Write>(writer: &mut BitWriter<W>, n: u64, max: Option<u64>) {
+    writer.align();
+
+    let max = max.unwrap_or(n);
+    if max < 0x80 {
+        writer.write_byte(n as u8);
+    } else if max < 0x4000 {
+        let msb = ((n >> 8) & 0xff) as u8;
+        let lsb = (n & 0xff) as u8;
+        writer.write_byte(0x80 | msb);
+        writer.write_byte(lsb);
+    } else {
+        todo!("encode fragmented values");
+    }
+}
+
+enum LengthDeterminantKind {
+    /// No length determinant is encoded, because it is constrained to one value.
+    ConstLength,
+    /// The length determinant is encoded as a fixed number of bits, because it is constrained to a range of values.
+    FixedSizeLength,
+    /// The length determinant is encoded as a variable number of bits, because it is unbounded.
+    VariableSizeLength,
+}
+
 fn write_length_determinant<W: Write>(
     writer: &mut BitWriter<W>,
     length: u64,
     length_range: (Option<u64>, Option<u64>),
-) {
+) -> LengthDeterminantKind {
     let (length_min, length_max) = length_range;
     match (length_min, length_max) {
-        (Some(min), Some(max)) if min == max => (),
+        (Some(min), Some(max)) if min == max => LengthDeterminantKind::ConstLength,
         (_, None) => {
-            write_vlq(length, writer);
+            write_per_vlq(writer, length, None);
+            LengthDeterminantKind::VariableSizeLength
         }
         (low, Some(high @ ..65536)) => {
             write_int(writer, length, low.unwrap_or(0), high, Alignment::None);
+            LengthDeterminantKind::FixedSizeLength
         }
         (_, Some(length_max @ 65536..)) => {
-            if length_max <= 127 {
-                writer.write_byte(length as u8);
-            } else if length_max <= 16383 {
-                let mut length_bits = length as u16;
-                length_bits &= 0xbfff; // ensure bit 14 is zero
-                length_bits |= 1 << 15;
-                writer.write_int(length_bits as u64, 16, Alignment::End);
-            } else {
-                todo!("encode fragmented values");
-            }
+            write_per_vlq(writer, length, Some(length_max));
+            LengthDeterminantKind::VariableSizeLength
         }
     }
 }
@@ -86,7 +77,7 @@ fn write_size_determinant<W: Write>(
     context: &Context,
     size: u64,
     resolved_type: &ResolvedType,
-) -> Result<()> {
+) -> Result<LengthDeterminantKind> {
     let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraint {
         Some(constraint)
             if constraint
@@ -136,15 +127,12 @@ fn write_size_determinant<W: Write>(
                 }
             }
             IntegerInclusion::NotIncluded => {
-                panic!("per_encode_value on OCTET STRING with illegal size")
+                panic!("per_encode_value on {} with illegal size", resolved_type.ty)
             }
         }
     }
 
-    write_length_determinant(writer, size, size_bounds);
-    writer.align();
-
-    Ok(())
+    Ok(write_length_determinant(writer, size, size_bounds))
 }
 
 fn write_length_prefixed_integer<W: Write>(
@@ -159,8 +147,8 @@ fn write_length_prefixed_integer<W: Write>(
         None => value.to_signed_bytes_be(),
     });
 
-    write_vlq(tmp_buf.len() as u64, &mut encoder.writer);
-    encoder.writer.write_bytes(&tmp_buf);
+    write_per_vlq(&mut encoder.writer, tmp_buf.len() as u64, None);
+    encoder.writer.write_bytes(tmp_buf);
 }
 
 fn write_constrained_integer<W: Write>(
@@ -260,13 +248,71 @@ pub fn per_encode_value<W: Write>(
         BuiltinValue::Integer(int) => {
             per_encode_integer(encoder, &typed_value.ty, int)?;
         }
+        BuiltinValue::BitString(bs) => {
+            let mut total_bits = bs.data.len() as u64 * 8 - bs.unused_bits as u64;
+
+            match &typed_value.ty.ty {
+                BuiltinType::BitString(bs) => {
+                    if bs.named_bits.is_some() {
+                        if let Some(constraint) = &typed_value.ty.constraint {
+                            if let Some(bounds) = constraint.size_bounds(context)? {
+                                match bounds.lower_bound {
+                                    Bound::Integer(lower_bound) => {
+                                        let lower_bound = lower_bound
+                                            .try_into()
+                                            .expect("lower bound is out of bounds");
+                                        if total_bits < lower_bound {
+                                            // BIT STRING with named bits are permitted to have values whose size are less than the lower bound
+                                            // in PER, the lower bound just indicates how much padding to add to the value
+                                            total_bits = lower_bound;
+                                        }
+                                    }
+                                    Bound::Unbounded => (),
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            };
+
+            let determinant_kind =
+                write_size_determinant(&mut encoder.writer, context, total_bits, &typed_value.ty)?;
+            match determinant_kind {
+                LengthDeterminantKind::ConstLength => (),
+                _ => {
+                    if total_bits > 0 {
+                        encoder.writer.align();
+                    }
+                }
+            }
+            for bit_index in 0..total_bits {
+                let byte_index = (bit_index / 8) as usize;
+                if byte_index >= bs.data.len() {
+                    encoder.writer.write_bit(false);
+                } else {
+                    let byte = bs.data[byte_index];
+                    let bit_pos = 7 - (bit_index % 8) as usize;
+                    let bit = (byte >> bit_pos) & 1;
+                    encoder.writer.write_bit(bit == 1);
+                }
+            }
+        }
         BuiltinValue::OctetString(bytes) => {
-            write_size_determinant(
+            let determinant_kind = write_size_determinant(
                 &mut encoder.writer,
                 context,
                 bytes.len() as u64,
                 &typed_value.ty,
             )?;
+            match determinant_kind {
+                LengthDeterminantKind::ConstLength => (),
+                _ => {
+                    if !bytes.is_empty() {
+                        encoder.writer.align();
+                    }
+                }
+            }
             encoder.writer.write_bytes(bytes);
         }
         BuiltinValue::Null => (),
@@ -299,6 +345,10 @@ mod test {
     json_test!(
         test_per_encode_integer,
         "../../../test-data/encode/per/PerIntegerTest"
+    );
+    json_test!(
+        test_per_encode_bit_string,
+        "../../../test-data/encode/per/PerBitStringTest"
     );
     json_test!(
         test_per_encode_octet_string,

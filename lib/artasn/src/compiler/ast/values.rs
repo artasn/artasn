@@ -171,7 +171,7 @@ fn find_component_from_series<'a>(
     parser: &AstParser<'_>,
     structures: (&'a [StructureComponent], &[StructureValueComponent]),
     component_series: &[AstElement<String>],
-) -> Result<(&'a Box<TaggedType>, AstElement<TypedValue>)> {
+) -> Result<(&'a TaggedType, AstElement<TypedValue>)> {
     if component_series.is_empty() {
         panic!("component_series.len() == 0");
     }

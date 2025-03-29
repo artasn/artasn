@@ -68,6 +68,9 @@ impl<W: Write> BitWriter<W> {
     }
 
     pub fn write_bytes(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
         if self.aligned {
             if self.bit_cursor != 0 {
                 panic!("write_bytes: aligned but bit_cursor == {}", self.bit_cursor);

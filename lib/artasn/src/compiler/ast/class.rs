@@ -318,7 +318,7 @@ macro_rules! try_parse {
     }};
 }
 
-fn is_type_class<'a>(
+fn is_type_class(
     class_idents: &[QualifiedIdentifier],
     tagged_type: &TaggedType,
 ) -> Option<AstElement<QualifiedIdentifier>> {

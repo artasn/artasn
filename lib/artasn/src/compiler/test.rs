@@ -93,6 +93,12 @@ fn test_encode_value(
         .expect("failed to resolve value");
 
     for (syntax, expected_encoding) in expected_encodings {
+        println!(
+            "validating {} encoding of value '{}'",
+            syntax.get_name(),
+            ident
+        );
+
         let mut buf = Vec::with_capacity(expected_encoding.len());
         let encoder = syntax.get_codec().encoder.expect("no encoder");
         encoder(syntax, EncodeMode::Normal, &mut buf, context, &typed_value).unwrap_or_else(
@@ -113,16 +119,6 @@ fn test_encode_value(
             hex::encode_upper(&buf)
         );
     }
-
-    println!(
-        "validated encoding of value '{}' ({})",
-        ident,
-        expected_encodings
-            .iter()
-            .map(|(syntax, _)| syntax.get_name())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
 }
 
 fn compare_constructed_decoded_value_to_json_values(

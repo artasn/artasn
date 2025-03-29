@@ -9,8 +9,6 @@ pub use encode::*;
 
 use crate::compiler::Context;
 
-const MAX_VLQ_LEN: usize = 10;
-
 pub(crate) struct PerEncoder<'a, W: Write> {
     pub context: &'a Context,
     pub writer: BitWriter<W>,

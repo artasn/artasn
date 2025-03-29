@@ -42,14 +42,7 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         let mut operators = None;
         for item in &extra.items {
             if let Item::Macro(item_macro) = item {
-                if *item_macro
-                    .mac
-                    .path
-                    .get_ident()
-                    .as_ref()
-                    .unwrap()
-                    == "enum_str"
-                {
+                if *item_macro.mac.path.get_ident().as_ref().unwrap() == "enum_str" {
                     let macro_body_tokens = &item_macro.mac.tokens;
                     let item_enum: ItemEnum = parse2(macro_body_tokens.clone()).unwrap();
                     let enum_name = item_enum.ident.to_string();

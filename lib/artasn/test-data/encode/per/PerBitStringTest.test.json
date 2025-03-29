@@ -42,12 +42,23 @@
             "per": "09AA80"
         },
         {
+            "name": "ubsl",
+            "per": {
+                "aligned": "09000008001013370180010004A008AA09AA80",
+                "unaligned": "09000008001013370180812822A826AA"
+            }
+        },
+        {
             "name": "zsbs1",
             "per": ""
         },
         {
             "name": "zsbs2",
             "per": ""
+        },
+        {
+            "name": "zsbsl",
+            "per": "02"
         },
         {
             "name": "cbs1",
@@ -64,6 +75,10 @@
         {
             "name": "obbs-2",
             "per": "80"
+        },
+        {
+            "name": "obbsl",
+            "per": "0240"
         },
         {
             "name": "srbs1-1",
@@ -105,6 +120,13 @@
             }
         },
         {
+            "name": "srbs1l",
+            "per": {
+                "aligned": "0604A098B0A8A0",
+                "unaligned": "0606A7654A"
+            }
+        },
+        {
             "name": "srbs2-1",
             "per": {
                 "aligned": "0080",
@@ -133,31 +155,45 @@
             }
         },
         {
+            "name": "srbs2l",
+            "per": {
+                "aligned": "040090B0A8A0",
+                "unaligned": "0426D550"
+            }
+        },
+        {
             "name": "srbs3-1",
             "per": {
-                "aligned": "",
-                "unaligned": "1540"
+                "aligned": "0080",
+                "unaligned": "10"
             }
         },
         {
             "name": "srbs3-2",
             "per": {
-                "aligned": "20AABB",
-                "unaligned": "355760"
+                "aligned": "2080",
+                "unaligned": "30"
             }
         },
         {
             "name": "srbs3-3",
             "per": {
-                "aligned": "A0001122334455",
-                "unaligned": "A0022446688AA0"
+                "aligned": "A0A8",
+                "unaligned": "B500"
             }
         },
         {
             "name": "srbs3-4",
             "per": {
-                "aligned": "C000112233445566",
-                "unaligned": "C0022446688AACC0"
+                "aligned": "C0AA",
+                "unaligned": "D540"
+            }
+        },
+        {
+            "name": "srbs3l",
+            "per": {
+                "aligned": "040090A8AB00AA",
+                "unaligned": "04135AB550"
             }
         },
         {
@@ -166,23 +202,37 @@
         },
         {
             "name": "smbs1-2",
-            "per": "01AA"
+            "per": "04A0"
         },
         {
             "name": "smbs1-3",
-            "per": "02AABB"
+            "per": "10AABB"
+        },
+        {
+            "name": "smbs1l",
+            "per": {
+                "aligned": "030004A010AABB",
+                "unaligned": "030004A10AABB0"
+            }
         },
         {
             "name": "smbs2-1",
-            "per": "02AABB"
+            "per": "0280"
         },
         {
             "name": "smbs2-2",
-            "per": "03AABBCC"
+            "per": "04A0"
         },
         {
             "name": "smbs2-3",
-            "per": "04AABBCCDD"
+            "per": "20AABBCCDD"
+        },
+        {
+            "name": "smbs2l",
+            "per": {
+                "aligned": "03028004A020AABBCCDD",
+                "unaligned": "0302812882AAEF3374"
+            }
         },
         {
             "name": "ezsbs1",
@@ -194,11 +244,18 @@
         },
         {
             "name": "cbsbs-1",
-            "per": "021337"
+            "per": "04A0"
         },
         {
             "name": "cbsbs-2",
-            "per": "01AA"
+            "per": "0180"
+        },
+        {
+            "name": "cbsbsl",
+            "per": {
+                "aligned": "0204A00180",
+                "unaligned": "0204A018"
+            }
         },
         {
             "name": "esrbs1-1",
@@ -207,29 +264,36 @@
         {
             "name": "esrbs1-2",
             "per": {
-                "aligned": "10AA",
-                "unaligned": "1AA0"
+                "aligned": "1080",
+                "unaligned": "18"
             }
         },
         {
             "name": "esrbs1-3",
             "per": {
-                "aligned": "20AABB",
-                "unaligned": "2AABB0"
+                "aligned": "2080",
+                "unaligned": "28"
             }
         },
         {
             "name": "esrbs1-4",
             "per": {
-                "aligned": "30AABBCC",
-                "unaligned": "3AABBCC0"
+                "aligned": "30A0",
+                "unaligned": "3A"
             }
         },
         {
             "name": "esrbs1-5",
             "per": {
-                "aligned": "40AABBCCDD",
-                "unaligned": "4AABBCCDD0"
+                "aligned": "40A0",
+                "unaligned": "4A"
+            }
+        },
+        {
+            "name": "esrbs1l",
+            "per": {
+                "aligned": "0501908CA8A0",
+                "unaligned": "0501947528"
             }
         },
         {
@@ -239,29 +303,36 @@
         {
             "name": "esrbs2-2",
             "per": {
-                "aligned": "20AA",
-                "unaligned": "3540"
+                "aligned": "2080",
+                "unaligned": "30"
             }
         },
         {
             "name": "esrbs2-3",
             "per": {
-                "aligned": "40AABB",
-                "unaligned": "555760"
+                "aligned": "4080",
+                "unaligned": "50"
             }
         },
         {
             "name": "esrbs2-4",
             "per": {
-                "aligned": "8003AABBCC",
-                "unaligned": "81D55DE600"
+                "aligned": "8003A0",
+                "unaligned": "81D0"
             }
         },
         {
             "name": "esrbs2-5",
             "per": {
-                "aligned": "8004AABBCCDD",
-                "unaligned": "82555DE66E80"
+                "aligned": "8004A0",
+                "unaligned": "8250"
+            }
+        },
+        {
+            "name": "esrbs2l",
+            "per": {
+                "aligned": "0504A0A003B004A0",
+                "unaligned": "0506A81D8250"
             }
         },
         {
@@ -271,29 +342,36 @@
         {
             "name": "esrbs3-2",
             "per": {
-                "aligned": "20AA",
-                "unaligned": "3540"
+                "aligned": "2080",
+                "unaligned": "30"
             }
         },
         {
             "name": "esrbs3-3",
             "per": {
-                "aligned": "40AABB",
-                "unaligned": "555760"
+                "aligned": "4080",
+                "unaligned": "50"
             }
         },
         {
             "name": "esrbs3-4",
             "per": {
-                "aligned": "8003AABBCC",
-                "unaligned": "81D55DE600"
+                "aligned": "8003A0",
+                "unaligned": "81D0"
             }
         },
         {
             "name": "esrbs3-5",
             "per": {
-                "aligned": "8004AABBCCDD",
-                "unaligned": "82555DE66E80"
+                "aligned": "8004A0",
+                "unaligned": "8250"
+            }
+        },
+        {
+            "name": "esrbs3l",
+            "per": {
+                "aligned": "0504A0A003B004A0",
+                "unaligned": "0506A81D8250"
             }
         },
         {
@@ -303,36 +381,43 @@
         {
             "name": "esrbs4-2",
             "per": {
-                "aligned": "40AA",
-                "unaligned": "6A80"
+                "aligned": "4080",
+                "unaligned": "60"
             }
         },
         {
             "name": "esrbs4-3",
             "per": {
-                "aligned": "8002AABB",
-                "unaligned": "81555D80"
+                "aligned": "800280",
+                "unaligned": "8140"
             }
         },
         {
             "name": "esrbs4-4",
             "per": {
-                "aligned": "8003AABBCC",
-                "unaligned": "81D55DE600"
+                "aligned": "8003A0",
+                "unaligned": "81D0"
             }
         },
         {
             "name": "esrbs4-5",
             "per": {
-                "aligned": "8004AABBCCDD",
-                "unaligned": "82555DE66E80"
+                "aligned": "8004A0",
+                "unaligned": "8250"
             }
         },
         {
             "name": "esrbs4-6",
             "per": {
-                "aligned": "8005AABBCCDDEE",
-                "unaligned": "82D55DE66EF700"
+                "aligned": "8005A8",
+                "unaligned": "82D4"
+            }
+        },
+        {
+            "name": "esrbs4l",
+            "per": {
+                "aligned": "0610C002A003B004A805A8",
+                "unaligned": "061C0A81D825416A"
             }
         },
         {
@@ -342,29 +427,180 @@
         {
             "name": "esrbs5-2",
             "per": {
-                "aligned": "10AA",
-                "unaligned": "1AA0"
+                "aligned": "1080",
+                "unaligned": "18"
             }
         },
         {
             "name": "esrbs5-3",
             "per": {
-                "aligned": "8002AABB",
-                "unaligned": "81555D80"
+                "aligned": "800280",
+                "unaligned": "8140"
             }
         },
         {
             "name": "esrbs5-4",
             "per": {
-                "aligned": "30AABBCC",
-                "unaligned": "3AABBCC0"
+                "aligned": "30A0",
+                "unaligned": "3A"
             }
         },
         {
             "name": "esrbs5-5",
             "per": {
-                "aligned": "40AABBCCDD",
-                "unaligned": "4AABBCCDD0"
+                "aligned": "40A0",
+                "unaligned": "4A"
+            }
+        },
+        {
+            "name": "esrbs5l",
+            "per": {
+                "aligned": "0501C0028CA8A0",
+                "unaligned": "0501C0A3A940"
+            }
+        },
+        {
+            "name": "unbs-empty",
+            "per": "00"
+        },
+        {
+            "name": "unbs-a",
+            "per": "0180"
+        },
+        {
+            "name": "unbs-b",
+            "per": "0240"
+        },
+        {
+            "name": "unbs-c",
+            "per": "0320"
+        },
+        {
+            "name": "unbs-d",
+            "per": "0801"
+        },
+        {
+            "name": "unbs-e",
+            "per": "090080"
+        },
+        {
+            "name": "unbs-f",
+            "per": "81000000000000000000000000000000000000000000000000000000000000000001"
+        },
+        {
+            "name": "unbs-g",
+            "per": "8101000000000000000000000000000000000000000000000000000000000000000080"
+        },
+        {
+            "name": "unbs-ad",
+            "per": "0881"
+        },
+        {
+            "name": "unbs-ae",
+            "per": "098080"
+        },
+        {
+            "name": "unbs-all",
+            "per": "8101E18000000000000000000000000000000000000000000000000000000000000180"
+        },
+        {
+            "name": "cnbs",
+            "per": "0801"
+        },
+        {
+            "name": "obnbs",
+            "per": "80"
+        },
+        {
+            "name": "srnbs1-1",
+            "per": "00"
+        },
+        {
+            "name": "srnbs1-2",
+            "per": {
+                "aligned": "2080",
+                "unaligned": "30"
+            }
+        },
+        {
+            "name": "srnbs1-3",
+            "per": {
+                "aligned": "4040",
+                "unaligned": "48"
+            }
+        },
+        {
+            "name": "srnbs1-4",
+            "per": {
+                "aligned": "6020",
+                "unaligned": "64"
+            }
+        },
+        {
+            "name": "srnbs1-5",
+            "per": {
+                "aligned": "8010",
+                "unaligned": "82"
+            }
+        },
+        {
+            "name": "srnbs1-6",
+            "per": {
+                "aligned": "80F0",
+                "unaligned": "9E"
+            }
+        },
+        {
+            "name": "srnbs1l",
+            "per": {
+                "aligned": "0604A0583018F0",
+                "unaligned": "06069660CF"
+            }
+        },
+        {
+            "name": "srnbs2-1",
+            "per": "0000000000000000000000000000"
+        },
+        {
+            "name": "srnbs2-2",
+            "per": {
+                "aligned": "0080000000000000000000000000",
+                "unaligned": "0100000000000000000000000000"
+            }
+        },
+        {
+            "name": "srnbs2-3",
+            "per": {
+                "aligned": "0040000000000000000000000000",
+                "unaligned": "0080000000000000000000000000"
+            }
+        },
+        {
+            "name": "srnbs2-4",
+            "per": {
+                "aligned": "0020000000000000000000000000",
+                "unaligned": "0040000000000000000000000000"
+            }
+        },
+        {
+            "name": "srnbs2-5",
+            "per": {
+                "aligned": "0010000000000000000000000000",
+                "unaligned": "0020000000000000000000000000"
+            }
+        },
+        {
+            "name": "srnbs2-6",
+            "per": {
+                "aligned": "00F0000000000000000000000000",
+                "unaligned": "01E0000000000000000000000000"
+            }
+        },
+        {
+            "name": "srnbs2l",
+            "per": {
+                "aligned": "060000000000000000000000000000008000000000000000000000000000400000000000000000000000000020000000000000000000000000001000000000000000000000000000F0000000000000000000000000",
+                "unaligned": "060000000000000000000000000000200000000000000000000000000200000000000000000000000000200000000000000000000000000200000000000000000000000003C0000000000000000000000000"
             }
         }
     ]
