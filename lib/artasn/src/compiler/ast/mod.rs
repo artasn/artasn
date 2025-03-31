@@ -1,4 +1,5 @@
 pub(crate) mod class;
+mod constraint_tree;
 pub(crate) mod constraints;
 pub(crate) mod extra;
 pub(crate) mod object_id;
@@ -537,7 +538,7 @@ pub fn register_all_information_objects(
                 match values::parse_value_assignment(
                     &parser,
                     value_assignment,
-                    ParseValueAssignmentStage::ClassValues,
+                    ParseValueAssignmentStage::Class,
                 ) {
                     Ok(Some(result)) => results.push(Ok(result)),
                     Ok(None) => (),
@@ -606,7 +607,7 @@ pub fn register_all_normal_values(
                 match values::parse_value_assignment(
                     &parser,
                     value_assignment,
-                    ParseValueAssignmentStage::NormalValues,
+                    ParseValueAssignmentStage::Normal,
                 ) {
                     Ok(Some(result)) => results.push(Ok(result)),
                     Ok(None) => (),
@@ -642,7 +643,7 @@ pub fn register_all_class_reference_values(
                 match values::parse_value_assignment(
                     &parser,
                     value_assignment,
-                    ParseValueAssignmentStage::ClassReferenceValues,
+                    ParseValueAssignmentStage::ClassReference,
                 ) {
                     Ok(Some(result)) => results.push(Ok(result)),
                     Ok(None) => (),

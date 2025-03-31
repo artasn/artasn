@@ -1,0 +1,93 @@
+InnerSubtypeConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+PresenceConstraint1 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN
+} (WITH COMPONENTS {
+    ...,
+    a ABSENT
+})
+pc1-valid1 PresenceConstraint1 ::= {
+    b TRUE
+}
+pc1-valid2 PresenceConstraint1 ::= {
+    b FALSE
+}
+pc1-invalid1 PresenceConstraint1 ::= {
+    a 1,
+    b TRUE
+}
+pc1-invalid2 PresenceConstraint1 ::= {
+    a 1,
+    b FALSE
+}
+
+PresenceConstraint2 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL
+} (WITH COMPONENTS {
+    a PRESENT,
+    b PRESENT
+} | WITH COMPONENTS {
+    a ABSENT,
+    b ABSENT
+})
+pc2-valid1 PresenceConstraint2 ::= {
+    a 1,
+    b TRUE
+}
+pc2-valid2 PresenceConstraint2 ::= {
+    a 2,
+    b FALSE
+}
+pc2-valid3 PresenceConstraint2 ::= {
+}
+pc2-invalid1 PresenceConstraint2 ::= {
+    a 1
+}
+pc2-invalid2 PresenceConstraint2 ::= {
+    a 2
+}
+pc2-invalid3 PresenceConstraint2 ::= {
+    b TRUE
+}
+pc2-invalid4 PresenceConstraint2 ::= {
+    FALSE
+}
+
+ValueConstraint1 ::= SEQUENCE {
+    a INTEGER,
+    b BOOLEAN
+} (WITH COMPONENTS {
+    a (1),
+    b (TRUE)
+} | WITH COMPONENTS {
+    a (0),
+    b (FALSE)
+})
+vc1-valid1 ValueConstraint1 ::= {
+    a 1,
+    b TRUE
+}
+vc1-valid2 ValueConstraint1 ::= {
+    a 0,
+    b FALSE
+}
+vc1-invalid3 ValueConstraint1 ::= {
+    a 1,
+    b FALSE
+}
+vc1-invalid4 ValueConstraint1 ::= {
+    a 0,
+    b TRUE
+}
+vc1-invalid5 ValueConstraint1 ::= {
+    a 2,
+    b TRUE
+}
+vc1-invalid6 ValueConstraint1 ::= {
+    a 2,
+    b FALSE
+}
+
+END

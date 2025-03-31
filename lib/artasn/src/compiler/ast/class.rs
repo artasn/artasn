@@ -103,7 +103,7 @@ fn parse_class_value_field(
                             (false, false, Some(default)) => {
                                 Some(ObjectClassFieldValueOption::Default(values::parse_value(
                                     parser,
-                                    ParseValueAssignmentStage::NormalValues,
+                                    ParseValueAssignmentStage::Normal,
                                     default,
                                     &target_type,
                                 )?))
@@ -464,7 +464,7 @@ fn parse_next_syntax_node(
                 let ast_value = try_parse!(ParseContext::new(token_stream), AstValue::parse);
                 let value = values::parse_value(
                     parser,
-                    ParseValueAssignmentStage::ClassReferenceValues,
+                    ParseValueAssignmentStage::ClassReference,
                     &ast_value,
                     &field_type,
                 )?;
@@ -663,7 +663,7 @@ fn parse_value_set(
     for ast_value in ast_elements {
         set_elements.push(values::parse_value(
             parser,
-            ParseValueAssignmentStage::NormalValues,
+            ParseValueAssignmentStage::Normal,
             ast_value,
             target_type,
         )?);

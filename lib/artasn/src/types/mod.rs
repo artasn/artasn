@@ -483,58 +483,68 @@ impl BuiltinType {
     ) -> Result<()> {
         let typed_value = valref.resolve(context)?;
 
-        let size_ok = match constraint {
-            Some(constraint) => match &typed_value.value {
-                BuiltinValue::BitString(value) => 'block: {
-                    let total_bits =
-                        BigInt::from((value.data.len() * 8) as i64 - (value.unused_bits as i64));
+        let constraint = constraint.map(|constraint| constraint.resolve(context, self));
+        let constraint = match constraint {
+            Some(Ok(constraint)) => Some(constraint),
+            Some(Err(err)) => return Err(err),
+            None => None,
+        };
 
-                    match self {
-                        Self::BitString(bs) => {
-                            if bs.named_bits.is_some() {
-                                if let Some(bounds) = constraint.size_bounds(context)? {
-                                    match bounds.lower_bound {
-                                        Bound::Integer(lower_bound) => {
-                                            if total_bits < lower_bound {
-                                                // BIT STRING with named bits are permitted to have values whose size are less than the lower bound
-                                                // this is because in PER, the lower bound just indicates how much padding to add to the value
-                                                break 'block Some(IntegerInclusion::Included {
-                                                    is_extension: false,
-                                                });
+        let size_ok = match &constraint {
+            Some(constraint) => {
+                match &typed_value.value {
+                    BuiltinValue::BitString(value) => 'block: {
+                        let total_bits = BigInt::from(
+                            (value.data.len() * 8) as i64 - (value.unused_bits as i64),
+                        );
+
+                        match self {
+                            Self::BitString(bs) => {
+                                if bs.named_bits.is_some() {
+                                    if let Some(bounds) = constraint.size_bounds()? {
+                                        match bounds.lower_bound {
+                                            Bound::Integer(lower_bound) => {
+                                                if total_bits < lower_bound {
+                                                    // BIT STRING with named bits are permitted to have values whose size are less than the lower bound
+                                                    // this is because in PER, the lower bound just indicates how much padding to add to the value
+                                                    break 'block Some(
+                                                        IntegerInclusion::Included {
+                                                            is_extension: false,
+                                                        },
+                                                    );
+                                                }
                                             }
+                                            Bound::Unbounded => (),
                                         }
-                                        Bound::Unbounded => (),
                                     }
                                 }
                             }
-                        }
-                        _ => unreachable!(),
-                    };
+                            _ => unreachable!(),
+                        };
 
-                    constraint.includes_integer(context, ConstraintCheckMode::Size, &total_bits)?
+                        constraint.includes_integer(ConstraintCheckMode::Size, &total_bits)?
+                    }
+                    BuiltinValue::OctetString(value) => constraint.includes_integer(
+                        ConstraintCheckMode::Size,
+                        &BigInt::from(value.len() as i64),
+                    )?,
+                    BuiltinValue::SequenceOf(value) => constraint.includes_integer(
+                        ConstraintCheckMode::Size,
+                        &BigInt::from(value.len() as i64),
+                    )?,
+                    _ => None,
                 }
-                BuiltinValue::OctetString(value) => constraint.includes_integer(
-                    context,
-                    ConstraintCheckMode::Size,
-                    &BigInt::from(value.len() as i64),
-                )?,
-                BuiltinValue::SequenceOf(value) => constraint.includes_integer(
-                    context,
-                    ConstraintCheckMode::Size,
-                    &BigInt::from(value.len() as i64),
-                )?,
-                _ => None,
-            },
+            }
             None => None,
         };
         let size_ok = size_ok.map(|inclusion| match inclusion {
             IntegerInclusion::Included { .. } => true,
             IntegerInclusion::NotIncluded => false,
         });
-        let value_ok = match constraint {
+        let value_ok = match &constraint {
             Some(constraint) => match &typed_value.value {
                 BuiltinValue::Integer(value) => constraint
-                    .includes_integer(context, ConstraintCheckMode::Value, value)?
+                    .includes_integer(ConstraintCheckMode::Value, value)?
                     .map(|inclusion| match inclusion {
                         IntegerInclusion::Included { .. } => true,
                         IntegerInclusion::NotIncluded => false,
@@ -549,7 +559,7 @@ impl BuiltinType {
                 return Err(Error {
                     kind: ErrorKind::Ast("value violates constraints of type".to_string()),
                     loc: valref.loc,
-                })
+                });
             }
             _ => (),
         }

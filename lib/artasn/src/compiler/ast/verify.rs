@@ -41,14 +41,10 @@ fn verify_unique_component_tags(context: &Context, structure: &Structure) -> Res
 
                         let illegal_component = 'block: {
                             for data in &consecutive_optionals {
-                                if possible_tags
-                                    .iter()
-                                    .find(|(tag, _)| {
-                                        tag.class == data.tag_series[0].class
-                                            && tag.num == data.tag_series[0].num
-                                    })
-                                    .is_some()
-                                {
+                                if possible_tags.iter().any(|(tag, _)| {
+                                    tag.class == data.tag_series[0].class
+                                        && tag.num == data.tag_series[0].num
+                                }) {
                                     break 'block Some(data);
                                 }
                             }
@@ -201,6 +197,11 @@ pub fn verify_type(context: &Context, declared_type: &TaggedType) -> Result<()> 
         }
         BuiltinType::Structure(structure) => verify_unique_component_tags(context, structure)?,
         _ => (),
+    }
+
+    if let Some(constraint) = resolved_ty.constraint {
+        // verify that the type's constraint is valid
+        constraint.resolve(context, &resolved_ty.ty)?;
     }
 
     Ok(())

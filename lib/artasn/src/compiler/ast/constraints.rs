@@ -6,6 +6,8 @@ use super::{
     AstParser,
 };
 
+use super::constraint_tree::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConstraintContext {
     Contextless,
@@ -24,63 +26,119 @@ fn parse_constraint(
         SubtypeElementSet,
     }
 
-    let element_sets = &ast_constraint.element.0.element.element_sets;
-    let mut constraint = Vec::with_capacity(element_sets.len());
-    let mut extensible = false;
+    let ast_element_sets = &ast_constraint.element.0.element.element_sets;
+    let mut element_sets = Vec::with_capacity(ast_element_sets.len());
+    let mut is_extension = false;
     let mut last_element_kind = None;
-    for element_set in element_sets {
+    for element_set in ast_element_sets {
         match &element_set.element {
             AstConstraintElement::Extensible(ast) => {
                 if last_element_kind.is_none() {
                     return Err(Error {
                         kind: ErrorKind::Ast(
-                            "extensibility operator '...' must appear after the base set of constraints"
+                            "extensibility marker must appear after the base set of constraints"
                                 .to_string(),
                         ),
                         loc: ast.loc,
                     });
                 }
 
-                if extensible {
+                if is_extension {
                     return Err(Error {
                         kind: ErrorKind::Ast(
-                            "extensibility operator '...' can only appear once in a constraint"
-                                .to_string(),
+                            "extensibility marker can only appear once in a constraint".to_string(),
                         ),
                         loc: ast.loc,
                     });
                 }
 
-                extensible = true;
+                is_extension = true;
                 last_element_kind = Some(ElementKind::Extensiblity);
-                constraint.push(vec![AstElement::new(SubtypeElement::Extensible, ast.loc)]);
             }
             AstConstraintElement::SubtypeElementSet(element_set) => {
                 if matches!(last_element_kind, Some(ElementKind::SubtypeElementSet)) {
                     return Err(Error {
-                        kind: ErrorKind::Ast("expecting intersection operator '|' before subtype constraint, but found operator ','".to_string()),
+                        kind: ErrorKind::Ast("expecting set operator ('|', 'UNION', '^', or 'INTERSECTION'), but found operator ','".to_string()),
                         loc: element_set.loc,
                     });
                 }
 
-                let element_set = &element_set.element.0;
-                let mut elements = Vec::with_capacity(element_set.len());
-                for element in element_set {
-                    elements.push(AstElement::new(
-                        parse_subtype_element(parser, element, constrained_type, parameters, ctx)?,
-                        element.loc,
-                    ));
-                }
+                let tree = parse_subtype_element_set(
+                    parser,
+                    element_set,
+                    constrained_type,
+                    parameters,
+                    ctx,
+                )?;
                 last_element_kind = Some(ElementKind::SubtypeElementSet);
-                constraint.push(elements);
+                element_sets.push(SubtypeElementSet { tree, is_extension });
             }
         };
     }
 
     Ok(Constraint {
-        elements: constraint,
+        element_sets,
+        is_extensible: is_extension,
         loc: ast_constraint.loc,
     })
+}
+
+fn parse_subtype_element_set(
+    parser: &AstParser<'_>,
+    ast_element_set: &AstElement<AstSubtypeElementSet>,
+    constrained_type: &ResolvedType,
+    parameters: &[(&String, &Parameter)],
+    ctx: ConstraintContext,
+) -> Result<ConstraintTree> {
+    let token_count =
+        ast_element_set.element.elements.len() + ast_element_set.element.operators.len();
+    let mut tokens = Vec::with_capacity(token_count);
+    for i in 0..token_count {
+        if i % 2 == 0 {
+            tokens.push(ElementSetToken::Operand(
+                &ast_element_set.element.elements[i / 2],
+            ));
+        } else {
+            let operator = ast_element_set.element.operators[i / 2]
+                .as_ref()
+                .map(|op| match op {
+                    AstConstraintOperator::Union(_) | AstConstraintOperator::KeywordUnion(_) => {
+                        SetOperator::Union
+                    }
+                    AstConstraintOperator::Intersection(_)
+                    | AstConstraintOperator::KeywordIntersection(_) => SetOperator::Intersection,
+                });
+            tokens.push(ElementSetToken::Operator(operator));
+        }
+    }
+
+    PRATT
+        .map_primary(|operand| match &operand.element {
+            AstSubtypeElement::SubtypeElementGroup(group) => parse_subtype_element_set(
+                parser,
+                &group.element.0,
+                constrained_type,
+                parameters,
+                ctx,
+            ),
+            _ => parse_subtype_element(parser, operand, constrained_type, parameters, ctx)
+                .map(|element| ConstraintTree::Element(AstElement::new(element, operand.loc))),
+        })
+        .map_infix(|lhs, op, rhs| {
+            let lhs = lhs?;
+            let rhs = rhs?;
+            let op = op.as_ref().map(|op| match op {
+                SetOperator::Union => ConstraintTreeOperator::Union,
+                SetOperator::Intersection => ConstraintTreeOperator::Intersection,
+            });
+
+            Ok(ConstraintTree::BinaryExpr {
+                lhs: Box::new(lhs),
+                op,
+                rhs: Box::new(rhs),
+            })
+        })
+        .parse(tokens.into_iter())
 }
 
 fn resolve_value_parameter(
@@ -163,17 +221,42 @@ fn parse_subtype_element(
         }};
     }
 
+    if ctx == ConstraintContext::WithinSize && !matches!(
+            &ast_subtype_element.element,
+            AstSubtypeElement::SingleValueConstraint(_)
+                | AstSubtypeElement::ValueRangeConstraint(_)
+        ) {
+        return Err(Error {
+            kind: ErrorKind::Ast(
+                "only single value and value range constraints are allowed in SIZE constraints"
+                    .to_string(),
+            ),
+            loc: ast_subtype_element.loc,
+        });
+    }
+
     Ok(match &ast_subtype_element.element {
+        AstSubtypeElement::SubtypeElementGroup(_) => {
+            unreachable!("parsed within PRATT.map_primary")
+        }
         AstSubtypeElement::SingleValueConstraint(single_value) => {
             let single_value = resolve_value!(&single_value.element.0, {
                 values::parse_value(
                     parser,
-                    ParseValueAssignmentStage::NormalValues,
+                    ParseValueAssignmentStage::Normal,
                     &single_value.element.0,
                     constrained_type,
                 )?
             });
             SubtypeElement::SingleValue(single_value)
+        }
+        AstSubtypeElement::ContainedSubtype(contained_subtype) => {
+            SubtypeElement::ContainedSubtype(types::parse_type(
+                parser,
+                &contained_subtype.element.0,
+                parameters,
+                TypeContext::Contextless,
+            )?)
         }
         AstSubtypeElement::ValueRangeConstraint(value_range) => {
             match &constrained_type.ty {
@@ -196,7 +279,7 @@ fn parse_subtype_element(
                         RangeLowerBound::Eq(resolve_value!(value, {
                             values::parse_value(
                                 parser,
-                                ParseValueAssignmentStage::NormalValues,
+                                ParseValueAssignmentStage::Normal,
                                 value,
                                 constrained_type,
                             )?
@@ -206,7 +289,7 @@ fn parse_subtype_element(
                         RangeLowerBound::Gt(resolve_value!(&value.element.0, {
                             values::parse_value(
                                 parser,
-                                ParseValueAssignmentStage::NormalValues,
+                                ParseValueAssignmentStage::Normal,
                                 &value.element.0,
                                 constrained_type,
                             )?
@@ -219,7 +302,7 @@ fn parse_subtype_element(
                         RangeUpperBound::Eq(resolve_value!(value, {
                             values::parse_value(
                                 parser,
-                                ParseValueAssignmentStage::NormalValues,
+                                ParseValueAssignmentStage::Normal,
                                 value,
                                 constrained_type,
                             )?
@@ -229,7 +312,7 @@ fn parse_subtype_element(
                         RangeUpperBound::Lt(resolve_value!(&value.element.0, {
                             values::parse_value(
                                 parser,
-                                ParseValueAssignmentStage::NormalValues,
+                                ParseValueAssignmentStage::Normal,
                                 &value.element.0,
                                 constrained_type,
                             )?
@@ -369,13 +452,16 @@ fn parse_contents_constraint(
     let encoded_by = match encoded_by {
         Some(encoded_by) => Some(values::parse_value(
             parser,
-            ParseValueAssignmentStage::NormalValues,
+            ParseValueAssignmentStage::Normal,
             encoded_by,
             &ResolvedType::universal(TagType::ObjectIdentifier),
         )?),
         None => None,
     };
-    Ok(ContentsConstraint { ty, encoded_by })
+    Ok(ContentsConstraint {
+        content_type: ty,
+        encoded_by,
+    })
 }
 
 fn parse_inner_type_constraints(
@@ -495,10 +581,15 @@ fn parse_type_with_constraint(
                         AstSubtypeConstraint {
                             element_sets: vec![AstElement::new(
                                 AstConstraintElement::SubtypeElementSet(AstElement::new(
-                                    AstSubtypeElementSet(vec![AstElement::new(
-                                        AstSubtypeElement::SizeConstraint(size_constraint.clone()),
-                                        loc,
-                                    )]),
+                                    AstSubtypeElementSet {
+                                        elements: vec![AstElement::new(
+                                            AstSubtypeElement::SizeConstraint(
+                                                size_constraint.clone(),
+                                            ),
+                                            loc,
+                                        )],
+                                        operators: Vec::new(),
+                                    },
                                     loc,
                                 )),
                                 loc,
