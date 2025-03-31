@@ -1,4 +1,4 @@
-ConstraintTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+BasicConstraintTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
 
 SizeConstraint1 ::= OCTET STRING (SIZE(1))
 sc1-valid1   SizeConstraint1 ::= '11'H

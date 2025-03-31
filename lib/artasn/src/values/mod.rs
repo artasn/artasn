@@ -127,10 +127,51 @@ impl Display for BuiltinValue {
     }
 }
 
+pub trait TryEq {
+    fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool>;
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedValue {
     pub ty: ResolvedType,
     pub value: BuiltinValue,
+}
+
+impl TryEq for AstElement<ResolvedValue> {
+    fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool> {
+        let lhs = &self.element;
+        let rhs = &rhs.element;
+        Ok(match (&lhs.value, &rhs.value) {
+            (BuiltinValue::Boolean(lhs), BuiltinValue::Boolean(rhs)) => lhs == rhs,
+            (BuiltinValue::Integer(lhs), BuiltinValue::Integer(rhs)) => lhs == rhs,
+            (BuiltinValue::BitString(lhs), BuiltinValue::BitString(rhs)) => lhs == rhs,
+            (BuiltinValue::OctetString(lhs), BuiltinValue::OctetString(rhs)) => lhs == rhs,
+            (BuiltinValue::Null, BuiltinValue::Null) => true,
+            (BuiltinValue::ObjectIdentifier(lhs), BuiltinValue::ObjectIdentifier(rhs)) => {
+                lhs.resolve_oid(context)? == rhs.resolve_oid(context)?
+            }
+            (BuiltinValue::Enumerated(lhs), BuiltinValue::Enumerated(rhs)) => {
+                lhs.try_eq(context, rhs)?
+            }
+            (BuiltinValue::Choice(lhs), BuiltinValue::Choice(rhs)) => {
+                lhs.value.try_eq(context, &rhs.value)?
+            }
+            (
+                BuiltinValue::CharacterString(lhs_tag, lhs),
+                BuiltinValue::CharacterString(rhs_tag, rhs),
+            ) => lhs_tag == rhs_tag && lhs == rhs,
+            _ => {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "cannot compare values of types {} and {}",
+                        lhs.value.tag_type(context)?,
+                        rhs.value.tag_type(context)?
+                    )),
+                    loc: self.loc,
+                })
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -156,7 +197,6 @@ pub struct TypedValue {
 
 pub trait ValueResolve {
     fn resolve<'a>(&'a self, context: &'a Context) -> Result<ResolvedValue>;
-    fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool>;
 }
 
 impl ValueResolve for AstElement<TypedValue> {
@@ -221,7 +261,9 @@ impl ValueResolve for AstElement<TypedValue> {
             }
         }
     }
+}
 
+impl TryEq for AstElement<TypedValue> {
     fn try_eq(&self, context: &Context, rhs: &Self) -> Result<bool> {
         // fast path: if comparing two identical valuereferences, we know the underlying values are the same
         if let (ValueReference::Reference(ref1), ValueReference::Reference(ref2)) =
@@ -232,38 +274,10 @@ impl ValueResolve for AstElement<TypedValue> {
             }
         }
 
-        let lhs = self.resolve(context)?;
-        let rhs = rhs.resolve(context)?;
-        Ok(match (&lhs.value, &rhs.value) {
-            (BuiltinValue::Boolean(lhs), BuiltinValue::Boolean(rhs)) => lhs == rhs,
-            (BuiltinValue::Integer(lhs), BuiltinValue::Integer(rhs)) => lhs == rhs,
-            (BuiltinValue::BitString(lhs), BuiltinValue::BitString(rhs)) => lhs == rhs,
-            (BuiltinValue::OctetString(lhs), BuiltinValue::OctetString(rhs)) => lhs == rhs,
-            (BuiltinValue::Null, BuiltinValue::Null) => true,
-            (BuiltinValue::ObjectIdentifier(lhs), BuiltinValue::ObjectIdentifier(rhs)) => {
-                lhs.resolve_oid(context)? == rhs.resolve_oid(context)?
-            }
-            (BuiltinValue::Enumerated(lhs), BuiltinValue::Enumerated(rhs)) => {
-                lhs.try_eq(context, rhs)?
-            }
-            (BuiltinValue::Choice(lhs), BuiltinValue::Choice(rhs)) => {
-                lhs.value.try_eq(context, &rhs.value)?
-            }
-            (
-                BuiltinValue::CharacterString(lhs_tag, lhs),
-                BuiltinValue::CharacterString(rhs_tag, rhs),
-            ) => lhs_tag == rhs_tag && lhs == rhs,
-            _ => {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!(
-                        "cannot compare values of types {} and {}",
-                        lhs.value.tag_type(context)?,
-                        rhs.value.tag_type(context)?
-                    )),
-                    loc: self.loc,
-                })
-            }
-        })
+        let resolved_lhs = self.resolve(context)?;
+        let resolved_rhs = rhs.resolve(context)?;
+        AstElement::new(resolved_lhs, self.loc)
+            .try_eq(context, &AstElement::new(resolved_rhs, rhs.loc))
     }
 }
 

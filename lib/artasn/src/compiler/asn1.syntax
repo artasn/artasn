@@ -399,6 +399,7 @@ rule Constraint {
         constraint = SubtypeConstraint
     }
     operator (
+    persist
     constraint = SubtypeConstraint
     persist
     operator )
@@ -409,6 +410,7 @@ rule SubtypeConstraint {
     captures {
         element_sets = repeated: ConstraintElement
     }
+    persist
     element_sets = ConstraintElement
     optional repeated {
         operator ,
@@ -416,22 +418,41 @@ rule SubtypeConstraint {
     }
 }
 
-variant ConstraintElement = Extensible | SubtypeElementSet;
+variant ConstraintElement = Extensible | SubtypeElementSet | error { "expecting constraint element or '...'" };
+
+variant ConstraintOperator = Union {
+    operator |
+} | KeywordUnion {
+    keyword UNION
+} | Intersection {
+    operator ^
+} | KeywordIntersection {
+    keyword INTERSECTION
+};
 
 rule SubtypeElementSet {
     captures {
         elements = repeated: SubtypeElement
+        operators = repeated: ConstraintOperator
     }
     elements = SubtypeElement
     persist
     optional repeated {
-        operator |
+        operators = ConstraintOperator
         elements = SubtypeElement
     }
-    return elements
 }
 
-variant SubtypeElement = UserDefinedConstraint | TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
+variant SubtypeElement = SubtypeElementGroup {
+    captures {
+        group = boxed SubtypeElementSet
+    }
+    operator (
+    persist
+    group = SubtypeElementSet
+    operator )
+    return group
+} | UserDefinedConstraint | TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -446,6 +467,15 @@ variant SubtypeElement = UserDefinedConstraint | TableConstraint | ContentsConst
     }
     value = Value
     return value
+} | ContainedSubtype {
+    captures {
+        ty = Type
+    }
+    optional {
+        keyword INCLUDES
+    }
+    ty = Type
+    return ty
 } | error { "expecting a constraint" };
 
 rule TableConstraint {

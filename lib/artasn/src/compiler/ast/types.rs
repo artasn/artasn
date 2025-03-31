@@ -44,7 +44,7 @@ fn default_value_lazy_parser(
 ) -> Result<AstElement<TypedValue>> {
     values::parse_value(
         parser,
-        ParseValueAssignmentStage::NormalValues,
+        ParseValueAssignmentStage::Normal,
         default,
         resolved_type,
     )
@@ -222,7 +222,7 @@ fn parse_enumerated_type(
         let value = match &ast_item.element.num {
             Some(num) => EnumerationItemValue::Specified(values::parse_value(
                 parser,
-                ParseValueAssignmentStage::NormalValues,
+                ParseValueAssignmentStage::Normal,
                 num,
                 &ResolvedType {
                     tag: Some(Tag::universal(TagType::Enumerated)),
@@ -509,7 +509,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                     let resolved_type = value_type.resolve(parser.context)?;
                     let value = values::parse_value(
                         parser,
-                        ParseValueAssignmentStage::NormalValues,
+                        ParseValueAssignmentStage::Normal,
                         &ast.element.0,
                         &resolved_type,
                     )?;

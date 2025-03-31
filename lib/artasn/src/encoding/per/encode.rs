@@ -42,11 +42,11 @@ fn write_per_vlq<W: Write>(writer: &mut BitWriter<W>, n: u64, max: Option<u64>) 
 
 enum LengthDeterminantKind {
     /// No length determinant is encoded, because it is constrained to one value.
-    ConstLength,
+    Const,
     /// The length determinant is encoded as a fixed number of bits, because it is constrained to a range of values.
-    FixedSizeLength,
+    FixedSize,
     /// The length determinant is encoded as a variable number of bits, because it is unbounded.
-    VariableSizeLength,
+    VariableSize,
 }
 
 fn write_length_determinant<W: Write>(
@@ -56,18 +56,18 @@ fn write_length_determinant<W: Write>(
 ) -> LengthDeterminantKind {
     let (length_min, length_max) = length_range;
     match (length_min, length_max) {
-        (Some(min), Some(max)) if min == max => LengthDeterminantKind::ConstLength,
+        (Some(min), Some(max)) if min == max => LengthDeterminantKind::Const,
         (_, None) => {
             write_per_vlq(writer, length, None);
-            LengthDeterminantKind::VariableSizeLength
+            LengthDeterminantKind::VariableSize
         }
         (low, Some(high @ ..65536)) => {
             write_int(writer, length, low.unwrap_or(0), high, Alignment::None);
-            LengthDeterminantKind::FixedSizeLength
+            LengthDeterminantKind::FixedSize
         }
         (_, Some(length_max @ 65536..)) => {
             write_per_vlq(writer, length, Some(length_max));
-            LengthDeterminantKind::VariableSizeLength
+            LengthDeterminantKind::VariableSize
         }
     }
 }
@@ -79,34 +79,34 @@ fn write_size_determinant<W: Write>(
     resolved_type: &ResolvedType,
 ) -> Result<LengthDeterminantKind> {
     let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraint {
-        Some(constraint)
-            if constraint
-                .find(|element| matches!(element, SubtypeElement::SingleValue(_)))
-                .is_none() =>
-        {
-            let size_bounds = match constraint.size_bounds(context)? {
-                Some(bounds) => {
-                    let min = match bounds.lower_bound {
-                        Bound::Integer(int) => Some(int.try_into().expect("size out of bounds")),
-                        Bound::Unbounded => None,
-                    };
-                    let max = match bounds.upper_bound {
-                        Some(Bound::Integer(int)) => {
-                            Some(int.try_into().expect("size out of bounds"))
-                        }
-                        None | Some(Bound::Unbounded) => None,
-                    };
-                    (min, max)
-                }
-                None => (None, None),
-            };
-            let inclusion = constraint.includes_integer(
-                context,
-                ConstraintCheckMode::Size,
-                &BigInt::from(size),
-            )?;
-            let is_extensible = constraint.is_extensible(None);
-            (size_bounds, inclusion, is_extensible)
+        Some(constraint) => {
+            let constraint = constraint.resolve(context, &resolved_type.ty)?;
+            if !constraint.has_value_constraint() {
+                let size_bounds = match constraint.size_bounds()? {
+                    Some(bounds) => {
+                        let min = match bounds.lower_bound {
+                            Bound::Integer(int) => {
+                                Some(int.try_into().expect("size out of bounds"))
+                            }
+                            Bound::Unbounded => None,
+                        };
+                        let max = match bounds.upper_bound {
+                            Some(Bound::Integer(int)) => {
+                                Some(int.try_into().expect("size out of bounds"))
+                            }
+                            None | Some(Bound::Unbounded) => None,
+                        };
+                        (min, max)
+                    }
+                    None => (None, None),
+                };
+                let inclusion =
+                    constraint.includes_integer(ConstraintCheckMode::Size, &BigInt::from(size))?;
+                let is_extensible = constraint.is_extensible(None);
+                (size_bounds, inclusion, is_extensible)
+            } else {
+                ((None, None), None, false)
+            }
         }
         _ => ((None, None), None, false),
     };
@@ -179,11 +179,12 @@ fn per_encode_integer<W: Write>(
     resolved_type: &ResolvedType,
     value: &BigInt,
 ) -> Result<()> {
-    let context = encoder.context;
     let writer = &mut encoder.writer;
     let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraint {
         Some(constraint) => {
-            let value_bounds = match constraint.integer_value_bounds(context)? {
+            let resolved_constraint = constraint.resolve(encoder.context, &resolved_type.ty)?;
+
+            let value_bounds = match resolved_constraint.integer_value_bounds()? {
                 Some(bounds) => {
                     let min = match bounds.lower_bound {
                         Bound::Integer(int) => Some(int),
@@ -198,8 +199,8 @@ fn per_encode_integer<W: Write>(
                 None => (None, None),
             };
             let inclusion =
-                constraint.includes_integer(context, ConstraintCheckMode::Value, value)?;
-            let is_extensible = constraint.is_extensible(None);
+                resolved_constraint.includes_integer(ConstraintCheckMode::Value, value)?;
+            let is_extensible = resolved_constraint.is_extensible(None);
             (value_bounds, inclusion, is_extensible)
         }
         _ => ((None, None), None, false),
@@ -252,10 +253,12 @@ pub fn per_encode_value<W: Write>(
             let mut total_bits = bs.data.len() as u64 * 8 - bs.unused_bits as u64;
 
             match &typed_value.ty.ty {
-                BuiltinType::BitString(bs) => {
+                ty @ BuiltinType::BitString(bs) => {
                     if bs.named_bits.is_some() {
                         if let Some(constraint) = &typed_value.ty.constraint {
-                            if let Some(bounds) = constraint.size_bounds(context)? {
+                            if let Some(bounds) =
+                                constraint.resolve(encoder.context, ty)?.size_bounds()?
+                            {
                                 match bounds.lower_bound {
                                     Bound::Integer(lower_bound) => {
                                         let lower_bound = lower_bound
@@ -279,7 +282,7 @@ pub fn per_encode_value<W: Write>(
             let determinant_kind =
                 write_size_determinant(&mut encoder.writer, context, total_bits, &typed_value.ty)?;
             match determinant_kind {
-                LengthDeterminantKind::ConstLength => (),
+                LengthDeterminantKind::Const => (),
                 _ => {
                     if total_bits > 0 {
                         encoder.writer.align();
@@ -306,7 +309,7 @@ pub fn per_encode_value<W: Write>(
                 &typed_value.ty,
             )?;
             match determinant_kind {
-                LengthDeterminantKind::ConstLength => (),
+                LengthDeterminantKind::Const => (),
                 _ => {
                     if !bytes.is_empty() {
                         encoder.writer.align();
@@ -328,7 +331,7 @@ pub fn per_encode_value<W: Write>(
                 per_encode_value(encoder, &element)?;
             }
         }
-        other => todo!("{other:#?}"),
+        _ => todo!("PER encode type: {}", typed_value.ty.ty),
     }
 
     Ok(())

@@ -489,15 +489,7 @@ pub fn ber_encode_value(
             let constraint = resolved_type
                 .constraint
                 .as_ref()
-                .map(|constraint| {
-                    constraint
-                        .flatten()
-                        .iter()
-                        .find_map(|subtype| match &subtype.element {
-                            SubtypeElement::Contents(contents) => Some(contents),
-                            _ => None,
-                        })
-                })
+                .map(|constraint| constraint.get_contents_constraint())
                 .expect("CONTAINING value for type without constraint")
                 .expect("CONTAINING value for type without contents constraint");
 

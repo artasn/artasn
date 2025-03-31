@@ -409,10 +409,17 @@ json_compile_test!(
     "../../test-data/compile/UniqueAlternativeTestImplicitTagging"
 );
 // TODO: make this work
-// json_compile_test!(test_unique_alternative_compliance_automatic_tagging, "../../test-data/compile/UniqueAlternativeTestAutomaticTagging");
+// json_compile_test!(
+//     test_unique_alternative_compliance_automatic_tagging,
+//     "../../test-data/compile/UniqueAlternativeTestAutomaticTagging"
+// );
 json_compile_test!(
-    test_constraint_verifier,
-    "../../test-data/compile/ConstraintTest"
+    test_basic_constraints,
+    "../../test-data/compile/BasicConstraintTest"
+);
+json_compile_test!(
+    test_contained_subtype_constraints,
+    "../../test-data/compile/ContainedSubtypeConstraintTest"
 );
 json_compile_test!(
     test_matching_imports,

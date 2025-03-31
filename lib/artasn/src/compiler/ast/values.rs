@@ -68,19 +68,18 @@ fn parse_object_class_field<'a, 'b>(
     class_type: &AstElement<QualifiedIdentifier>,
     field: &AstElement<String>,
 ) -> Result<(&'a ObjectClassField, Option<&'b TableConstraint>)> {
-    let table_constraint = component_type.constraint.as_ref().and_then(|constraint| {
-        constraint.find(|element| matches!(element, SubtypeElement::Table(_)))
-    });
+    let constraint = component_type
+        .constraint
+        .as_ref()
+        .map(|constraint| constraint.get_table_constraint());
+    let table_constraint = constraint.unwrap_or_default();
 
     let class =
         class::resolve_information_object_class(parser, class_type)?.resolve(parser.context)?;
     let field = class.find_field(field)?;
 
     Ok(match table_constraint {
-        Some(table_constraint) => match table_constraint {
-            SubtypeElement::Table(table) => (field, Some(table)),
-            _ => unreachable!(),
-        },
+        Some(table_constraint) => (field, Some(table_constraint)),
         None => (field, None),
     })
 }
@@ -394,10 +393,9 @@ fn validate_class_field_reference_value(
 ) -> Result<()> {
     if kind == ObjectClassFieldReferenceKind::TypeLike {
         let is_open_type_value = match &value.element {
-            AstValue::BuiltinValue(builtin) => match &builtin.element {
-                AstBuiltinValue::OpenTypeValue(_) => true,
-                _ => false,
-            },
+            AstValue::BuiltinValue(builtin) => {
+                matches!(&builtin.element, AstBuiltinValue::OpenTypeValue(_))
+            }
             _ => false,
         };
         if !is_open_type_value {
@@ -452,7 +450,7 @@ fn parse_structure_value(
             {
                 let component_type = match &ty_component.component_type.ty {
                     UntaggedType::ObjectClassField(ocf) => {
-                        if stage != ParseValueAssignmentStage::ClassReferenceValues {
+                        if stage != ParseValueAssignmentStage::ClassReference {
                             return Err(Error::break_parser());
                         }
 
@@ -772,7 +770,7 @@ fn parse_choice_value(
 
     let resolved_alternative_ty = match &alternative.alternative_type.ty {
         UntaggedType::ObjectClassField(ocf) => {
-            if stage != ParseValueAssignmentStage::ClassReferenceValues {
+            if stage != ParseValueAssignmentStage::ClassReference {
                 return Err(Error::break_parser());
             }
             let (resolved_type, kind) = parse_object_class_field_reference(
@@ -967,20 +965,15 @@ pub fn parse_value(
                 ))
             }
             AstBuiltinValue::ContainingValue(containing) => {
-                let constraints = target_type.constraint.as_ref().map(|constraint| {
-                    constraint
-                        .flatten()
-                        .iter()
-                        .find_map(|subtype| match &subtype.element {
-                            SubtypeElement::Contents(contents) => Some(contents),
-                            _ => None,
-                        })
-                });
-                let constraints = match constraints {
-                    Some(Some(constraints)) => constraints,
+                let constraint = target_type
+                    .constraint
+                    .as_ref()
+                    .map(|constraint| constraint.get_contents_constraint());
+                let contents_constraint = match constraint {
+                    Some(Some(contents_constraint)) => contents_constraint,
                     _ => {
                         return Err(Error {
-                            kind: ErrorKind::Ast("CONTAINING value can not be applied to a type that does not have a contents constraint".to_string()),
+                            kind: ErrorKind::Ast("CONTAINING value can not be assigned to a type that does not have a contents constraint".to_string()),
                             loc: value.loc,
                         })
                     }
@@ -990,11 +983,11 @@ pub fn parse_value(
                     BuiltinType::BitString(_) => TagType::BitString,
                     BuiltinType::OctetString => TagType::OctetString,
                     // constraint parser (compiler/ast/constraints.rs)
-                    // ensures that content constraints can only be applied to BIT STRING or OCTET STRING
+                    // ensures that content constraints can only be assigned to BIT STRING or OCTET STRING
                     _ => unreachable!(),
                 };
 
-                let contained_type = constraints.ty.resolve(parser.context)?;
+                let contained_type = contents_constraint.content_type.resolve(parser.context)?;
                 BuiltinValue::Containing(ContainingValue {
                     container_type,
                     value: Box::new(parse_value(
@@ -1013,7 +1006,7 @@ pub fn parse_value(
                         tagged_type.resolve(parser.context)?
                     }
                     AstOpenTypeValueTypeReference::ObjectFieldReference(field_ref) => {
-                        if stage != ParseValueAssignmentStage::ClassReferenceValues {
+                        if stage != ParseValueAssignmentStage::ClassReference {
                             return Err(Error::break_parser());
                         }
 
@@ -1069,7 +1062,7 @@ pub fn parse_value(
                 return parse_value(parser, stage, &otv.element.value, &value_type);
             }
             AstBuiltinValue::ObjectFieldReference(object_field_ref) => {
-                if stage != ParseValueAssignmentStage::ClassReferenceValues {
+                if stage != ParseValueAssignmentStage::ClassReference {
                     return Err(Error::break_parser());
                 }
 
@@ -1226,9 +1219,9 @@ pub enum ParsedValueAssignment {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseValueAssignmentStage {
-    NormalValues,
-    ClassValues,
-    ClassReferenceValues,
+    Normal,
+    Class,
+    ClassReference,
 }
 
 pub fn parse_value_assignment(
@@ -1247,7 +1240,7 @@ pub fn parse_value_assignment(
                 );
                 if let Some(class) = class {
                     match stage {
-                        ParseValueAssignmentStage::ClassValues => {
+                        ParseValueAssignmentStage::Class => {
                             return Ok(Some(match &value_assignment.element.value.element {
                                 AstValue::BuiltinValue(builtin) => match &builtin.element {
                                     AstBuiltinValue::BracedTokenStream(tokens) => {
@@ -1282,8 +1275,8 @@ pub fn parse_value_assignment(
                                 ),
                             }));
                         }
-                        ParseValueAssignmentStage::NormalValues
-                        | ParseValueAssignmentStage::ClassReferenceValues => {
+                        ParseValueAssignmentStage::Normal
+                        | ParseValueAssignmentStage::ClassReference => {
                             return Ok(None);
                         }
                     }
@@ -1293,8 +1286,7 @@ pub fn parse_value_assignment(
     }
 
     Ok(match stage {
-        ParseValueAssignmentStage::NormalValues
-        | ParseValueAssignmentStage::ClassReferenceValues => {
+        ParseValueAssignmentStage::Normal | ParseValueAssignmentStage::ClassReference => {
             let mut ty = types::parse_type(
                 parser,
                 &value_assignment.element.ty,
@@ -1339,6 +1331,6 @@ pub fn parse_value_assignment(
                 ParsedValueAssignment::Value(DeclaredValue { value: val, ty }),
             ))
         }
-        ParseValueAssignmentStage::ClassValues => None,
+        ParseValueAssignmentStage::Class => None,
     })
 }
