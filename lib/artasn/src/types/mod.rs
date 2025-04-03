@@ -564,7 +564,44 @@ impl BuiltinType {
             _ => (),
         }
 
-        if let (Self::Structure(seq), BuiltinValue::Sequence(value)) = (self, &typed_value.value) {
+        if let (Self::Structure(seq), builtin_value @ BuiltinValue::Sequence(value)) =
+            (self, &typed_value.value)
+        {
+            let inner_type_constraints: Option<Vec<&InnerTypeConstraints>> =
+                constraint.as_ref().map(|constraint| {
+                    constraint
+                        .specs
+                        .iter()
+                        .flat_map(|spec| {
+                            spec.items.iter().filter_map(|item| match item {
+                                ConstraintSpecItem::InnerType(inner_type) => Some(inner_type),
+                                _ => None,
+                            })
+                        })
+                        .collect()
+                });
+            if let Some(inner_type_constraints) = inner_type_constraints {
+                let satisfied = 'block: {
+                    for inner_type_constraint in inner_type_constraints {
+                        if inner_type_constraint.is_satisfied_by_value(
+                            context,
+                            self,
+                            builtin_value,
+                        )? {
+                            break 'block true;
+                        }
+                    }
+
+                    false
+                };
+                if !satisfied {
+                    return Err(Error {
+                        kind: ErrorKind::Ast("SEQUENCE value does not satisfy any of the inner type constraints in the governing type".to_string()),
+                        loc: valref.loc,
+                    });
+                }
+            }
+
             for seq_component in &seq.components {
                 let val_component = value
                     .components

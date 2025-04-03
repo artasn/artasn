@@ -663,26 +663,18 @@ fn eval_value_and_size_set_binary_expr(
             });
 
             if lhs_size.specs.len() > 1 || rhs_size.specs.len() > 1 {
-                let lhs_ext = lhs_size
-                    .specs
-                    .iter()
-                    .skip(1)
-                    .flat_map(|spec| {
-                        spec.items.iter().map(|item| match item {
-                            ConstraintSpecItem::Value(value) => value.clone(),
-                            _ => unreachable!(),
-                        })
-                    });
-                let rhs_ext = rhs_size
-                    .specs
-                    .iter()
-                    .skip(1)
-                    .flat_map(|spec| {
-                        spec.items.iter().map(|item| match item {
-                            ConstraintSpecItem::Value(value) => value.clone(),
-                            _ => unreachable!(),
-                        })
-                    });
+                let lhs_ext = lhs_size.specs.iter().skip(1).flat_map(|spec| {
+                    spec.items.iter().map(|item| match item {
+                        ConstraintSpecItem::Value(value) => value.clone(),
+                        _ => unreachable!(),
+                    })
+                });
+                let rhs_ext = rhs_size.specs.iter().skip(1).flat_map(|spec| {
+                    spec.items.iter().map(|item| match item {
+                        ConstraintSpecItem::Value(value) => value.clone(),
+                        _ => unreachable!(),
+                    })
+                });
                 size_specs.push(ConstraintSpec {
                     items: eval_value_set_binary_expr(
                         lhs_ext,
@@ -917,7 +909,7 @@ pub struct ContentsConstraint {
     pub encoded_by: Option<AstElement<TypedValue>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InnerTypeConstraintsKind {
     Full,
     Partial,
@@ -927,6 +919,92 @@ pub enum InnerTypeConstraintsKind {
 pub struct InnerTypeConstraints {
     pub kind: InnerTypeConstraintsKind,
     pub components: Vec<NamedConstraint>,
+}
+
+impl InnerTypeConstraints {
+    fn lookup_constraint<'a>(&'a self, name: &str) -> Option<&'a ComponentConstraint> {
+        self.components.iter().find_map(|component| {
+            if &component.name.element == name {
+                Some(&component.constraint)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn is_satisfied_by_value(
+        &self,
+        context: &Context,
+        value_type: &BuiltinType,
+        value: &BuiltinValue,
+    ) -> Result<bool> {
+        match (value_type, value) {
+            (BuiltinType::Structure(ty), BuiltinValue::Sequence(val) | BuiltinValue::Set(val)) => {
+                match self.kind {
+                    InnerTypeConstraintsKind::Full => {
+                        for value_component in &val.components {
+                            if self
+                                .lookup_constraint(&value_component.name.element)
+                                .is_none()
+                            {
+                                return Ok(false);
+                            }
+                        }
+                    }
+                    InnerTypeConstraintsKind::Partial => (),
+                }
+
+                for component_constraint in &self.components {
+                    let ty_component = ty.components.iter().find(|component| {
+                        component.name.element == component_constraint.name.element
+                    });
+                    let value_component = val.components.iter().find(|component| {
+                        component.name.element == component_constraint.name.element
+                    });
+                    let constraint = &component_constraint.constraint;
+
+                    let presence = match self.kind {
+                        InnerTypeConstraintsKind::Full => {
+                            // X.680 clause 51.8.10.3:
+                            // in full spec, unspecified presence indicates PRESENT
+                            constraint.presence.or(Some(Presence::Present))
+                        }
+                        InnerTypeConstraintsKind::Partial => constraint.presence,
+                    };
+                    match (presence, value_component) {
+                        (Some(Presence::Present), None) | (Some(Presence::Absent), Some(_)) => {
+                            return Ok(false)
+                        }
+                        _ => (),
+                    }
+
+                    if let (constraint @ Some(_), Some(component)) = (&constraint.value, value_component) {
+                        // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
+                        let constrained_type =
+                            ty_component.unwrap().component_type.resolve(context)?;
+
+                        if constrained_type
+                            .ty
+                            .ensure_satisfied_by_value(
+                                context,
+                                &component.value,
+                                constraint.as_ref(),
+                            )
+                            .is_err()
+                        {
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                Ok(true)
+            }
+            (BuiltinType::Choice(_ty), BuiltinValue::Choice(_val)) => {
+                todo!("inner type constraints w/ CHOICE")
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

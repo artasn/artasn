@@ -422,6 +422,14 @@ json_compile_test!(
     "../../test-data/compile/ContainedSubtypeConstraintTest"
 );
 json_compile_test!(
+    test_sequence_inner_type_constraints,
+    "../../test-data/compile/SequenceInnerTypeConstraintTest"
+);
+json_compile_test!(
+    test_choice_inner_type_constraints,
+    "../../test-data/compile/ChoiceInnerTypeConstraintTest"
+);
+json_compile_test!(
     test_matching_imports,
     "../../test-data/compile/import/",
     "MatchingImportTest",

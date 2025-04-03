@@ -1,0 +1,237 @@
+SequenceInnerTypeConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+FullSpecConstraint1 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL,
+    c UTF8String OPTIONAL
+} (WITH COMPONENTS { a, b, c })
+fsc1-valid1   FullSpecConstraint1 ::= { a 1, b TRUE, c "Hello, world!" }
+fsc1-invalid1 FullSpecConstraint1 ::= { }
+fsc1-invalid2 FullSpecConstraint1 ::= { a 1 }
+fsc1-invalid3 FullSpecConstraint1 ::= { b TRUE }
+fsc1-invalid4 FullSpecConstraint1 ::= { c "Hello, world!" }
+fsc1-invalid5 FullSpecConstraint1 ::= { a 1, b TRUE }
+fsc1-invalid6 FullSpecConstraint1 ::= { a 1, c "Hello, world!" }
+fsc1-invalid7 FullSpecConstraint1 ::= { b TRUE, c "Hello, world!" }
+
+FullSpecConstraint2 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL,
+    c UTF8String OPTIONAL
+} (WITH COMPONENTS { a, b })
+fsc2-valid1   FullSpecConstraint2 ::= { a 1, b TRUE }
+fsc2-invalid1 FullSpecConstraint2 ::= { }
+fsc2-invalid2 FullSpecConstraint2 ::= { a 1 }
+fsc2-invalid3 FullSpecConstraint2 ::= { b TRUE }
+fsc2-invalid4 FullSpecConstraint2 ::= { c "Hello, world!" }
+fsc2-invalid5 FullSpecConstraint2 ::= { a 1, c "Hello, world!" }
+fsc2-invalid6 FullSpecConstraint2 ::= { b TRUE, c "Hello, world!" }
+fsc2-invalid7 FullSpecConstraint2 ::= { a 1, b TRUE, c "Hello, world!" }
+
+FullSpecConstraint3 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL,
+    c UTF8String OPTIONAL
+} (WITH COMPONENTS { a, b } | WITH COMPONENTS { a, c } | WITH COMPONENTS { b, c })
+fsc3-valid1   FullSpecConstraint3 ::= { a 1, b TRUE }
+fsc3-valid2   FullSpecConstraint3 ::= { a 1, c "Hello, world!" }
+fsc3-valid3   FullSpecConstraint3 ::= { b TRUE, c "Hello, world!" }
+fsc3-invalid1 FullSpecConstraint3 ::= { }
+fsc3-invalid2 FullSpecConstraint3 ::= { a 1 }
+fsc3-invalid3 FullSpecConstraint3 ::= { b TRUE }
+fsc3-invalid4 FullSpecConstraint3 ::= { c "Hello, world!" }
+fsc3-invalid5 FullSpecConstraint3 ::= { a 1, b TRUE, c "Hello, world!" }
+
+PartialSpecConstraint1 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL,
+    c UTF8String OPTIONAL
+} (WITH COMPONENTS { ..., a })
+psc1-valid1 PartialSpecConstraint1 ::= { a 1, b TRUE, c "Hello, world!" }
+psc1-valid2 PartialSpecConstraint1 ::= { }
+psc1-valid3 PartialSpecConstraint1 ::= { a 1 }
+psc1-valid4 PartialSpecConstraint1 ::= { b TRUE }
+psc1-valid5 PartialSpecConstraint1 ::= { c "Hello, world!" }
+psc1-valid6 PartialSpecConstraint1 ::= { a 1, b TRUE }
+psc1-valid7 PartialSpecConstraint1 ::= { a 1, c "Hello, world!" }
+psc1-valid8 PartialSpecConstraint1 ::= { b TRUE, c "Hello, world!" }
+
+PartialSpecPresenceConstraint1 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN
+} (WITH COMPONENTS {
+    ...,
+    a ABSENT
+})
+pspc1-valid1 PartialSpecPresenceConstraint1 ::= {
+    b TRUE
+}
+pspc1-valid2 PartialSpecPresenceConstraint1 ::= {
+    b FALSE
+}
+pspc1-invalid1 PartialSpecPresenceConstraint1 ::= {
+    a 1,
+    b TRUE
+}
+pspc1-invalid2 PartialSpecPresenceConstraint1 ::= {
+    a 1,
+    b FALSE
+}
+
+FullSpecPresenceConstraint1 ::= SEQUENCE {
+    a INTEGER OPTIONAL,
+    b BOOLEAN OPTIONAL
+} (WITH COMPONENTS {
+    a PRESENT,
+    b PRESENT
+} | WITH COMPONENTS {
+    a ABSENT,
+    b ABSENT
+})
+fspc1-valid1 FullSpecPresenceConstraint1 ::= {
+    a 1,
+    b TRUE
+}
+fspc1-valid2 FullSpecPresenceConstraint1 ::= {
+    a 2,
+    b FALSE
+}
+fspc1-valid3 FullSpecPresenceConstraint1 ::= {
+}
+fspc1-invalid1 FullSpecPresenceConstraint1 ::= {
+    a 1
+}
+fspc1-invalid2 FullSpecPresenceConstraint1 ::= {
+    a 2
+}
+fspc1-invalid3 FullSpecPresenceConstraint1 ::= {
+    b TRUE
+}
+fspc1-invalid4 FullSpecPresenceConstraint1 ::= {
+    b FALSE
+}
+
+FullSpecValueConstraint1 ::= SEQUENCE {
+    a INTEGER,
+    b BOOLEAN
+} (WITH COMPONENTS {
+    a (1),
+    b (TRUE)
+} | WITH COMPONENTS {
+    a (0),
+    b (FALSE)
+})
+fsvc1-valid1 FullSpecValueConstraint1 ::= {
+    a 1,
+    b TRUE
+}
+fsvc1-valid2 FullSpecValueConstraint1 ::= {
+    a 0,
+    b FALSE
+}
+fsvc1-invalid3 FullSpecValueConstraint1 ::= {
+    a 1,
+    b FALSE
+}
+fsvc1-invalid4 FullSpecValueConstraint1 ::= {
+    a 0,
+    b TRUE
+}
+fsvc1-invalid5 FullSpecValueConstraint1 ::= {
+    a 2,
+    b TRUE
+}
+fsvc1-invalid6 FullSpecValueConstraint1 ::= {
+    a 2,
+    b FALSE
+}
+
+NestedValueConstraint ::= SEQUENCE {
+    a SEQUENCE {
+        foo INTEGER,
+        bar BOOLEAN
+    },
+    b SEQUENCE {
+        baz UTF8String,
+        quz OCTET STRING
+    }
+} (WITH COMPONENTS {
+    ...,
+    b (WITH COMPONENTS {
+        baz ("Hello, world!"),
+        quz ('DEADBEEF'H)
+    } | WITH COMPONENTS {
+        baz ("Goodbye, world!"),
+        quz ('1337'H)
+    })
+})
+nvc-valid1 NestedValueConstraint ::= {
+    a {
+        foo 1,
+        bar TRUE
+    },
+    b {
+        baz "Hello, world!",
+        quz 'DEADBEEF'H
+    }
+}
+nvc-valid2 NestedValueConstraint ::= {
+    a {
+        foo 1,
+        bar TRUE
+    },
+    b {
+        baz "Goodbye, world!",
+        quz '1337'H
+    }
+}
+nvc-valid3 NestedValueConstraint ::= {
+    a {
+        foo 2,
+        bar FALSE
+    },
+    b {
+        baz "Hello, world!",
+        quz 'DEADBEEF'H
+    }
+}
+nvc-valid4 NestedValueConstraint ::= {
+    a {
+        foo 2,
+        bar FALSE
+    },
+    b {
+        baz "Goodbye, world!",
+        quz '1337'H
+    }
+}
+nvc-invalid1 NestedValueConstraint ::= {
+    a {
+        foo 1,
+        bar TRUE
+    },
+    b {
+        baz "Goodbye, world!",
+        quz 'DEADBEEF'H
+    }
+}
+nvc-invalid2 NestedValueConstraint ::= {
+    a {
+        foo 1,
+        bar TRUE
+    },
+    b {
+        baz "Hello, world!",
+        quz '1337'H
+    }
+}
+
+-- InvalidFullSpecValueConstraint1 ::= SEQUENCE {
+--     a INTEGER (1<..10),
+--     b BOOLEAN
+-- } (WITH COMPONENTS {
+--     a (1),
+--     b (TRUE)
+-- })
+
+END

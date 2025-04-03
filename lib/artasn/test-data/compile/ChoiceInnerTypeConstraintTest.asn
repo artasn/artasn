@@ -1,0 +1,166 @@
+ChoiceSubtypeConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+FullSpecConstraint1 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a, b, c })
+fsc1-valid1 FullSpecConstraint1 ::= a : 1
+fsc1-valid2 FullSpecConstraint1 ::= b : TRUE
+fsc1-valid3 FullSpecConstraint1 ::= c : "Hello, world!"
+
+FullSpecConstraint2 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a, b })
+fsc2-valid1   FullSpecConstraint2 ::= a : 1
+fsc2-valid2   FullSpecConstraint2 ::= b : TRUE
+fsc2-invalid1 FullSpecConstraint2 ::= c : "Hello, world!"
+
+FullSpecValueConstraint ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a (1) })
+fsvc-valid1   FullSpecValueConstraint ::= a : 1
+fsvc-invalid1 FullSpecValueConstraint ::= a : 2
+fsvc-invalid2 FullSpecValueConstraint ::= b : TRUE
+fsvc-invalid3 FullSpecValueConstraint ::= b : FALSE
+fsvc-invalid4 FullSpecValueConstraint ::= c : "Hello, world!"
+fsvc-invalid5 FullSpecValueConstraint ::= c : "Goodbye, world!"
+
+FullSpecPresenceConstraint1 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a PRESENT, b ABSENT, c ABSENT })
+fspc1-valid1   FullSpecPresenceConstraint1 ::= a : 1
+fspc1-invalid1 FullSpecPresenceConstraint1 ::= b : TRUE
+fspc1-invalid2 FullSpecPresenceConstraint1 ::= c : "Hello, world!"
+
+FullSpecPresenceConstraint2 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a ABSENT, b ABSENT, c ABSENT })
+fspc2-invalid1 FullSpecPresenceConstraint2 ::= a : 1
+fspc2-invalid2 FullSpecPresenceConstraint2 ::= b : TRUE
+fspc2-invalid3 FullSpecPresenceConstraint2 ::= c : "Hello, world!"
+
+InvalidFullSpecPresenceConstraint ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS { a PRESENT, b PRESENT, c ABSENT })
+
+PartialSpecValueConstraint ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS {
+    ...,
+    a (1)
+})
+psvc-valid1   PartialSpecValueConstraint ::= a : 1
+psvc-valid2   PartialSpecValueConstraint ::= b : TRUE
+psvc-valid3   PartialSpecValueConstraint ::= c : "Hello, world!"
+psvc-valid4   PartialSpecValueConstraint ::= b : FALSE
+psvc-valid5   PartialSpecValueConstraint ::= c : "Goodbye, world!"
+psvc-invalid1 PartialSpecValueConstraint ::= a : 2
+
+PartialSpecValuedPresenceConstraint1 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS {
+    ...,
+    a (1) PRESENT
+})
+psvpc1-valid1   PartialSpecValuedPresenceConstraint1 ::= a : 1
+psvpc1-invalid1 PartialSpecValuedPresenceConstraint1 ::= a : 2
+psvpc1-invalid2 PartialSpecValuedPresenceConstraint1 ::= b : TRUE
+psvpc1-invalid3 PartialSpecValuedPresenceConstraint1 ::= b : FALSE
+psvpc1-invalid4 PartialSpecValuedPresenceConstraint1 ::= c : "Hello, world!"
+psvpc1-invalid5 PartialSpecValuedPresenceConstraint1 ::= c : "Goodbye, world!"
+
+PartialSpecValuedPresenceConstraint2 ::= CHOICE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+} (WITH COMPONENTS {
+    ...,
+    a (1) PRESENT
+} | WITH COMPONENTS {
+    ...,
+    b (TRUE) PRESENT
+} | WITH COMPONENTS {
+    ...,
+    c ("foo") PRESENT
+})
+psvpc2-valid1   PartialSpecValuedPresenceConstraint2 ::= a : 1
+psvpc2-valid2   PartialSpecValuedPresenceConstraint2 ::= b : TRUE
+psvpc2-valid3   PartialSpecValuedPresenceConstraint2 ::= c : "foo"
+psvpc2-invalid1 PartialSpecValuedPresenceConstraint2 ::= a : 2
+psvpc2-invalid2 PartialSpecValuedPresenceConstraint2 ::= b : FALSE
+psvpc2-invalid3 PartialSpecValuedPresenceConstraint2 ::= c : "Hello, world!"
+
+ChoiceAlternativeByEnum ::= SEQUENCE {
+    alternative ENUMERATED {
+        foo (0),
+        bar (1),
+        baz (2)
+    },
+    value CHOICE {
+        foo INTEGER,
+        bar BOOLEAN,
+        baz UTF8String
+    }
+} (WITH COMPONENTS {
+    alternative (foo),
+    value (WITH COMPONENTS { foo })
+} | WITH COMPONENTS {
+    alternative (bar),
+    value (WITH COMPONENTS { bar })
+} | WITH COMPONENTS {
+    alternative (baz),
+    value (WITH COMPONENTS { baz })
+})
+cabe-valid1 ChoiceAlternativeByEnum ::= {
+    alternative foo,
+    value foo : 1
+}
+cabe-valid2 ChoiceAlternativeByEnum ::= {
+    alternative bar,
+    value bar : TRUE
+}
+cabe-valid3 ChoiceAlternativeByEnum ::= {
+    alternative baz,
+    value baz : "Hello, world!"
+}
+cabe-invalid1 ChoiceAlternativeByEnum ::= {
+    alternative foo,
+    value bar : TRUE
+}
+cabe-invalid2 ChoiceAlternativeByEnum ::= {
+    alternative foo,
+    value baz : "Hello, world!"
+}
+cabe-invalid3 ChoiceAlternativeByEnum ::= {
+    alternative bar,
+    value foo : 1
+}
+cabe-invalid4 ChoiceAlternativeByEnum ::= {
+    alternative bar,
+    value baz : "Hello, world!"
+}
+cabe-invalid5 ChoiceAlternativeByEnum ::= {
+    alternative baz,
+    value foo : 1
+}
+cabe-invalid6 ChoiceAlternativeByEnum ::= {
+    alternative baz,
+    value bar : TRUE
+}
+
+END

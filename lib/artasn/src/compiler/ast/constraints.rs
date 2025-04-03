@@ -221,11 +221,13 @@ fn parse_subtype_element(
         }};
     }
 
-    if ctx == ConstraintContext::WithinSize && !matches!(
+    if ctx == ConstraintContext::WithinSize
+        && !matches!(
             &ast_subtype_element.element,
             AstSubtypeElement::SingleValueConstraint(_)
                 | AstSubtypeElement::ValueRangeConstraint(_)
-        ) {
+        )
+    {
         return Err(Error {
             kind: ErrorKind::Ast(
                 "only single value and value range constraints are allowed in SIZE constraints"
@@ -470,27 +472,40 @@ fn parse_inner_type_constraints(
     constrained_type: &ResolvedType,
     parameters: &[(&String, &Parameter)],
 ) -> Result<InnerTypeConstraints> {
-    let components: Vec<(&AstElement<String>, &Box<TaggedType>)> = match &constrained_type.ty {
-        BuiltinType::Structure(structure) => structure
-            .components
-            .iter()
-            .map(|component| (&component.name, &component.component_type))
-            .collect(),
-        BuiltinType::Choice(choice) => choice
-            .alternatives
-            .iter()
-            .map(|alternative| (&alternative.name, &alternative.alternative_type))
-            .collect(),
-        other => {
-            return Err(Error {
-                kind: ErrorKind::Ast(format!(
-                    "inner type constraints cannot be applied to type {}",
-                    other
-                )),
-                loc: itc.loc,
-            })
-        }
-    };
+    let (is_choice, components): (bool, Vec<(&AstElement<String>, &Box<TaggedType>, bool)>) =
+        match &constrained_type.ty {
+            BuiltinType::Structure(structure) => (
+                false,
+                structure
+                    .components
+                    .iter()
+                    .map(|component| {
+                        (
+                            &component.name,
+                            &component.component_type,
+                            component.optional,
+                        )
+                    })
+                    .collect(),
+            ),
+            BuiltinType::Choice(choice) => (
+                true,
+                choice
+                    .alternatives
+                    .iter()
+                    .map(|alternative| (&alternative.name, &alternative.alternative_type, false))
+                    .collect(),
+            ),
+            other => {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "inner type constraints cannot be applied to type {}",
+                        other
+                    )),
+                    loc: itc.loc,
+                })
+            }
+        };
 
     let (kind, ast_components) = match &itc.element.0.element {
         AstTypeConstraintSpec::FullSpec(spec) => (InnerTypeConstraintsKind::Full, &spec.element.0),
@@ -510,10 +525,10 @@ fn parse_inner_type_constraints(
                     .as_ref()
                     .map(|name| name.0.clone()),
                 constraint: {
-                    let component_type = match components.iter().find(|component| {
+                    let (component_type, is_optional) = match components.iter().find(|component| {
                         component.0.element == ast_component.element.name.element.0
                     }) {
-                        Some(component) => component.1.resolve(parser.context)?,
+                        Some(component) => (component.1.resolve(parser.context)?, component.2),
                         None => {
                             return Err(Error {
                                 kind: ErrorKind::Ast(format!(
@@ -524,31 +539,31 @@ fn parse_inner_type_constraints(
                             })
                         }
                     };
-                    let (value, presence) = match &ast_component.element.constraint.element {
-                        AstComponentConstraint::Constraint(constraint) => (
-                            Some(parse_constraint(
-                                parser,
-                                constraint,
-                                &component_type,
-                                parameters,
-                                ConstraintContext::Contextless,
-                            )?),
-                            None,
-                        ),
-                        AstComponentConstraint::PresenceConstraint(presence) => {
-                            (None, Some(parse_presence(presence)))
-                        }
-                        AstComponentConstraint::ValuedPresenceConstraint(valued_presence) => (
-                            Some(parse_constraint(
-                                parser,
-                                &valued_presence.element.value,
-                                &component_type,
-                                parameters,
-                                ConstraintContext::Contextless,
-                            )?),
-                            Some(parse_presence(&valued_presence.element.presence)),
-                        ),
+                    let component_constraint = &ast_component.element.constraint.element;
+                    let value = match &component_constraint.value {
+                        Some(constraint) => Some(parse_constraint(
+                            parser,
+                            constraint,
+                            &component_type,
+                            parameters,
+                            ConstraintContext::Contextless,
+                        )?),
+                        None => None,
                     };
+                    let presence = component_constraint.presence.as_ref().map(|presence| match &presence.element {
+                            AstPresenceConstraint::PresencePresent(_) => Presence::Present,
+                            AstPresenceConstraint::PresenceAbsent(_) => Presence::Absent,
+                            AstPresenceConstraint::PresenceOptional(_) => Presence::Optional,
+                        });
+                    if !is_choice && presence.is_some() && !is_optional {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "component '{}' must be OPTIONAL to have a presence constraint",
+                                ast_component.element.name.element.0
+                            )),
+                            loc: ast_component.loc,
+                        });
+                    }
                     ComponentConstraint { value, presence }
                 },
             })
@@ -556,14 +571,6 @@ fn parse_inner_type_constraints(
         .collect::<Result<Vec<NamedConstraint>>>()?;
 
     Ok(InnerTypeConstraints { kind, components })
-}
-
-fn parse_presence(presence: &AstElement<AstPresenceConstraint>) -> Presence {
-    match &presence.element {
-        AstPresenceConstraint::PresencePresent(_) => Presence::Present,
-        AstPresenceConstraint::PresenceAbsent(_) => Presence::Absent,
-        AstPresenceConstraint::PresenceOptional(_) => Presence::Optional,
-    }
 }
 
 fn parse_type_with_constraint(

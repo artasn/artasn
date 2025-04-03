@@ -500,6 +500,7 @@ fn parse_structure_value(
         });
     }
     let value = StructureValue { components };
+    println!("struct_val = {value:#?}\nloc = {:?}", struct_val.loc);
     Ok(match tag_type {
         TagType::Sequence => BuiltinValue::Sequence(value),
         TagType::Set => BuiltinValue::Set(value),
@@ -821,6 +822,7 @@ pub fn parse_value(
         };
     }
 
+    let mut loc = value.loc;
     let builtin = match &value.element {
         AstValue::BuiltinValue(builtin) => match &builtin.element {
             AstBuiltinValue::Null(_) => BuiltinValue::Null,
@@ -900,6 +902,7 @@ pub fn parse_value(
             AstBuiltinValue::BracedTokenStream(braced) => match &target_type.ty {
                 BuiltinType::BitString(bit_string) => {
                     let ast_named_bits = parse_braced_value::<AstNamedBitStringValue>(braced)?;
+                    loc = ast_named_bits.loc;
                     BuiltinValue::BitString(parse_named_bit_string(
                         parser,
                         bit_string,
@@ -908,6 +911,7 @@ pub fn parse_value(
                 }
                 BuiltinType::ObjectIdentifier => {
                     let object_id = parse_braced_value::<AstObjectIdentifierValue>(braced)?;
+                    loc = object_id.loc;
                     BuiltinValue::ObjectIdentifier(object_id::parse_object_identifier(
                         parser,
                         &object_id,
@@ -916,6 +920,7 @@ pub fn parse_value(
                 }
                 BuiltinType::RelativeOid => {
                     let object_id = parse_braced_value::<AstObjectIdentifierValue>(braced)?;
+                    loc = object_id.loc;
                     BuiltinValue::RelativeOid(object_id::parse_object_identifier(
                         parser,
                         &object_id,
@@ -924,10 +929,12 @@ pub fn parse_value(
                 }
                 BuiltinType::Structure(_) => {
                     let struct_val = parse_braced_value::<AstStructureValue>(braced)?;
+                    loc = struct_val.loc;
                     parse_structure_value(parser, stage, &struct_val, target_type, None)?
                 }
                 BuiltinType::StructureOf(struct_of) => {
                     let struct_of_val = parse_braced_value::<AstStructureOfValue>(braced)?;
+                    loc = struct_of_val.loc;
                     let component_type = struct_of.component_type.resolve(parser.context)?;
 
                     let ast_elements = &struct_of_val.element.0;
@@ -1148,12 +1155,14 @@ pub fn parse_value(
             _ => return_reference!(valref),
         },
     };
+
+    println!("value.loc = {:?}", value.loc);
     Ok(AstElement::new(
         TypedValue {
             resolved_type: target_type.clone(),
             value: ValueReference::BuiltinValue(builtin),
         },
-        value.loc,
+        loc,
     ))
 }
 

@@ -36,6 +36,7 @@ pub enum BuiltinValue {
     RealLiteral(RealLiteral),
     Enumerated(Box<AstElement<TypedValue>>),
     Time(Time),
+    // TODO: consolidate Sequence/Set and SequenceOf/SetOf into Structure + StructureOf
     Sequence(StructureValue),
     SequenceOf(Vec<AstElement<TypedValue>>),
     Set(StructureValue),

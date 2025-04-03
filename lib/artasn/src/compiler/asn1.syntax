@@ -641,14 +641,18 @@ rule NamedConstraint {
     constraint = ComponentConstraint
 }
 
-variant ComponentConstraint = Constraint | PresenceConstraint | ValuedPresenceConstraint {
+rule ComponentConstraint {
     captures {
+        value = optional: Constraint
+        presence = optional: PresenceConstraint
+    }
+    optional {
         value = Constraint
+    }
+    optional {
         presence = PresenceConstraint
     }
-    value = Constraint
-    presence = PresenceConstraint
-} | error { "expecting a component constraint" };
+}
 
 variant PresenceConstraint = PresencePresent {
     keyword PRESENT
@@ -1231,7 +1235,9 @@ rule StructureValue {
         components = repeated: StructureValueComponent
     }
     operator {
-    components = StructureValueComponent
+    optional {
+        components = StructureValueComponent
+    }
     optional repeated {
         operator ,
         components = StructureValueComponent
