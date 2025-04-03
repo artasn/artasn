@@ -528,7 +528,7 @@ impl BuiltinType {
                         ConstraintCheckMode::Size,
                         &BigInt::from(value.len() as i64),
                     )?,
-                    BuiltinValue::SequenceOf(value) => constraint.includes_integer(
+                    BuiltinValue::StructureOf(_, value) => constraint.includes_integer(
                         ConstraintCheckMode::Size,
                         &BigInt::from(value.len() as i64),
                     )?,
@@ -564,7 +564,7 @@ impl BuiltinType {
             _ => (),
         }
 
-        if let (Self::Structure(seq), builtin_value @ BuiltinValue::Sequence(value)) =
+        if let (Self::Structure(seq), builtin_value @ BuiltinValue::Structure(_, value)) =
             (self, &typed_value.value)
         {
             let inner_type_constraints: Option<Vec<&InnerTypeConstraints>> =

@@ -194,7 +194,7 @@ fn find_component_from_series<'a>(
                     } else {
                         let structure_value =
                             match component_value.value().resolve(parser.context)?.value {
-                                BuiltinValue::Sequence(seq) | BuiltinValue::Set(seq) => seq,
+                                BuiltinValue::Structure(_, structure) => structure,
                                 _ => unreachable!(),
                             };
                         return find_component_from_series(
@@ -499,13 +499,10 @@ fn parse_structure_value(
             is_default,
         });
     }
-    let value = StructureValue { components };
-    println!("struct_val = {value:#?}\nloc = {:?}", struct_val.loc);
-    Ok(match tag_type {
-        TagType::Sequence => BuiltinValue::Sequence(value),
-        TagType::Set => BuiltinValue::Set(value),
-        _ => unreachable!(),
-    })
+    Ok(BuiltinValue::Structure(
+        tag_type,
+        StructureValue { components },
+    ))
 }
 
 fn parse_character_string(
@@ -942,7 +939,7 @@ pub fn parse_value(
                     for ast_element in ast_elements {
                         elements.push(parse_value(parser, stage, ast_element, &component_type)?);
                     }
-                    BuiltinValue::SequenceOf(elements)
+                    BuiltinValue::StructureOf(struct_of.ty, elements)
                 }
                 other => {
                     return Err(Error {
@@ -1156,7 +1153,6 @@ pub fn parse_value(
         },
     };
 
-    println!("value.loc = {:?}", value.loc);
     Ok(AstElement::new(
         TypedValue {
             resolved_type: target_type.clone(),

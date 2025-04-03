@@ -939,7 +939,7 @@ impl InnerTypeConstraints {
         value: &BuiltinValue,
     ) -> Result<bool> {
         match (value_type, value) {
-            (BuiltinType::Structure(ty), BuiltinValue::Sequence(val) | BuiltinValue::Set(val)) => {
+            (BuiltinType::Structure(ty), BuiltinValue::Structure(_, val)) => {
                 match self.kind {
                     InnerTypeConstraintsKind::Full => {
                         for value_component in &val.components {
@@ -978,7 +978,9 @@ impl InnerTypeConstraints {
                         _ => (),
                     }
 
-                    if let (constraint @ Some(_), Some(component)) = (&constraint.value, value_component) {
+                    if let (constraint @ Some(_), Some(component)) =
+                        (&constraint.value, value_component)
+                    {
                         // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
                         let constrained_type =
                             ty_component.unwrap().component_type.resolve(context)?;

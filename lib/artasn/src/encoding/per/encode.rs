@@ -319,7 +319,7 @@ pub fn per_encode_value<W: Write>(
             encoder.writer.write_bytes(bytes);
         }
         BuiltinValue::Null => (),
-        BuiltinValue::SequenceOf(seq_of) => {
+        BuiltinValue::StructureOf(_, seq_of) => {
             write_size_determinant(
                 &mut encoder.writer,
                 context,

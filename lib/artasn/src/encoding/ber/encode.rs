@@ -234,7 +234,7 @@ fn ber_encode_external(
                         "syntax" => (Some(alternative_value), None),
                         "presentation-context-id" => (None, Some(alternative_value)),
                         "context-negotiation" => match &alternative_value.value {
-                            BuiltinValue::Sequence(seq) => {
+                            BuiltinValue::Structure(_, seq) => {
                                 let presentation_context_id =
                                     seq.components[0].value.resolve(context)?;
                                 let transfer_syntax = seq.components[1].value.resolve(context)?;
@@ -401,7 +401,7 @@ pub fn ber_encode_value(
         BuiltinValue::Time(time) => {
             buf.extend(time.to_ber_string().into_bytes().into_iter().rev());
         }
-        BuiltinValue::Sequence(structure) | BuiltinValue::Set(structure) => {
+        BuiltinValue::Structure(_, structure) => {
             if is_real_type(&typed_value.ty.ty) {
                 let special = structure
                     .components
@@ -454,7 +454,8 @@ pub fn ber_encode_value(
                 ber_encode_structure(mode, buf, context, &structure.components)?;
             }
         }
-        BuiltinValue::SequenceOf(structure) | BuiltinValue::SetOf(structure) => {
+        BuiltinValue::StructureOf(_, structure) => {
+            // TODO: sort elements in content order if SET OF
             for element in structure.iter().rev() {
                 let resolved = element.resolve(context)?;
                 ber_encode_value(mode, buf, context, &resolved)?;
