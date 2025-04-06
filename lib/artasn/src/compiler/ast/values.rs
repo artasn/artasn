@@ -68,15 +68,15 @@ fn parse_object_class_field<'a, 'b>(
     class_type: &AstElement<QualifiedIdentifier>,
     field: &AstElement<String>,
 ) -> Result<(&'a ObjectClassField, Option<&'b TableConstraint>)> {
-    let constraint = component_type
-        .constraint
-        .as_ref()
-        .map(|constraint| constraint.get_table_constraint());
-    let table_constraint = constraint.unwrap_or_default();
-
     let class =
         class::resolve_information_object_class(parser, class_type)?.resolve(parser.context)?;
     let field = class.find_field(field)?;
+
+    let table_constraint = component_type.constraints.as_ref().and_then(|constraints| {
+        constraints
+            .iter()
+            .find_map(|constraint| constraint.get_table_constraint())
+    });
 
     Ok(match table_constraint {
         Some(table_constraint) => (field, Some(table_constraint)),
@@ -324,14 +324,14 @@ fn parse_object_class_field_reference<C: ComponentLike>(
                                                             Ok((ResolvedType {
                                                                 tag: Some(outer_tag),
                                                                 ty: inner_type.ty,
-                                                                constraint: inner_type.constraint,
+                                                                constraints: inner_type.constraints,
                                                             }, kind))
                                                         }
                                                         TagKind::Implicit => {
                                                             Ok((ResolvedType {
                                                                 tag: struct_component.component_type().tag.clone(),
                                                                 ty: inner_type.ty,
-                                                                constraint: inner_type.constraint,
+                                                                constraints: inner_type.constraints,
                                                             }, kind))
                                                         }
                                                     }
@@ -969,12 +969,13 @@ pub fn parse_value(
                 ))
             }
             AstBuiltinValue::ContainingValue(containing) => {
-                let constraint = target_type
-                    .constraint
-                    .as_ref()
-                    .map(|constraint| constraint.get_contents_constraint());
+                let constraint = target_type.constraints.as_ref().and_then(|constraints| {
+                    constraints
+                        .iter()
+                        .find_map(|constraint| constraint.get_contents_constraint())
+                });
                 let contents_constraint = match constraint {
-                    Some(Some(contents_constraint)) => contents_constraint,
+                    Some(contents_constraint) => contents_constraint,
                     _ => {
                         return Err(Error {
                             kind: ErrorKind::Ast("CONTAINING value can not be assigned to a type that does not have a contents constraint".to_string()),
@@ -1332,8 +1333,12 @@ pub fn parse_value_assignment(
                 };
 
             Some((
-                ident,
-                ParsedValueAssignment::Value(DeclaredValue { value: val, ty }),
+                ident.clone(),
+                ParsedValueAssignment::Value(DeclaredValue {
+                    name: ident,
+                    value: val,
+                    ty,
+                }),
             ))
         }
         ParseValueAssignmentStage::Class => None,

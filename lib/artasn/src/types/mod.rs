@@ -156,7 +156,7 @@ impl Display for UntaggedType {
 pub struct ResolvedType {
     pub tag: Option<Tag>,
     pub ty: BuiltinType,
-    pub constraint: Option<Constraint>,
+    pub constraints: Option<Vec<Constraint>>,
 }
 
 impl ResolvedType {
@@ -164,7 +164,7 @@ impl ResolvedType {
         ResolvedType {
             tag: Some(Tag::universal(tag_type)),
             ty: BuiltinType::universal(tag_type),
-            constraint: None,
+            constraints: None,
         }
     }
 
@@ -200,7 +200,7 @@ impl ResolvedType {
 pub struct TaggedType {
     pub tag: Option<Tag>,
     pub ty: UntaggedType,
-    pub constraint: Option<Constraint>,
+    pub constraints: Option<Vec<Constraint>>,
 }
 
 impl TaggedType {
@@ -208,13 +208,17 @@ impl TaggedType {
         TaggedType {
             tag: Some(Tag::universal(tag_type)),
             ty: UntaggedType::BuiltinType(BuiltinType::universal(tag_type)),
-            constraint: None,
+            constraints: None,
         }
     }
 
     pub fn resolve(&self, context: &Context) -> Result<ResolvedType> {
         let mut tagged_ty = self;
         let mut tag = self.tag.as_ref();
+        let mut constraint_subsets = Vec::new();
+        if let Some(constraints) = &self.constraints {
+            constraint_subsets.extend(constraints);
+        }
         loop {
             match &tagged_ty.ty {
                 UntaggedType::BuiltinType(ty) => {
@@ -233,7 +237,17 @@ impl TaggedType {
                         //   I1 ::= INTEGER (0..10)
                         //   I2 ::= I1 (8..<MAX)
                         // the only valid values for I2 are 8 and 9
-                        constraint: tagged_ty.constraint.clone(),
+                        // this is equivalent to the definition:
+                        //   I ::= INTEGER (0..10) (8..<MAX)
+                        constraints: {
+                            let constraints =
+                                constraint_subsets.into_iter().cloned().collect::<Vec<_>>();
+                            if constraints.is_empty() {
+                                None
+                            } else {
+                                Some(constraints)
+                            }
+                        },
                     });
                 }
                 UntaggedType::Reference(name) => {
@@ -247,6 +261,9 @@ impl TaggedType {
 
                     tagged_ty = &decl.ty;
                     tag = tag.or(tagged_ty.tag.as_ref());
+                    if let Some(constraints) = &tagged_ty.constraints {
+                        constraint_subsets.extend(constraints);
+                    }
                 }
                 UntaggedType::ObjectClassField(ocf) => {
                     let class_ref =
@@ -259,6 +276,9 @@ impl TaggedType {
                                 ObjectClassFieldValueType::TaggedType(tagged_type) => {
                                     tagged_ty = tagged_type;
                                     tag = tag.or(tagged_ty.tag.as_ref());
+                                    if let Some(constraints) = &tagged_ty.constraints {
+                                        constraint_subsets.extend(constraints);
+                                    }
                                 }
                                 _ => return Err(Error {
                                     kind: ErrorKind::Ast(format!(
@@ -479,16 +499,9 @@ impl BuiltinType {
         &self,
         context: &Context,
         valref: &AstElement<TypedValue>,
-        constraint: Option<&Constraint>,
+        constraint: Option<&ResolvedConstraint>,
     ) -> Result<()> {
         let typed_value = valref.resolve(context)?;
-
-        let constraint = constraint.map(|constraint| constraint.resolve(context, self));
-        let constraint = match constraint {
-            Some(Ok(constraint)) => Some(constraint),
-            Some(Err(err)) => return Err(err),
-            None => None,
-        };
 
         let size_ok = match &constraint {
             Some(constraint) => {
@@ -564,9 +577,9 @@ impl BuiltinType {
             _ => (),
         }
 
-        if let (Self::Structure(seq), builtin_value @ BuiltinValue::Structure(_, value)) =
-            (self, &typed_value.value)
-        {
+        if let builtin_value @ (BuiltinValue::Structure(_, _)
+            | BuiltinValue::StructureOf(_, _)
+            | BuiltinValue::Choice(_)) = &typed_value.value {
             let inner_type_constraints: Option<Vec<&InnerTypeConstraints>> =
                 constraint.as_ref().map(|constraint| {
                     constraint
@@ -596,12 +609,16 @@ impl BuiltinType {
                 };
                 if !satisfied {
                     return Err(Error {
-                        kind: ErrorKind::Ast("SEQUENCE value does not satisfy any of the inner type constraints in the governing type".to_string()),
+                        kind: ErrorKind::Ast(format!("{} value does not satisfy any of the inner type constraints in the governing type", typed_value.ty.ty)),
                         loc: valref.loc,
                     });
                 }
             }
+        }
 
+        if let (Self::Structure(seq), BuiltinValue::Structure(_, value)) =
+            (self, &typed_value.value)
+        {
             for seq_component in &seq.components {
                 let val_component = value
                     .components
@@ -614,10 +631,18 @@ impl BuiltinType {
                         }
                         _ => {
                             let seq_ty = seq_component.component_type.resolve(context)?;
+                            let constraint = match &seq_component.component_type.constraints {
+                                Some(constraints) => Some(Constraint::resolve_subsets(
+                                    context,
+                                    constraints,
+                                    &seq_ty.ty,
+                                )?),
+                                None => None,
+                            };
                             seq_ty.ty.ensure_satisfied_by_value(
                                 context,
                                 &val_component.value,
-                                seq_component.component_type.constraint.as_ref(),
+                                constraint.as_ref(),
                             )?;
                         }
                     }
@@ -648,6 +673,11 @@ impl Display for BuiltinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Choice(_) => f.write_str("CHOICE"),
+            Self::StructureOf(of) => match of.ty {
+                TagType::Sequence => f.write_str("SEQUENCE OF"),
+                TagType::Set => f.write_str("SET OF"),
+                _ => unreachable!(),
+            },
             other => other.tag_type().unwrap().fmt(f),
         }
     }

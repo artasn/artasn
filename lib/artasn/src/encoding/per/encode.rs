@@ -78,9 +78,9 @@ fn write_size_determinant<W: Write>(
     size: u64,
     resolved_type: &ResolvedType,
 ) -> Result<LengthDeterminantKind> {
-    let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraint {
-        Some(constraint) => {
-            let constraint = constraint.resolve(context, &resolved_type.ty)?;
+    let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraints {
+        Some(constraints) => {
+            let constraint = Constraint::resolve_subsets(context, constraints, &resolved_type.ty)?;
             if !constraint.has_value_constraint() {
                 let size_bounds = match constraint.size_bounds()? {
                     Some(bounds) => {
@@ -180,9 +180,10 @@ fn per_encode_integer<W: Write>(
     value: &BigInt,
 ) -> Result<()> {
     let writer = &mut encoder.writer;
-    let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraint {
-        Some(constraint) => {
-            let resolved_constraint = constraint.resolve(encoder.context, &resolved_type.ty)?;
+    let (mut size_bounds, inclusion, is_extensible) = match &resolved_type.constraints {
+        Some(constraints) => {
+            let resolved_constraint =
+                Constraint::resolve_subsets(encoder.context, constraints, &resolved_type.ty)?;
 
             let value_bounds = match resolved_constraint.integer_value_bounds()? {
                 Some(bounds) => {
@@ -255,9 +256,10 @@ pub fn per_encode_value<W: Write>(
             match &typed_value.ty.ty {
                 ty @ BuiltinType::BitString(bs) => {
                     if bs.named_bits.is_some() {
-                        if let Some(constraint) = &typed_value.ty.constraint {
+                        if let Some(constraints) = &typed_value.ty.constraints {
                             if let Some(bounds) =
-                                constraint.resolve(encoder.context, ty)?.size_bounds()?
+                                Constraint::resolve_subsets(encoder.context, constraints, ty)?
+                                    .size_bounds()?
                             {
                                 match bounds.lower_bound {
                                     Bound::Integer(lower_bound) => {

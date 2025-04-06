@@ -472,118 +472,157 @@ fn parse_inner_type_constraints(
     constrained_type: &ResolvedType,
     parameters: &[(&String, &Parameter)],
 ) -> Result<InnerTypeConstraints> {
-    let (is_choice, components): (bool, Vec<(&AstElement<String>, &Box<TaggedType>, bool)>) =
-        match &constrained_type.ty {
-            BuiltinType::Structure(structure) => (
-                false,
-                structure
-                    .components
-                    .iter()
-                    .map(|component| {
-                        (
-                            &component.name,
-                            &component.component_type,
-                            component.optional,
-                        )
+    Ok(match &itc.element {
+        AstInnerTypeConstraints::SingleTypeConstraint(single) => {
+            let component_type = match &constrained_type.ty {
+                BuiltinType::StructureOf(of) => of.component_type.resolve(parser.context)?,
+                other => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "single inner type constraint cannot be applied to type {}",
+                            other
+                        )),
+                        loc: itc.loc,
                     })
-                    .collect(),
-            ),
-            BuiltinType::Choice(choice) => (
-                true,
-                choice
-                    .alternatives
-                    .iter()
-                    .map(|alternative| (&alternative.name, &alternative.alternative_type, false))
-                    .collect(),
-            ),
-            other => {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!(
-                        "inner type constraints cannot be applied to type {}",
-                        other
-                    )),
-                    loc: itc.loc,
-                })
-            }
-        };
+                }
+            };
 
-    let (kind, ast_components) = match &itc.element.0.element {
-        AstTypeConstraintSpec::FullSpec(spec) => (InnerTypeConstraintsKind::Full, &spec.element.0),
-        AstTypeConstraintSpec::PartialSpec(spec) => {
-            (InnerTypeConstraintsKind::Partial, &spec.element.0)
+            InnerTypeConstraints::Single(parse_constraint(
+                parser,
+                &single.element.0,
+                &component_type,
+                parameters,
+                ConstraintContext::Contextless,
+            )?)
         }
-    };
-    let components = ast_components
-        .element
-        .0
-        .iter()
-        .map(|ast_component| {
-            Ok(NamedConstraint {
-                name: ast_component
-                    .element
-                    .name
-                    .as_ref()
-                    .map(|name| name.0.clone()),
-                constraint: {
-                    let (component_type, is_optional) = match components.iter().find(|component| {
-                        component.0.element == ast_component.element.name.element.0
-                    }) {
-                        Some(component) => (component.1.resolve(parser.context)?, component.2),
-                        None => {
-                            return Err(Error {
-                                kind: ErrorKind::Ast(format!(
-                                    "constrained type does not contain a component named '{}'",
+        AstInnerTypeConstraints::MultipleTypeConstraints(multiple) => {
+            let (is_choice, components): (
+                bool,
+                Vec<(&AstElement<String>, &Box<TaggedType>, bool)>,
+            ) = match &constrained_type.ty {
+                BuiltinType::Structure(structure) => (
+                    false,
+                    structure
+                        .components
+                        .iter()
+                        .map(|component| {
+                            (
+                                &component.name,
+                                &component.component_type,
+                                component.optional,
+                            )
+                        })
+                        .collect(),
+                ),
+                BuiltinType::Choice(choice) => (
+                    true,
+                    choice
+                        .alternatives
+                        .iter()
+                        .map(|alternative| {
+                            (&alternative.name, &alternative.alternative_type, false)
+                        })
+                        .collect(),
+                ),
+                other => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "inner type constraints cannot be applied to type {}",
+                            other
+                        )),
+                        loc: itc.loc,
+                    })
+                }
+            };
+
+            let (kind, ast_components) = match &multiple.element.0.element {
+                AstTypeConstraintSpec::FullSpec(spec) => {
+                    (MultipleTypeConstraintsKind::Full, &spec.element.0)
+                }
+                AstTypeConstraintSpec::PartialSpec(spec) => {
+                    (MultipleTypeConstraintsKind::Partial, &spec.element.0)
+                }
+            };
+            let components = ast_components
+                .element
+                .0
+                .iter()
+                .map(|ast_component| {
+                    Ok(NamedConstraint {
+                        name: ast_component
+                            .element
+                            .name
+                            .as_ref()
+                            .map(|name| name.0.clone()),
+                        constraint: {
+                            let (component_type, is_optional) =
+                                match components.iter().find(|component| {
+                                    component.0.element == ast_component.element.name.element.0
+                                }) {
+                                    Some(component) => {
+                                        (component.1.resolve(parser.context)?, component.2)
+                                    }
+                                    None => {
+                                        return Err(Error {
+                                            kind: ErrorKind::Ast(format!(
+                                        "constrained type does not contain a component named '{}'",
+                                        ast_component.element.name.element.0
+                                    )),
+                                            loc: ast_component.element.name.loc,
+                                        })
+                                    }
+                                };
+                            let component_constraint = &ast_component.element.constraint.element;
+                            let value = match &component_constraint.value {
+                                Some(constraint) => Some(parse_constraint(
+                                    parser,
+                                    constraint,
+                                    &component_type,
+                                    parameters,
+                                    ConstraintContext::Contextless,
+                                )?),
+                                None => None,
+                            };
+                            let presence = component_constraint.presence.as_ref().map(|presence| {
+                                match &presence.element {
+                                    AstPresenceConstraint::PresencePresent(_) => Presence::Present,
+                                    AstPresenceConstraint::PresenceAbsent(_) => Presence::Absent,
+                                    AstPresenceConstraint::PresenceOptional(_) => {
+                                        Presence::Optional
+                                    }
+                                }
+                            });
+                            if !is_choice && presence.is_some() && !is_optional {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(format!(
+                                    "component '{}' must be OPTIONAL to have a presence constraint",
                                     ast_component.element.name.element.0
                                 )),
-                                loc: ast_component.element.name.loc,
-                            })
-                        }
-                    };
-                    let component_constraint = &ast_component.element.constraint.element;
-                    let value = match &component_constraint.value {
-                        Some(constraint) => Some(parse_constraint(
-                            parser,
-                            constraint,
-                            &component_type,
-                            parameters,
-                            ConstraintContext::Contextless,
-                        )?),
-                        None => None,
-                    };
-                    let presence = component_constraint.presence.as_ref().map(|presence| match &presence.element {
-                            AstPresenceConstraint::PresencePresent(_) => Presence::Present,
-                            AstPresenceConstraint::PresenceAbsent(_) => Presence::Absent,
-                            AstPresenceConstraint::PresenceOptional(_) => Presence::Optional,
-                        });
-                    if !is_choice && presence.is_some() && !is_optional {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "component '{}' must be OPTIONAL to have a presence constraint",
-                                ast_component.element.name.element.0
-                            )),
-                            loc: ast_component.loc,
-                        });
-                    }
-                    ComponentConstraint { value, presence }
-                },
-            })
-        })
-        .collect::<Result<Vec<NamedConstraint>>>()?;
+                                    loc: ast_component.loc,
+                                });
+                            }
+                            ComponentConstraint { value, presence }
+                        },
+                    })
+                })
+                .collect::<Result<Vec<NamedConstraint>>>()?;
 
-    Ok(InnerTypeConstraints { kind, components })
+            InnerTypeConstraints::Multiple(MultipleTypeConstraints { kind, components })
+        }
+    })
 }
 
 fn parse_type_with_constraint(
     of: &AstElement<AstStructureOf>,
-) -> Option<AstElement<AstConstraint>> {
+) -> Option<Vec<AstElement<AstConstraint>>> {
     of.element
         .constraint
         .as_ref()
         .map(|constraint| match &constraint.element {
-            AstConstraintOrSizeConstraint::Constraint(constraint) => constraint.clone(),
+            AstConstraintOrSizeConstraint::Constraint(constraint) => vec![constraint.clone()],
             AstConstraintOrSizeConstraint::SizeConstraint(size_constraint) => {
                 let loc = size_constraint.loc;
-                AstElement::new(
+                vec![AstElement::new(
                     AstConstraint(AstElement::new(
                         AstSubtypeConstraint {
                             element_sets: vec![AstElement::new(
@@ -605,7 +644,7 @@ fn parse_type_with_constraint(
                         loc,
                     )),
                     loc,
-                )
+                )]
             }
         })
 }
@@ -616,18 +655,32 @@ fn parse_constrained_type(
     constrained_type: &ResolvedType,
     parameters: &[(&String, &Parameter)],
 ) -> Result<PendingConstraint> {
-    let ast_constraint = match &ast_constrained_type.element {
-        AstConstrainedType::Suffixed(suffixed) => suffixed.element.constraint.clone(),
+    let ast_constraints = match &ast_constrained_type.element {
+        AstConstrainedType::Suffixed(suffixed) => {
+            let ast_constraints = suffixed.element.constraints.clone();
+            if ast_constraints.is_empty() {
+                None
+            } else {
+                Some(ast_constraints)
+            }
+        }
         AstConstrainedType::TypeWithConstraint(twc) => parse_type_with_constraint(&twc.element.0),
     };
-    let constraint = match ast_constraint {
-        Some(ast_constraint) => Some(parse_constraint(
-            parser,
-            &ast_constraint,
-            constrained_type,
-            parameters,
-            ConstraintContext::Contextless,
-        )?),
+    let constraints = match ast_constraints {
+        Some(ast_constraints) => Some(
+            ast_constraints
+                .into_iter()
+                .map(|ast_constraint| {
+                    parse_constraint(
+                        parser,
+                        &ast_constraint,
+                        constrained_type,
+                        parameters,
+                        ConstraintContext::Contextless,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?,
+        ),
         None => match &ast_constrained_type.element {
             AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
                 AstUntaggedType::DefinedType(typeref) => {
@@ -643,7 +696,7 @@ fn parse_constrained_type(
                             _ => None,
                         });
                         match param {
-                            Some(param) => param.constraint.clone(),
+                            Some(param) => param.constraints.clone(),
                             None => None,
                         }
                     } else {
@@ -751,7 +804,7 @@ fn parse_constrained_type(
                 }
                 _ => {
                     return Ok(PendingConstraint {
-                        constraint,
+                        constraints,
                         component_constraints: Vec::new(),
                     })
                 }
@@ -775,7 +828,7 @@ fn parse_constrained_type(
         }
     };
     Ok(PendingConstraint {
-        constraint,
+        constraints,
         component_constraints,
     })
 }
@@ -787,7 +840,7 @@ pub(crate) fn parse_type_constraint(
     parameters: &[(&String, &Parameter)],
 ) -> Result<PendingConstraint> {
     Ok(match &ty.element {
-        AstType::TaggedType(tagged_type) => parse_constrained_type(
+        AstType::TaggedType(tagged_type) => parse_type_constraint(
             parser,
             &tagged_type.element.ty,
             constrained_type,
@@ -846,47 +899,60 @@ fn resolve_type_assignment<'a>(
         AstTypeAssignmentSubject::Type(ast_type) => ast_type,
         _ => panic!("parameterized type resolves to a CLASS"),
     };
-    let constrained = match &ast_type.element {
-        AstType::TaggedType(tagged_type) => &tagged_type.element.ty,
-        AstType::ConstrainedType(constrained) => constrained,
-    };
-    Ok(match &constrained.element {
-        AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
-            AstUntaggedType::ParameterizedDefinedType(typeref) => {
-                // recursively resolve the AST until we reach the root type
-                // e.g:
-                //
-                // ```
-                // A{K, V} ::= SEQUENCE { k K, v V }
-                // B{K} ::= A{K, INTEGER}
-                // C ::= B{UTF8String}
-                // ```
-                //
-                // resolve_type_assignment(C) -> (
-                //   A{K, V} ::= SEQUENCE { k K, v V },
-                //   [("K", UTF8String), ("V", INTEGER)]
-                // )
-                let (ast, named_parameters) =
-                    resolve_type_assignment_from_parameterized_type_reference(
-                        parser, typeref, parameters,
-                    )?;
-                resolve_type_assignment(
-                    parser,
-                    ast,
-                    named_parameters
-                        .iter()
-                        .map(|(name, parameter)| (name, parameter))
-                        .collect(),
-                )?
+
+    let untagged = {
+        let mut ast_type = ast_type;
+        loop {
+            match &ast_type.element {
+                AstType::TaggedType(tagged_type) => {
+                    ast_type = &tagged_type.element.ty;
+                }
+                AstType::ConstrainedType(constrained_type) => match &constrained_type.element {
+                    AstConstrainedType::Suffixed(suffixed) => {
+                        break &suffixed.element.ty;
+                    }
+                    AstConstrainedType::TypeWithConstraint(_) => {
+                        return Ok((
+                            type_assignment,
+                            parameters
+                                .iter()
+                                .map(|(name, param)| ((*name).clone(), (*param).clone()))
+                                .collect(),
+                        ));
+                    }
+                },
             }
-            _ => (
-                type_assignment,
-                parameters
+        }
+    };
+
+    Ok(match &untagged.element {
+        AstUntaggedType::ParameterizedDefinedType(typeref) => {
+            // recursively resolve the AST until we reach the root type
+            // e.g:
+            //
+            // ```
+            // A{K, V} ::= SEQUENCE { k K, v V }
+            // B{K} ::= A{K, INTEGER}
+            // C ::= B{UTF8String}
+            // ```
+            //
+            // resolve_type_assignment(C) -> (
+            //   A{K, V} ::= SEQUENCE { k K, v V },
+            //   [("K", UTF8String), ("V", INTEGER)]
+            // )
+            let (ast, named_parameters) =
+                resolve_type_assignment_from_parameterized_type_reference(
+                    parser, typeref, parameters,
+                )?;
+            resolve_type_assignment(
+                parser,
+                ast,
+                named_parameters
                     .iter()
-                    .map(|(name, param)| ((*name).clone(), (*param).clone()))
+                    .map(|(name, parameter)| (name, parameter))
                     .collect(),
-            ),
-        },
+            )?
+        }
         _ => (
             type_assignment,
             parameters
@@ -899,7 +965,7 @@ fn resolve_type_assignment<'a>(
 
 #[derive(Debug)]
 pub struct PendingConstraint {
-    pub constraint: Option<Constraint>,
+    pub constraints: Option<Vec<Constraint>>,
     pub component_constraints: Vec<(String, PendingConstraint)>,
 }
 
@@ -968,8 +1034,8 @@ pub fn parse_type_assignment_constraint(
 }
 
 pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingConstraint) {
-    if let Some(constraint) = pending.constraint {
-        tagged_type.constraint = Some(constraint);
+    if let Some(constraints) = pending.constraints {
+        tagged_type.constraints = Some(constraints);
     }
     if !pending.component_constraints.is_empty() {
         match &mut tagged_type.ty {

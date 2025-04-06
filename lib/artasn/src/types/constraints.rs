@@ -16,7 +16,7 @@ use crate::{
     values::{BuiltinValue, ResolvedValue, TryEq, TypedValue, ValueResolve},
 };
 
-use super::{BuiltinType, TagType, TaggedType};
+use super::{BuiltinType, ResolvedType, TagType, TaggedType};
 
 macro_rules! resolve_integer {
     ( $context:expr, $constant:expr ) => {{
@@ -449,7 +449,39 @@ pub enum ConstraintTree {
 }
 
 impl ConstraintTree {
-    pub fn resolve(
+    fn has_value_constraint(&self, context: &Context) -> Result<bool> {
+        Ok(match self {
+            Self::BinaryExpr { lhs, rhs, .. } => {
+                lhs.has_value_constraint(context)? || rhs.has_value_constraint(context)?
+            }
+            Self::Element(element) => match &element.element {
+                SubtypeElement::SingleValue(_) | SubtypeElement::ValueRange(_) => true,
+                SubtypeElement::ContainedSubtype(subtype) => {
+                    match &subtype.resolve(context)?.constraints {
+                        Some(constraints) => {
+                            if constraints.len() > 1 {
+                                todo!();
+                            } else {
+                                constraints[0]
+                                    .element_sets
+                                    .iter()
+                                    .map(|element_set| {
+                                        element_set.tree.has_value_constraint(context)
+                                    })
+                                    .collect::<Result<Vec<bool>>>()?
+                                    .into_iter()
+                                    .any(|has| has)
+                            }
+                        }
+                        None => false,
+                    }
+                }
+                _ => false,
+            },
+        })
+    }
+
+    fn resolve(
         &self,
         context: &Context,
         constrained_type: &BuiltinType,
@@ -541,15 +573,18 @@ impl ConstraintTree {
                 }
                 SubtypeElement::ContainedSubtype(subtype) => {
                     let subtype = subtype.resolve(context)?;
-                    match &subtype.constraint {
-                        Some(constraint) => {
-                            let resolved = constraint.resolve(context, constrained_type)?;
-                            let specs = &resolved.specs;
+                    match &subtype.constraints {
+                        Some(constraints) => {
+                            let constraint = Constraint::resolve_subsets(
+                                context,
+                                constraints,
+                                constrained_type,
+                            )?;
 
                             // only inherit the base constraint of a contained subtype;
                             // i.e. do not inherit the extensions
                             // see X.680 clause I.4.3.5 for details
-                            specs[0].items.clone()
+                            constraint.specs[0].items.clone()
                         }
                         None => vec![ConstraintSpecItem::Value(AstElement::new(
                             ValueConstraint::Range(ResolvedValueRange {
@@ -694,10 +729,7 @@ fn eval_value_and_size_set_binary_expr(
                     || lhs_size.is_extensible
                     || rhs_size.is_extensible,
                 specs: size_specs,
-                loc: Loc::new(
-                    lhs_size.loc.offset,
-                    rhs_size.loc.offset + rhs_size.loc.len - lhs_size.loc.offset,
-                ),
+                loc: Loc::span(lhs_size.loc, rhs_size.loc),
             }))
         }
         (Some(size), None) | (None, Some(size)) => Some(ConstraintSpecItem::Size(size.clone())),
@@ -714,7 +746,13 @@ fn eval_value_and_size_set_binary_expr(
             }
             Ok(union)
         }
-        ConstraintTreeOperator::Intersection => todo!(),
+        ConstraintTreeOperator::Intersection => {
+            if size_spec.is_some() {
+                todo!("intersection w/ SIZE constraint")
+            }
+
+            Ok(values)
+        }
     }
 }
 
@@ -727,17 +765,56 @@ fn eval_value_set_binary_expr<
     rhs: I2,
     constrained_type: &BuiltinType,
 ) -> Result<Vec<AstElement<ValueConstraint>>> {
-    let mut all_items = Vec::new();
-    for item in lhs {
-        all_items.push(item.clone());
-    }
-    for item in rhs {
-        all_items.push(item.clone());
-    }
-
-    let mut items: Vec<AstElement<ValueConstraint>> = Vec::with_capacity(all_items.len());
-    match op {
+    let items = match op {
         ConstraintTreeOperator::Union => {
+            let mut all_items = Vec::new();
+            for item in lhs {
+                all_items.push(item.clone());
+            }
+            for item in rhs {
+                all_items.push(item.clone());
+            }
+
+            if let BuiltinType::Integer(_) = constrained_type {
+                all_items.sort_by(|a, b| match (&a.element, &b.element) {
+                    (ValueConstraint::SingleValue(a), ValueConstraint::SingleValue(b)) => {
+                        match (&a.value, &b.value) {
+                            (BuiltinValue::Integer(a), BuiltinValue::Integer(b)) => a.cmp(b),
+                            _ => unreachable!(),
+                        }
+                    }
+                    (ValueConstraint::Range(a), ValueConstraint::Range(b)) => {
+                        PositionalBound::new(a.lower.clone(), BoundPosition::Lower)
+                            .cmp(&PositionalBound::new(b.lower.clone(), BoundPosition::Lower))
+                    }
+                    (ValueConstraint::SingleValue(a), ValueConstraint::Range(b)) => {
+                        let a = match &a.value {
+                            BuiltinValue::Integer(a) => a,
+                            _ => unreachable!(),
+                        };
+                        PositionalBound::new(b.lower.clone(), BoundPosition::Lower)
+                            .cmp(&PositionalBound::new(
+                                Bound::Integer(a.clone()),
+                                BoundPosition::Lower,
+                            ))
+                            .reverse()
+                    }
+                    (ValueConstraint::Range(a), ValueConstraint::SingleValue(b)) => {
+                        let b = match &b.value {
+                            BuiltinValue::Integer(b) => b,
+                            _ => unreachable!(),
+                        };
+                        PositionalBound::new(a.lower.clone(), BoundPosition::Lower).cmp(
+                            &PositionalBound::new(
+                                Bound::Integer(b.clone()),
+                                BoundPosition::Lower,
+                            ),
+                        )
+                    }
+                });
+            }
+
+            let mut items: Vec<AstElement<ValueConstraint>> = Vec::with_capacity(all_items.len());
             for item in all_items {
                 match constrained_type {
                     BuiltinType::Integer(_) => {
@@ -749,23 +826,29 @@ fn eval_value_set_binary_expr<
                             match last_item_bounds.upper {
                                 Bound::Unbounded => continue,
                                 last_item_upper_bound @ Bound::Integer(_) => {
-                                    let new_upper_bound =
-                                        last_item_upper_bound.upper_max(&item_bounds.upper);
-                                    if PositionalBound::new(
+                                    let last_item_upper_bound = PositionalBound::new(
                                         last_item_upper_bound,
                                         BoundPosition::Upper,
-                                    ) >= PositionalBound::new(
-                                        item_bounds.lower,
-                                        BoundPosition::Lower,
-                                    ) {
+                                    );
+                                    let new_upper_bound =
+                                        last_item_upper_bound.max_bound(&PositionalBound::new(
+                                            item_bounds.upper,
+                                            BoundPosition::Upper,
+                                        ));
+                                    if last_item_upper_bound
+                                        >= PositionalBound::new(
+                                            item_bounds.lower,
+                                            BoundPosition::Lower,
+                                        )
+                                    {
                                         match &mut last.element {
                                             ValueConstraint::Range(range) => {
-                                                range.upper = new_upper_bound;
+                                                range.upper = new_upper_bound.bound;
                                             }
                                             ValueConstraint::SingleValue(value) => {
                                                 match &mut value.value {
                                                     BuiltinValue::Integer(int) => {
-                                                        *int = match new_upper_bound {
+                                                        *int = match new_upper_bound.bound {
                                                             Bound::Integer(int) => int,
                                                             Bound::Unbounded => panic!("attempt to assign Unbounded to a single value"),
                                                         };
@@ -798,9 +881,58 @@ fn eval_value_set_binary_expr<
                     },
                 }
             }
+
+            items
         }
-        ConstraintTreeOperator::Intersection => todo!("INTERSECTION"),
-    }
+        ConstraintTreeOperator::Intersection => {
+            let lhs = lhs.collect::<Vec<_>>();
+            let rhs = rhs.collect::<Vec<_>>();
+            let loc = Loc::span(
+                lhs.first().expect("lhs.first").loc,
+                rhs.last().expect("rhs.last").loc,
+            );
+
+            let mut intersection = Vec::with_capacity(lhs.len() + rhs.len());
+            for lhs_item in &lhs {
+                let lhs_bounds = get_value_constraint_bounds(&lhs_item.element);
+                for rhs_item in &rhs {
+                    let rhs_bounds = get_value_constraint_bounds(&rhs_item.element);
+                    let start =
+                        PositionalBound::new(lhs_bounds.lower.clone(), BoundPosition::Lower)
+                            .max_bound(&PositionalBound::new(
+                                rhs_bounds.lower,
+                                BoundPosition::Lower,
+                            ));
+                    let end = PositionalBound::new(lhs_bounds.upper.clone(), BoundPosition::Upper)
+                        .min_bound(&PositionalBound::new(
+                            rhs_bounds.upper,
+                            BoundPosition::Upper,
+                        ));
+                    let constraint = if start < end {
+                        Some(ValueConstraint::Range(ResolvedValueRange {
+                            lower: start.bound,
+                            upper: end.bound,
+                        }))
+                    } else if start == end {
+                        Some(match start.bound {
+                            Bound::Integer(int) => ValueConstraint::SingleValue(ResolvedValue {
+                                ty: ResolvedType::universal(TagType::Integer),
+                                value: BuiltinValue::Integer(int),
+                            }),
+                            Bound::Unbounded => panic!("start == end but bound == Unbounded"),
+                        })
+                    } else {
+                        None
+                    };
+                    if let Some(constraint) = constraint {
+                        intersection.push(AstElement::new(constraint, loc));
+                    }
+                }
+            }
+
+            intersection
+        }
+    };
     Ok(items)
 }
 
@@ -827,6 +959,18 @@ pub struct Constraint {
 }
 
 impl Constraint {
+    pub fn resolve_subsets(
+        context: &Context,
+        subsets: &[Constraint],
+        constrained_type: &BuiltinType,
+    ) -> Result<ResolvedConstraint> {
+        if subsets.len() > 1 {
+            todo!("constraint subsets");
+        } else {
+            subsets[0].resolve(context, constrained_type)
+        }
+    }
+
     pub fn resolve(
         &self,
         context: &Context,
@@ -837,6 +981,30 @@ impl Constraint {
             specs.push(ConstraintSpec {
                 items: element_set.tree.resolve(context, constrained_type)?,
                 is_extension: element_set.is_extension,
+            });
+        }
+
+        let mut has_value_constraint = false;
+        let mut one_value_satisfies = false;
+        for (element_set, spec) in self.element_sets.iter().zip(&specs) {
+            if !has_value_constraint && element_set.tree.has_value_constraint(context)? {
+                has_value_constraint = true;
+            }
+
+            if has_value_constraint {
+                let kinds = collect_spec_item_kinds(&spec.items);
+                if kinds.contains(&ConstraintSpecItemKind::Value) {
+                    one_value_satisfies = true;
+                    break;
+                }
+            }
+        }
+        if has_value_constraint && !one_value_satisfies {
+            return Err(Error {
+                kind: ErrorKind::Ast(
+                    "there must be at least one value that satisfies the constraint".to_string(),
+                ),
+                loc: self.loc,
             });
         }
         Ok(ResolvedConstraint {
@@ -910,18 +1078,65 @@ pub struct ContentsConstraint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InnerTypeConstraintsKind {
+pub enum MultipleTypeConstraintsKind {
     Full,
     Partial,
 }
 
 #[derive(Debug, Clone)]
-pub struct InnerTypeConstraints {
-    pub kind: InnerTypeConstraintsKind,
-    pub components: Vec<NamedConstraint>,
+pub enum InnerTypeConstraints {
+    Single(Constraint),
+    Multiple(MultipleTypeConstraints),
 }
 
 impl InnerTypeConstraints {
+    pub fn is_satisfied_by_value(
+        &self,
+        context: &Context,
+        value_type: &BuiltinType,
+        value: &BuiltinValue,
+    ) -> Result<bool> {
+        match self {
+            Self::Single(single) => {
+                let constrained_type = match value_type {
+                    BuiltinType::StructureOf(of) => of.component_type.resolve(context)?,
+                    _ => {
+                        panic!("is_satisfied_by_value: kind is Single but value is not StructureOf")
+                    }
+                };
+                let constraint = Constraint::resolve_subsets(
+                    context,
+                    &[single.clone()],
+                    &constrained_type.ty,
+                )?;
+                let elements = match value {
+                    BuiltinValue::StructureOf(_, of) => of,
+                    _ => unreachable!(),
+                };
+                for element in elements {
+                    if constrained_type
+                        .ty
+                        .ensure_satisfied_by_value(context, element, Some(&constraint))
+                        .is_err()
+                    {
+                        return Ok(false);
+                    }
+                }
+
+                Ok(true)
+            }
+            Self::Multiple(multiple) => multiple.is_satisfied_by_value(context, value_type, value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MultipleTypeConstraints {
+    pub kind: MultipleTypeConstraintsKind,
+    pub components: Vec<NamedConstraint>,
+}
+
+impl MultipleTypeConstraints {
     fn lookup_constraint<'a>(&'a self, name: &str) -> Option<&'a ComponentConstraint> {
         self.components.iter().find_map(|component| {
             if &component.name.element == name {
@@ -941,7 +1156,7 @@ impl InnerTypeConstraints {
         match (value_type, value) {
             (BuiltinType::Structure(ty), BuiltinValue::Structure(_, val)) => {
                 match self.kind {
-                    InnerTypeConstraintsKind::Full => {
+                    MultipleTypeConstraintsKind::Full => {
                         for value_component in &val.components {
                             if self
                                 .lookup_constraint(&value_component.name.element)
@@ -951,7 +1166,7 @@ impl InnerTypeConstraints {
                             }
                         }
                     }
-                    InnerTypeConstraintsKind::Partial => (),
+                    MultipleTypeConstraintsKind::Partial => (),
                 }
 
                 for component_constraint in &self.components {
@@ -964,12 +1179,12 @@ impl InnerTypeConstraints {
                     let constraint = &component_constraint.constraint;
 
                     let presence = match self.kind {
-                        InnerTypeConstraintsKind::Full => {
+                        MultipleTypeConstraintsKind::Full => {
                             // X.680 clause 51.8.10.3:
                             // in full spec, unspecified presence indicates PRESENT
                             constraint.presence.or(Some(Presence::Present))
                         }
-                        InnerTypeConstraintsKind::Partial => constraint.presence,
+                        MultipleTypeConstraintsKind::Partial => constraint.presence,
                     };
                     match (presence, value_component) {
                         (Some(Presence::Present), None) | (Some(Presence::Absent), Some(_)) => {
@@ -978,20 +1193,17 @@ impl InnerTypeConstraints {
                         _ => (),
                     }
 
-                    if let (constraint @ Some(_), Some(component)) =
+                    if let (Some(constraint), Some(component)) =
                         (&constraint.value, value_component)
                     {
                         // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
                         let constrained_type =
                             ty_component.unwrap().component_type.resolve(context)?;
+                        let constraint = constraint.resolve(context, &constrained_type.ty)?;
 
                         if constrained_type
                             .ty
-                            .ensure_satisfied_by_value(
-                                context,
-                                &component.value,
-                                constraint.as_ref(),
-                            )
+                            .ensure_satisfied_by_value(context, &component.value, Some(&constraint))
                             .is_err()
                         {
                             return Ok(false);
@@ -1001,8 +1213,57 @@ impl InnerTypeConstraints {
 
                 Ok(true)
             }
-            (BuiltinType::Choice(_ty), BuiltinValue::Choice(_val)) => {
-                todo!("inner type constraints w/ CHOICE")
+            (BuiltinType::Choice(ty), BuiltinValue::Choice(val)) => {
+                let ty_alternative = ty
+                    .alternatives
+                    .iter()
+                    .find(|alternative| alternative.name.element == val.alternative.element)
+                    .expect("CHOICE value alternative does not exist in type");
+
+                let alternative_constraint = self.lookup_constraint(&val.alternative.element);
+                match self.kind {
+                    MultipleTypeConstraintsKind::Full => {
+                        if alternative_constraint.is_none() {
+                            return Ok(false);
+                        }
+                    }
+                    MultipleTypeConstraintsKind::Partial => {
+                        // if a component of a CHOICE inner type constraint is marked PRESENT,
+                        // only that CHOICE alternative is allowed
+                        // TODO: check to make sure this is enforced in the AST (i.e. ensure no multiple PRESENT)
+                        if alternative_constraint.is_none() {
+                            for component_constraint in &self.components {
+                                if let Some(Presence::Present) =
+                                    component_constraint.constraint.presence
+                                {
+                                    return Ok(false);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(alternative_constraint) = alternative_constraint {
+                    if let Some(Presence::Absent) = alternative_constraint.presence {
+                        return Ok(false);
+                    }
+
+                    if let Some(constraint) = &alternative_constraint.value {
+                        // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
+                        let constrained_type = ty_alternative.alternative_type.resolve(context)?;
+                        let constraint = constraint.resolve(context, &constrained_type.ty)?;
+
+                        if constrained_type
+                            .ty
+                            .ensure_satisfied_by_value(context, &val.value, Some(&constraint))
+                            .is_err()
+                        {
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                Ok(true)
             }
             _ => unreachable!(),
         }
@@ -1093,17 +1354,6 @@ pub enum Bound {
     Integer(BigInt),
 }
 
-impl Bound {
-    /// Returns the maximum of two upper bounds.
-    /// [`Bound::Unbounded`] represents `MAX` and will be returned if either value is unbounded.
-    pub fn upper_max(&self, b: &Self) -> Self {
-        match (self, b) {
-            (Self::Unbounded, _) | (_, Self::Unbounded) => Self::Unbounded,
-            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a.max(b).clone()),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BoundPosition {
     Lower,
@@ -1120,20 +1370,86 @@ impl PositionalBound {
     pub fn new(bound: Bound, kind: BoundPosition) -> PositionalBound {
         PositionalBound { bound, kind }
     }
+
+    /// Returns the greater of two bounds.
+    pub fn max_bound(&self, b: &Self) -> Self {
+        if self.kind == BoundPosition::Lower {
+            match (&self.bound, &b.bound) {
+                // if one bound is MIN, but the other bound is an integer, return the integer
+                (Bound::Integer(int), Bound::Unbounded)
+                | (Bound::Unbounded, Bound::Integer(int)) => {
+                    PositionalBound::new(Bound::Integer(int.clone()), self.kind)
+                }
+                (Bound::Integer(a), Bound::Integer(b)) => {
+                    PositionalBound::new(Bound::Integer(a.max(b).clone()), self.kind)
+                }
+                // if bothh bounds are MIN, return MIN
+                (Bound::Unbounded, Bound::Unbounded) => {
+                    PositionalBound::new(Bound::Unbounded, self.kind)
+                }
+            }
+        } else {
+            match (&self.bound, &b.bound) {
+                // if either bound is MAX, return MAX
+                (Bound::Unbounded, _) | (_, Bound::Unbounded) => {
+                    PositionalBound::new(Bound::Unbounded, self.kind)
+                }
+                (Bound::Integer(a), Bound::Integer(b)) => {
+                    PositionalBound::new(Bound::Integer(a.max(b).clone()), self.kind)
+                }
+            }
+        }
+    }
+
+    /// Returns the lesser of two bounds.
+    pub fn min_bound(&self, b: &Self) -> Self {
+        if self.kind == BoundPosition::Lower {
+            match (&self.bound, &b.bound) {
+                // if either bound is MIN, return MIN
+                (Bound::Unbounded, _) | (_, Bound::Unbounded) => {
+                    PositionalBound::new(Bound::Unbounded, self.kind)
+                }
+                (Bound::Integer(a), Bound::Integer(b)) => {
+                    PositionalBound::new(Bound::Integer(a.min(b).clone()), self.kind)
+                }
+            }
+        } else {
+            match (&self.bound, &b.bound) {
+                // if one bound is MAX, but the other bound is an integer, return the integer
+                (Bound::Integer(int), Bound::Unbounded)
+                | (Bound::Unbounded, Bound::Integer(int)) => {
+                    PositionalBound::new(Bound::Integer(int.clone()), self.kind)
+                }
+                (Bound::Integer(a), Bound::Integer(b)) => {
+                    PositionalBound::new(Bound::Integer(a.min(b).clone()), self.kind)
+                }
+                // if both bounds are MAX, return MAX
+                (Bound::Unbounded, Bound::Unbounded) => {
+                    PositionalBound::new(Bound::Unbounded, self.kind)
+                }
+            }
+        }
+    }
 }
 
 impl PartialEq for PositionalBound {
     fn eq(&self, rhs: &Self) -> bool {
-        self.bound == rhs.bound && self.kind == rhs.kind
+        self.bound == rhs.bound
     }
 }
 
 impl PartialOrd for PositionalBound {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+impl Ord for PositionalBound {
+    fn cmp(&self, rhs: &Self) -> Ordering {
         if self == rhs {
-            Some(Ordering::Equal)
+            Ordering::Equal
         } else {
-            Some(match (&self.bound, &rhs.bound) {
+            match (&self.bound, &rhs.bound) {
                 (Bound::Unbounded, _) => {
                     match self.kind {
                         BoundPosition::Upper => Ordering::Greater, // MAX > anything
@@ -1147,7 +1463,19 @@ impl PartialOrd for PositionalBound {
                     }
                 }
                 (Bound::Integer(lhs), Bound::Integer(rhs)) => lhs.cmp(rhs),
-            })
+            }
+        }
+    }
+}
+
+impl Display for PositionalBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.bound {
+            Bound::Integer(int) => int.fmt(f),
+            Bound::Unbounded => f.write_str(match self.kind {
+                BoundPosition::Lower => "MIN",
+                BoundPosition::Upper => "MAX",
+            }),
         }
     }
 }
@@ -1282,10 +1610,7 @@ mod test {
                 }
 
                 let decl = context.lookup_type(&ident).unwrap();
-                decl.ty
-                    .constraint
-                    .as_ref()
-                    .unwrap()
+                decl.ty.constraints.as_ref().unwrap()[0]
                     .resolve(context, &decl.ty.resolve(context).unwrap().ty)
                     .expect("failed to resolve constraint")
             }

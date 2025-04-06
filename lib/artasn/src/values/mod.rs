@@ -208,7 +208,7 @@ impl ValueResolve for AstElement<TypedValue> {
                         ty: ResolvedType {
                             tag: tag.cloned(),
                             ty: resolved_type.ty,
-                            constraint: resolved_type.constraint,
+                            constraints: resolved_type.constraints,
                         },
                         value: value.clone(),
                     });

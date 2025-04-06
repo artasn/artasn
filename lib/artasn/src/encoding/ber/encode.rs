@@ -488,10 +488,13 @@ pub fn ber_encode_value(
         }
         BuiltinValue::Containing(containing) => {
             let constraint = resolved_type
-                .constraint
+                .constraints
                 .as_ref()
-                .map(|constraint| constraint.get_contents_constraint())
-                .expect("CONTAINING value for type without constraint")
+                .and_then(|constraints| {
+                    constraints
+                        .iter()
+                        .find_map(|constraint| constraint.get_contents_constraint())
+                })
                 .expect("CONTAINING value for type without contents constraint");
 
             let ts = match &constraint.encoded_by {

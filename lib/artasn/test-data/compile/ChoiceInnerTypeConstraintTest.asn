@@ -48,12 +48,6 @@ fspc2-invalid1 FullSpecPresenceConstraint2 ::= a : 1
 fspc2-invalid2 FullSpecPresenceConstraint2 ::= b : TRUE
 fspc2-invalid3 FullSpecPresenceConstraint2 ::= c : "Hello, world!"
 
-InvalidFullSpecPresenceConstraint ::= CHOICE {
-    a INTEGER,
-    b BOOLEAN,
-    c UTF8String
-} (WITH COMPONENTS { a PRESENT, b PRESENT, c ABSENT })
-
 PartialSpecValueConstraint ::= CHOICE {
     a INTEGER,
     b BOOLEAN,
@@ -162,5 +156,17 @@ cabe-invalid6 ChoiceAlternativeByEnum ::= {
     alternative baz,
     value bar : TRUE
 }
+
+-- InvalidFullSpecPresenceConstraint ::= CHOICE {
+--     a INTEGER,
+--     b BOOLEAN,
+--     c UTF8String
+-- } (WITH COMPONENTS { a PRESENT, c PRESENT })
+
+-- InvalidPartialSpecPresenceConstraint ::= CHOICE {
+--     a INTEGER,
+--     b BOOLEAN,
+--     c UTF8String
+-- } (WITH COMPONENTS { ..., a PRESENT, c PRESENT })
 
 END

@@ -426,6 +426,10 @@ json_compile_test!(
     "../../test-data/compile/SequenceInnerTypeConstraintTest"
 );
 json_compile_test!(
+    test_sequence_of_inner_type_constraint,
+    "../../test-data/compile/SequenceOfInnerTypeConstraintTest"
+);
+json_compile_test!(
     test_choice_inner_type_constraints,
     "../../test-data/compile/ChoiceInnerTypeConstraintTest"
 );

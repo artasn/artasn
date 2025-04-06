@@ -9,12 +9,14 @@ use crate::{
 
 #[derive(Debug)]
 pub struct DeclaredValue {
+    pub name: QualifiedIdentifier,
     pub value: AstElement<TypedValue>,
     pub ty: TaggedType,
 }
 
 #[derive(Debug)]
 pub struct DeclaredType {
+    pub name: QualifiedIdentifier,
     pub ty: TaggedType,
 }
 

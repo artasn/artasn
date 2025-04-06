@@ -199,9 +199,11 @@ pub fn verify_type(context: &Context, declared_type: &TaggedType) -> Result<()> 
         _ => (),
     }
 
-    if let Some(constraint) = resolved_ty.constraint {
+    if let Some(constraints) = resolved_ty.constraints {
         // verify that the type's constraint is valid
-        constraint.resolve(context, &resolved_ty.ty)?;
+        for constraint in constraints {
+            constraint.resolve(context, &resolved_ty.ty)?;
+        }
     }
 
     Ok(())
@@ -209,10 +211,18 @@ pub fn verify_type(context: &Context, declared_type: &TaggedType) -> Result<()> 
 
 pub fn verify_value(context: &Context, declared_value: &DeclaredValue) -> Result<()> {
     let resolved_ty = declared_value.ty.resolve(context)?;
+    let constraint = match &resolved_ty.constraints {
+        Some(constraints) => Some(Constraint::resolve_subsets(
+            context,
+            constraints,
+            &resolved_ty.ty,
+        )?),
+        None => None,
+    };
     resolved_ty.ty.ensure_satisfied_by_value(
         context,
         &declared_value.value,
-        resolved_ty.constraint.as_ref(),
+        constraint.as_ref(),
     )?;
 
     Ok(())

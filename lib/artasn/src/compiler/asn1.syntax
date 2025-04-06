@@ -585,13 +585,26 @@ variant RangeUpperBound = Max {
     return value
 } | Value | error { "expecting a range upper bound" };
 
-rule InnerTypeConstraints {
+variant InnerTypeConstraints = SingleTypeConstraint | MultipleTypeConstraints;
+
+rule SingleTypeConstraint {
+    captures {
+        constraint = Constraint
+    }
+    keyword WITH
+    keyword COMPONENT
+    persist
+    constraint = Constraint
+    return constraint
+}
+
+rule MultipleTypeConstraints {
     captures {
         spec = TypeConstraintSpec
     }
     keyword WITH
-    persist
     keyword COMPONENTS
+    persist
     spec = TypeConstraintSpec
     return spec
 }
@@ -733,15 +746,24 @@ rule Real {
 rule EnumerationItem {
     captures {
         name = ValueReference
-        num = optional: Value
+        num = optional: EnumerationItemNum
     }
-    name = ValueReference
     persist
+    name = ValueReference
     optional {
-        operator (
-        num = Value
-        operator )
+        num = EnumerationItemNum
     }
+}
+
+rule EnumerationItemNum {
+    captures {
+        num = Value
+    }
+    operator (
+    persist
+    num = Value
+    operator )
+    return num
 }
 
 rule Enumerated {
@@ -1039,25 +1061,24 @@ rule TaggedType {
     captures {
         tag = Tag
         kind = optional: TagKind
-        ty = boxed ConstrainedType
+        ty = boxed Type
     }
     tag = Tag
     persist
     optional {
         kind = TagKind
     }
-    ty = ConstrainedType
+    ty = Type
 }
 
 variant ConstrainedType = Suffixed {
     captures {
         ty = UntaggedType
-        constraint = optional: Constraint
+        constraints = repeated: Constraint
     }
     ty = UntaggedType
-    persist
-    optional {
-        constraint = Constraint
+    optional repeated {
+        constraints = Constraint
     }
 } | TypeWithConstraint {
     captures {
@@ -1116,7 +1137,7 @@ variant Parameter = ObjectSetParameter {
 
 variant UntaggedType = BuiltinType | ObjectClassFieldType | ParameterizedDefinedType | DefinedType | error { "expecting type" };
 
-variant Type = TaggedType | ConstrainedType | error { "expecting tagged or untagged type" };
+variant Type = TaggedType | ConstrainedType | error { "expecting type" };
 
 rule ValueAssignment {
     captures {

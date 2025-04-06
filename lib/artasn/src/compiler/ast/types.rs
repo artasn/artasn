@@ -59,7 +59,7 @@ fn parse_structure_components(
         .iter()
         .any(|component| match &component.element.ty.element {
             AstType::TaggedType(_) => true,
-            AstType::ConstrainedType(_) => false,
+            _ => false,
         });
     components
         .iter()
@@ -186,7 +186,7 @@ fn parse_choice_type(
         .iter()
         .any(|alternative| match &alternative.element.ty.element {
             AstType::TaggedType(_) => true,
-            AstType::ConstrainedType(_) => false,
+            _ => false,
         });
     Ok(BuiltinType::Choice(Choice {
         alternatives: alternatives
@@ -223,11 +223,11 @@ fn parse_enumerated_type(
             Some(num) => EnumerationItemValue::Specified(values::parse_value(
                 parser,
                 ParseValueAssignmentStage::Normal,
-                num,
+                &num.element.0,
                 &ResolvedType {
                     tag: Some(Tag::universal(TagType::Enumerated)),
                     ty: BuiltinType::Enumerated(Vec::new()),
-                    constraint: None,
+                    constraints: None,
                 },
             )?),
             None => {
@@ -702,7 +702,7 @@ fn parse_untagged_type(
     Ok(TaggedType {
         tag: None,
         ty: untagged,
-        constraint: None,
+        constraints: None,
     })
 }
 
@@ -718,7 +718,7 @@ fn parse_constrained_type(
         AstConstrainedType::TypeWithConstraint(twc) => TaggedType {
             tag: None,
             ty: parse_structure_of_type(parser, &twc.element.0, parameters)?,
-            constraint: None,
+            constraints: None,
         },
     })
 }
@@ -757,8 +757,12 @@ pub fn parse_type(
         .tag_default;
     Ok(match &ty.element {
         AstType::TaggedType(ast_tagged_type) => {
-            let tagged_type =
-                parse_constrained_type(parser, &ast_tagged_type.element.ty, parameters)?;
+            let tagged_type = parse_type(
+                parser,
+                &ast_tagged_type.element.ty,
+                parameters,
+                TypeContext::Contextless,
+            )?;
             let tag = &ast_tagged_type.element.tag;
             let class = match tag.element.class {
                 Some(ref class) => match class.element {
@@ -842,7 +846,7 @@ pub fn parse_type(
             TaggedType {
                 tag: Some(tag),
                 ty: tagged_type.ty,
-                constraint: tagged_type.constraint, // TODO: should constraints from parameterized types be applied here?
+                constraints: tagged_type.constraints, // TODO: should constraints from parameterized types be applied here?
             }
         }
         AstType::ConstrainedType(constrained) => {
@@ -886,7 +890,7 @@ pub fn parse_type(
             TaggedType {
                 tag,
                 ty: tagged_type.ty,
-                constraint: tagged_type.constraint, // TODO: should constraints from parameterized types be applied here?
+                constraints: tagged_type.constraints, // TODO: should constraints from parameterized types be applied here?
             }
         }
     })
@@ -956,17 +960,15 @@ pub fn parse_parameterized_type_assignment(
 pub(crate) fn ast_type_as_parameterized_type_reference(
     ast: &AstElement<AstType>,
 ) -> Option<&AstElement<AstParameterizedDefinedType>> {
-    let constrained: &AstElement<AstConstrainedType> = match &ast.element {
-        AstType::TaggedType(tagged) => &tagged.element.ty,
-        AstType::ConstrainedType(constrained) => constrained,
-    };
-    let untagged = match &constrained.element {
-        AstConstrainedType::Suffixed(suffixed) => &suffixed.element.ty,
-        AstConstrainedType::TypeWithConstraint(_) => return None,
-    };
-    match &untagged.element {
-        AstUntaggedType::ParameterizedDefinedType(typeref) => Some(typeref),
-        _ => None,
+    match &ast.element {
+        AstType::TaggedType(tagged) => ast_type_as_parameterized_type_reference(&tagged.element.ty),
+        AstType::ConstrainedType(constrained) => match &constrained.element {
+            AstConstrainedType::Suffixed(suffixed) => match &suffixed.element.ty.element {
+                AstUntaggedType::ParameterizedDefinedType(typeref) => Some(typeref),
+                _ => None,
+            },
+            AstConstrainedType::TypeWithConstraint(_) => None,
+        },
     }
 }
 
@@ -999,7 +1001,7 @@ pub fn parse_type_assignment(
                     } else {
                         let ty = parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
 
-                        Ok(Some((ident, DeclaredType { ty })))
+                        Ok(Some((ident.clone(), DeclaredType { name: ident, ty })))
                     }
                 }
                 TypeAssignmentParseMode::Parameterized { parameters } => match parameter_names {
@@ -1028,7 +1030,7 @@ pub fn parse_type_assignment(
                             TypeContext::Contextless,
                         )?;
 
-                        Ok(Some((ident, DeclaredType { ty })))
+                        Ok(Some((ident.clone(), DeclaredType { name: ident, ty })))
                     }
                     None => panic!(
                         "type '{}' is not parameterized, but the parse mode is Parameterized",

@@ -31,7 +31,7 @@ SequenceType ::= SEQUENCE {
     null NULL,
     objectIdentifier OBJECT IDENTIFIER,
     objectDescriptor ObjectDescriptor,
-    -- external EXTERNAL,
+    external EXTERNAL,
     real REAL,
     enumerated EnumeratedType,
     embeddedPDV EMBEDDED PDV,
@@ -68,11 +68,14 @@ sequenceValue SequenceType ::= {
     null NULL,
     objectIdentifier { joint-iso-itu-t artasn(1337) test(47) oid(81) },
     objectDescriptor "ObjectDescriptor",
-    -- external EXTERNAL,
+    external {
+        identification syntax : { joint-iso-itu-t artasn(1337) test(47) external-syntax(82) },
+        data-value '1337'H
+    },
     real { mantissa 1, base 2, exponent -1 },
     enumerated baz,
     embeddedPDV {
-        identification syntax : { joint-iso-itu-t artasn(1337) test(47) embedded-pdv-syntax(82) },
+        identification syntax : { joint-iso-itu-t artasn(1337) test(47) embedded-pdv-syntax(83) },
         data-value '1337'H
     },
     utf8String "UTF8String",

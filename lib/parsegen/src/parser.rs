@@ -443,6 +443,15 @@ impl Loc {
     pub fn at(offset: usize) -> Loc {
         Loc { offset, len: 0 }
     }
+
+    pub fn span(from: Loc, to: Loc) -> Loc {
+        let min = if from.offset < to.offset { from } else { to };
+        let max = if to.offset > from.offset { to } else { from };
+        Loc {
+            offset: min.offset,
+            len: max.offset + max.len - min.offset,
+        }
+    }
 }
 
 impl Default for Loc {

@@ -1,0 +1,29 @@
+SequenceOfInnerTypeConstraintTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+BitStringList ::= SEQUENCE OF BIT STRING
+
+TwoBit-BitStringList ::= BitStringList (WITH COMPONENT (SIZE(2)))
+tbbsl-valid1   TwoBit-BitStringList ::= { }
+tbbsl-valid2   TwoBit-BitStringList ::= { '00'B }
+tbbsl-valid3   TwoBit-BitStringList ::= { '00'B, '01'B, '10'B, '11'B }
+tbbsl-invalid1 TwoBit-BitStringList ::= { '1'B }
+tbbsl-invalid2 TwoBit-BitStringList ::= { '111'B }
+tbbsl-invalid3 TwoBit-BitStringList ::= { '00'B, '01'B, '10'B, '11'B, '100'B }
+
+-- TwoBit-BitStringList-WithSize-1 ::= TwoBit-BitStringList (SIZE(4))
+-- tbbslws1-valid1   TwoBit-BitStringList-WithSize-1 ::= { '00'B, '01'B, '10'B, '11'B }
+-- tbbslws1-valid2   TwoBit-BitStringList-WithSize-1 ::= { '00'B, '00'B, '00'B, '00'B }
+-- tbbslws1-invalid1 TwoBit-BitStringList-WithSize-1 ::= { }
+-- tbbslws1-invalid2 TwoBit-BitStringList-WithSize-1 ::= { '00'B }
+-- tbbslws1-invalid3 TwoBit-BitStringList-WithSize-1 ::= { '00'B, '00'B, '00'B, '00'B, '00'B }
+-- tbbslws1-invalid4 TwoBit-BitStringList-WithSize-1 ::= { '111'B, '111'B, '111'B, '111'B }
+
+-- TwoBit-BitStringList-WithSize-2 ::= BitStringList (SIZE(4)) (WITH COMPONENT (SIZE(2)))
+-- tbbslws2-valid1   TwoBit-BitStringList-WithSize-2 ::= { '00'B, '01'B, '10'B, '11'B }
+-- tbbslws2-valid2   TwoBit-BitStringList-WithSize-2 ::= { '00'B, '00'B, '00'B, '00'B }
+-- tbbslws2-invalid1 TwoBit-BitStringList-WithSize-2 ::= { }
+-- tbbslws2-invalid2 TwoBit-BitStringList-WithSize-2 ::= { '00'B }
+-- tbbslws2-invalid3 TwoBit-BitStringList-WithSize-2 ::= { '00'B, '00'B, '00'B, '00'B, '00'B }
+-- tbbslws2-invalid4 TwoBit-BitStringList-WithSize-2 ::= { '111'B, '111'B, '111'B, '111'B }
+
+END
