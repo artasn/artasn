@@ -1,5 +1,13 @@
 [
     "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:9",
     "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:10",
-    "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:11"
+    "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:11",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:16",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:17",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:18",
+    "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:19",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:24",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:25",
+    "compile error: value violates constraints of type at SequenceOfInnerTypeConstraintTest.asn:26",
+    "compile error: SEQUENCE OF value does not satisfy any of the inner type constraints in the governing type at SequenceOfInnerTypeConstraintTest.asn:27"
 ]

@@ -181,28 +181,28 @@ fn find_component_from_series<'a>(
     for (component, component_value) in structure.iter().zip(structure_value) {
         if component.name().element == search_component.element {
             let is_search_terminal = component_series.len() == 1;
-            if let UntaggedType::BuiltinType(builtin) = &component.component_type().ty {
-                if let BuiltinType::Structure(structure) = builtin {
-                    if is_search_terminal {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "component reference cannot be to a {}",
-                                structure.ty
-                            )),
-                            loc: search_component.loc,
-                        });
-                    } else {
-                        let structure_value =
-                            match component_value.value().resolve(parser.context)?.value {
-                                BuiltinValue::Structure(_, structure) => structure,
-                                _ => unreachable!(),
-                            };
-                        return find_component_from_series(
-                            parser,
-                            (&structure.components, &structure_value.components),
-                            &component_series[1..],
-                        );
-                    }
+            if let UntaggedType::BuiltinType(BuiltinType::Structure(structure)) =
+                &component.component_type().ty
+            {
+                if is_search_terminal {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "component reference cannot be to a {}",
+                            structure.ty
+                        )),
+                        loc: search_component.loc,
+                    });
+                } else {
+                    let structure_value =
+                        match component_value.value().resolve(parser.context)?.value {
+                            BuiltinValue::Structure(_, structure) => structure,
+                            _ => unreachable!(),
+                        };
+                    return find_component_from_series(
+                        parser,
+                        (&structure.components, &structure_value.components),
+                        &component_series[1..],
+                    );
                 }
             }
             let resolved_type = component.component_type().resolve(parser.context)?;

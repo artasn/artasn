@@ -57,10 +57,7 @@ fn parse_structure_components(
 ) -> Result<Vec<StructureComponent>> {
     let has_tags = components
         .iter()
-        .any(|component| match &component.element.ty.element {
-            AstType::TaggedType(_) => true,
-            _ => false,
-        });
+        .any(|component| matches!(&component.element.ty.element, AstType::TaggedType(_)));
     components
         .iter()
         .enumerate()
@@ -184,10 +181,7 @@ fn parse_choice_type(
 ) -> Result<BuiltinType> {
     let has_tags = alternatives
         .iter()
-        .any(|alternative| match &alternative.element.ty.element {
-            AstType::TaggedType(_) => true,
-            _ => false,
-        });
+        .any(|alternative| matches!(&alternative.element.ty.element, AstType::TaggedType(_)));
     Ok(BuiltinType::Choice(Choice {
         alternatives: alternatives
             .iter()

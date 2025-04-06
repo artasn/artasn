@@ -487,74 +487,10 @@ impl ConstraintTree {
         constrained_type: &BuiltinType,
     ) -> Result<Vec<ConstraintSpecItem>> {
         Ok(match self {
-            Self::BinaryExpr {
-                lhs: lhs_tree,
-                op,
-                rhs: rhs_tree,
-            } => {
-                let lhs = lhs_tree.resolve(context, constrained_type)?;
-                let lhs_kinds = collect_spec_item_kinds(&lhs);
-
-                let rhs = rhs_tree.resolve(context, constrained_type)?;
-                let rhs_kinds = collect_spec_item_kinds(&rhs);
-
-                if spec_item_kinds_contains_only(
-                    &lhs_kinds,
-                    &[ConstraintSpecItemKind::Value, ConstraintSpecItemKind::Size],
-                ) && spec_item_kinds_contains_only(
-                    &rhs_kinds,
-                    &[ConstraintSpecItemKind::Value, ConstraintSpecItemKind::Size],
-                ) {
-                    eval_value_and_size_set_binary_expr(&lhs, op, &rhs, constrained_type)?
-                } else if spec_item_kinds_contains_only(
-                    &lhs_kinds,
-                    &[ConstraintSpecItemKind::InnerType],
-                ) && spec_item_kinds_contains_only(
-                    &rhs_kinds,
-                    &[ConstraintSpecItemKind::InnerType],
-                ) {
-                    if op.element != ConstraintTreeOperator::Union {
-                        return Err(Error {
-                            kind: ErrorKind::Ast(format!(
-                                "cannot use {} operator with inner type constraints",
-                                op.element
-                            )),
-                            loc: op.loc,
-                        });
-                    }
-
-                    let mut all = Vec::with_capacity(lhs.len() + rhs.len());
-                    all.extend(lhs);
-                    all.extend(rhs);
-                    all
-                } else {
-                    let lhs_names = lhs
-                        .into_iter()
-                        .map(|item| item.get_name())
-                        .unique()
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let rhs_names = rhs
-                        .into_iter()
-                        .map(|item| item.get_name())
-                        .unique()
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    return Err(Error {
-                        kind: ErrorKind::Ast(if lhs_kinds == rhs_kinds {
-                            format!(
-                                "cannot use {} operator with {} constraints",
-                                op.element, lhs_names,
-                            )
-                        } else {
-                            format!(
-                                "cannot use {} operator with {} and {} constraints",
-                                op.element, lhs_names, rhs_names,
-                            )
-                        }),
-                        loc: op.loc,
-                    });
-                }
+            Self::BinaryExpr { lhs, op, rhs } => {
+                let lhs = lhs.resolve(context, constrained_type)?;
+                let rhs = rhs.resolve(context, constrained_type)?;
+                eval_binary_expr(constrained_type, lhs, op, rhs)?
             }
             Self::Element(element) => match &element.element {
                 SubtypeElement::SingleValue(single_value) => {
@@ -635,6 +571,80 @@ fn iter_exactly_zero_or_one<Item, I: Iterator<Item = Item>>(mut iter: I) -> Opti
             None => Some(item),
         },
         None => None,
+    }
+}
+
+fn eval_binary_expr(
+    constrained_type: &BuiltinType,
+    lhs: Vec<ConstraintSpecItem>,
+    op: &AstElement<ConstraintTreeOperator>,
+    rhs: Vec<ConstraintSpecItem>,
+) -> Result<Vec<ConstraintSpecItem>> {
+    let lhs_kinds = collect_spec_item_kinds(&lhs);
+    let rhs_kinds = collect_spec_item_kinds(&rhs);
+
+    if spec_item_kinds_contains_only(
+        &lhs_kinds,
+        &[ConstraintSpecItemKind::Value, ConstraintSpecItemKind::Size],
+    ) && spec_item_kinds_contains_only(
+        &rhs_kinds,
+        &[ConstraintSpecItemKind::Value, ConstraintSpecItemKind::Size],
+    ) {
+        eval_value_and_size_set_binary_expr(&lhs, op, &rhs, constrained_type)
+    } else if spec_item_kinds_contains_only(&lhs_kinds, &[ConstraintSpecItemKind::InnerType])
+        && spec_item_kinds_contains_only(&rhs_kinds, &[ConstraintSpecItemKind::InnerType])
+    {
+        if op.element != ConstraintTreeOperator::Union {
+            return Err(Error {
+                kind: ErrorKind::Ast(format!(
+                    "cannot use {} operator with inner type constraints",
+                    op.element
+                )),
+                loc: op.loc,
+            });
+        }
+
+        let mut all = Vec::with_capacity(lhs.len() + rhs.len());
+        all.extend(lhs);
+        all.extend(rhs);
+        Ok(all)
+    } else if spec_item_kinds_contains_only(&lhs_kinds, &[ConstraintSpecItemKind::InnerType])
+        || spec_item_kinds_contains_only(&rhs_kinds, &[ConstraintSpecItemKind::InnerType])
+    {
+        // if performing either a UNION or INTERSECTION with any constraints and inner type constraints,
+        // just union them together. this allows subsets to include inner type constraints
+        // TODO: this may be a noncompliant implementation and should be investigated further
+        let mut all = Vec::with_capacity(lhs.len() + rhs.len());
+        all.extend(lhs);
+        all.extend(rhs);
+        Ok(all)
+    } else {
+        let lhs_names = lhs
+            .into_iter()
+            .map(|item| item.get_name())
+            .unique()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let rhs_names = rhs
+            .into_iter()
+            .map(|item| item.get_name())
+            .unique()
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(Error {
+            kind: ErrorKind::Ast(if lhs_kinds == rhs_kinds {
+                format!(
+                    "cannot use {} operator with {} constraints",
+                    op.element, lhs_names,
+                )
+            } else {
+                format!(
+                    "cannot use {} operator with {} and {} constraints",
+                    op.element, lhs_names, rhs_names,
+                )
+            }),
+            loc: op.loc,
+        });
     }
 }
 
@@ -805,10 +815,7 @@ fn eval_value_set_binary_expr<
                             _ => unreachable!(),
                         };
                         PositionalBound::new(a.lower.clone(), BoundPosition::Lower).cmp(
-                            &PositionalBound::new(
-                                Bound::Integer(b.clone()),
-                                BoundPosition::Lower,
-                            ),
+                            &PositionalBound::new(Bound::Integer(b.clone()), BoundPosition::Lower),
                         )
                     }
                 });
@@ -908,21 +915,19 @@ fn eval_value_set_binary_expr<
                             rhs_bounds.upper,
                             BoundPosition::Upper,
                         ));
-                    let constraint = if start < end {
-                        Some(ValueConstraint::Range(ResolvedValueRange {
+                    let constraint = match start.cmp(&end) {
+                        Ordering::Less => Some(ValueConstraint::Range(ResolvedValueRange {
                             lower: start.bound,
                             upper: end.bound,
-                        }))
-                    } else if start == end {
-                        Some(match start.bound {
+                        })),
+                        Ordering::Equal => Some(match start.bound {
                             Bound::Integer(int) => ValueConstraint::SingleValue(ResolvedValue {
                                 ty: ResolvedType::universal(TagType::Integer),
                                 value: BuiltinValue::Integer(int),
                             }),
                             Bound::Unbounded => panic!("start == end but bound == Unbounded"),
-                        })
-                    } else {
-                        None
+                        }),
+                        Ordering::Greater => None,
                     };
                     if let Some(constraint) = constraint {
                         intersection.push(AstElement::new(constraint, loc));
@@ -965,7 +970,36 @@ impl Constraint {
         constrained_type: &BuiltinType,
     ) -> Result<ResolvedConstraint> {
         if subsets.len() > 1 {
-            todo!("constraint subsets");
+            let resolved = subsets[0].resolve(context, constrained_type)?;
+            let mut last_loc = resolved.loc;
+            let mut is_extensible = resolved.is_extensible;
+            let mut resolved_specs = resolved.specs;
+            for subset in subsets.iter().skip(1) {
+                let resolved_subset = subset.resolve(context, constrained_type)?;
+                let op = AstElement::new(ConstraintTreeOperator::Intersection, resolved_subset.loc);
+                is_extensible = resolved_subset.is_extensible;
+                last_loc = resolved_subset.loc;
+                resolved_specs = resolved_subset
+                    .specs
+                    .into_iter()
+                    .map(|spec| {
+                        Ok(ConstraintSpec {
+                            is_extension: spec.is_extension,
+                            items: eval_binary_expr(
+                                constrained_type,
+                                resolved_specs[0].items.clone(),
+                                &op,
+                                spec.items,
+                            )?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+            }
+            Ok(ResolvedConstraint {
+                specs: resolved_specs,
+                is_extensible,
+                loc: last_loc,
+            })
         } else {
             subsets[0].resolve(context, constrained_type)
         }
@@ -1104,11 +1138,8 @@ impl InnerTypeConstraints {
                         panic!("is_satisfied_by_value: kind is Single but value is not StructureOf")
                     }
                 };
-                let constraint = Constraint::resolve_subsets(
-                    context,
-                    &[single.clone()],
-                    &constrained_type.ty,
-                )?;
+                let constraint =
+                    Constraint::resolve_subsets(context, &[single.clone()], &constrained_type.ty)?;
                 let elements = match value {
                     BuiltinValue::StructureOf(_, of) => of,
                     _ => unreachable!(),
@@ -1139,7 +1170,7 @@ pub struct MultipleTypeConstraints {
 impl MultipleTypeConstraints {
     fn lookup_constraint<'a>(&'a self, name: &str) -> Option<&'a ComponentConstraint> {
         self.components.iter().find_map(|component| {
-            if &component.name.element == name {
+            if component.name.element == name {
                 Some(&component.constraint)
             } else {
                 None

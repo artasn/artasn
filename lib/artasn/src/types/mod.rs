@@ -578,8 +578,9 @@ impl BuiltinType {
         }
 
         if let builtin_value @ (BuiltinValue::Structure(_, _)
-            | BuiltinValue::StructureOf(_, _)
-            | BuiltinValue::Choice(_)) = &typed_value.value {
+        | BuiltinValue::StructureOf(_, _)
+        | BuiltinValue::Choice(_)) = &typed_value.value
+        {
             let inner_type_constraints: Option<Vec<&InnerTypeConstraints>> =
                 constraint.as_ref().map(|constraint| {
                     constraint
