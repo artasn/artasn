@@ -1,5 +1,11 @@
 -- ASN module extracted from ITU-T X.694 (02/2021)
 
+-- This ASN.1 module, as described in X.694, has the name 'XSDv1'.
+-- It appears that many standard modules import this module by just the name 'XSD' without the OID. (See the F.515 standard modules as an example.)
+-- Additionally, modules that use the v2 mappings either import with the name 'XSDv2', or 'XSD' with the v2 OID.
+-- As such, in order to ensure ArtASN provides as much ease for users to interact with modules defined in open standards,
+-- this module has been renamed to 'XSD' from 'XSDv1', while the 'XSDv2' module retains its original name.
+
 XSD {joint-iso-itu-t asn1(1) specification(0) modules(0) xsd-module(2) version1(1)}
 "/ASN.1/Specification/Modules/XSD-Module/Version1"
 DEFINITIONS

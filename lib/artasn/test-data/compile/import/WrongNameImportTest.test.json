@@ -1,0 +1,6 @@
+[
+    "compile error: failed to resolve symbol 'WithType' (module 'ModuleWithOIDAndWrongName' not found)",
+    "compile error: failed to resolve symbol 'withValue' (module 'ModuleWithOIDAndWrongName' not found)",
+    "compile error: failed to resolve symbol 'WithoutType' (module 'ModuleWithoutOIDAndWrongName' not found)",
+    "compile error: failed to resolve symbol 'withoutValue' (module 'ModuleWithoutOIDAndWrongName' not found)"
+]

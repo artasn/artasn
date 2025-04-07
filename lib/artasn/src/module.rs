@@ -180,7 +180,7 @@ impl ModuleHeader {
             for import in &imports_from_module.imports {
                 if &import.element == symbol {
                     let module = match &imports_from_module.module.element.oid {
-                        Some(_) => context.lookup_module(&imports_from_module.module.element),
+                        Some(oid) => context.lookup_module_by_oid(oid),
                         None => {
                             context.lookup_module_by_name(&imports_from_module.module.element.name)
                         }

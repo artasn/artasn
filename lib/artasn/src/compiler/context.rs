@@ -4,7 +4,7 @@ use super::parser::{AstElement, AstTypeAssignment};
 use crate::{
     module::{ModuleHeader, ModuleIdentifier, QualifiedIdentifier},
     types::{Class, InformationObjectClassReference, TaggedType},
-    values::{InformationObjectReference, InformationObjectSet, TypedValue},
+    values::{InformationObjectReference, InformationObjectSet, Oid, TypedValue},
 };
 
 #[derive(Debug)]
@@ -132,6 +132,10 @@ impl Context {
 
     pub fn lookup_module_by_name<'a>(&'a self, name: &str) -> Option<&'a ModuleHeader> {
         self.modules.values().find(|value| value.ident.name == name)
+    }
+
+    pub fn lookup_module_by_oid<'a>(&'a self, oid: &Oid) -> Option<&'a ModuleHeader> {
+        self.modules.values().find(|value| matches!(&value.ident.oid, Some(module_oid) if module_oid == oid))
     }
 
     pub fn lookup_module<'a>(&'a self, ident: &ModuleIdentifier) -> Option<&'a ModuleHeader> {

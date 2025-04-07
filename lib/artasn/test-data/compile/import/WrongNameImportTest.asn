@@ -1,0 +1,25 @@
+WrongNameImportTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+    
+IMPORTS
+    WithType, withValue FROM ModuleWithOIDAndWrongName
+    WithoutType, withoutValue FROM ModuleWithoutOIDAndWrongName;
+
+S1 ::= SEQUENCE {
+    with WithType,
+    without WithoutType
+}
+s1 S1 ::= {
+    with withValue,
+    without withoutValue
+}
+
+S2 ::= SEQUENCE {
+    with ModuleWithOID.WithType,
+    without ModuleWithoutOID.WithoutType
+}
+s2 S2 ::= {
+    with ModuleWithOID.withValue,
+    without ModuleWithoutOID.withoutValue
+}
+
+END

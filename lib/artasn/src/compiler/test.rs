@@ -438,28 +438,42 @@ json_compile_test!(
     "../../test-data/compile/ConstraintSubsetTest"
 );
 json_compile_test!(
-    test_matching_imports,
+    test_import_matching,
     "../../test-data/compile/import/",
     "MatchingImportTest",
     "ModuleWithOID",
     "ModuleWithoutOID"
 );
 json_compile_test!(
-    test_omitted_oid_import,
+    test_import_omitted_oid,
     "../../test-data/compile/import/",
     "OmittedOIDImportTest",
     "ModuleWithOID",
     "ModuleWithoutOID"
 );
 json_compile_test!(
-    test_misplaced_oid_import,
+    test_import_wrong_name,
+    "../../test-data/compile/import/",
+    "WrongNameImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
+);
+json_compile_test!(
+    test_import_wrong_name_with_oid,
+    "../../test-data/compile/import/",
+    "WrongNameWithOIDImportTest",
+    "ModuleWithOID",
+    "ModuleWithoutOID"
+);
+json_compile_test!(
+    test_import_misplaced_oid,
     "../../test-data/compile/import/",
     "MisplacedOIDImportTest",
     "ModuleWithOID",
     "ModuleWithoutOID"
 );
 json_compile_test!(
-    test_mismatch_oid_import,
+    test_import_mismatch_oid,
     "../../test-data/compile/import/",
     "MismatchOIDImportTest",
     "ModuleWithOID",
