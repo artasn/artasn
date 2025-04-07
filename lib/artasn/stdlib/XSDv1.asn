@@ -1,6 +1,6 @@
 -- ASN module extracted from ITU-T X.694 (02/2021)
 
-XSDv1 {joint-iso-itu-t asn1(1) specification(0) modules(0) xsd-module(2) version1(1)}
+XSD {joint-iso-itu-t asn1(1) specification(0) modules(0) xsd-module(2) version1(1)}
 "/ASN.1/Specification/Modules/XSD-Module/Version1"
 DEFINITIONS
 AUTOMATIC TAGS ::=

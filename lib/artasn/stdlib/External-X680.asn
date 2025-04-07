@@ -44,7 +44,7 @@ External ::= [UNIVERSAL 8] SEQUENCE {
     -- This provides human-readable identification of the class of the value
     data-value [1] OCTET STRING,
     artasn-external ExternalMarker OPTIONAL
-    -- the `artasn-external` component is not part of the standard definition of REAL,
+    -- the `artasn-external` component is not part of the standard definition of EXTERNAL,
     -- and is used internally by artasn
 } (WITH COMPONENTS {
     ...,

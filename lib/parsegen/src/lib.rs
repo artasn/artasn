@@ -67,7 +67,6 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         Err(err) => panic!("{}", err),
     };
 
-    // we include "common.rs" ()
     let gen_files: &[&str] = &[include_str!("./parser.rs"), include_str!("./tokenizer.rs")];
     let gen_files = gen_files
         .iter()
@@ -79,7 +78,8 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         attrs: Vec::new(),
         items: Vec::new(),
     };
-    // usages required for generated code, but stripped in strip_module
+    // all `use` statements get stripped from the gen_files modules in the loop below
+    // the following `use` statements are required for generated code, so they are explicitly added back in
     composite_module.items.push(Item::Use(syn::parse_quote!(
         use std::fmt::{Display, Write};
     )));
