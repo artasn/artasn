@@ -100,6 +100,7 @@ lazy_static::lazy_static! {
         ("EmbeddedPDV.asn", include_str!("../../stdlib/EmbeddedPDV.asn")),
         ("CharacterString.asn", include_str!("../../stdlib/CharacterString.asn")),
         ("InformationObjectClasses.asn", include_str!("../../stdlib/InformationObjectClasses.asn")),
+        ("ASN1-OBJECT-IDENTIFIER-MODULE.asn", include_str!("../../stdlib/ASN1-OBJECT-IDENTIFIER-MODULE.asn")),
     ];
 }
 
