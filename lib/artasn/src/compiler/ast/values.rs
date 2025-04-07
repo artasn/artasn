@@ -3,7 +3,7 @@ use std::fmt::Write;
 use num::{bigint::Sign, BigInt};
 
 use crate::{
-    compiler::{ast::types::TypeContext, context::DeclaredValue, parser::*},
+    compiler::{context::DeclaredValue, parser::*},
     module::*,
     types::*,
     values::*,
@@ -166,11 +166,11 @@ fn find_matching_object_in_set<'a>(
     Ok(None)
 }
 
-fn find_component_from_series<'a>(
+fn find_component_from_series(
     parser: &AstParser<'_>,
-    structures: (&'a [StructureComponent], &[StructureValueComponent]),
+    structures: (&[StructureComponent], &[StructureValueComponent]),
     component_series: &[AstElement<String>],
-) -> Result<(&'a TaggedType, AstElement<TypedValue>)> {
+) -> Result<(TaggedType, AstElement<TypedValue>)> {
     if component_series.is_empty() {
         panic!("component_series.len() == 0");
     }
@@ -200,7 +200,10 @@ fn find_component_from_series<'a>(
                         };
                     return find_component_from_series(
                         parser,
-                        (&structure.components, &structure_value.components),
+                        (
+                            &structure.resolve_components(parser.context)?,
+                            &structure_value.components,
+                        ),
                         &component_series[1..],
                     );
                 }
@@ -217,7 +220,10 @@ fn find_component_from_series<'a>(
                 }
                 _ => {
                     if is_search_terminal {
-                        return Ok((component.component_type(), component_value.value().clone()));
+                        return Ok((
+                            component.component_type().clone(),
+                            component_value.value().clone(),
+                        ));
                     } else {
                         return Err(Error {
                             kind: ErrorKind::Ast(format!(
@@ -418,7 +424,7 @@ fn parse_structure_value(
 ) -> Result<BuiltinValue> {
     let tag_type = target_type.ty.tag_type().expect("tag_type");
     let struct_ty_components = match &target_type.ty {
-        BuiltinType::Structure(ty) => &ty.components,
+        BuiltinType::Structure(ty) => &ty.resolve_components(parser.context)?,
         ty => {
             return Err(Error {
                 kind: ErrorKind::Ast(format!("SEQUENCE value cannot be assigned to {} type", ty)),
@@ -751,7 +757,7 @@ fn parse_choice_value(
         }
     };
     let alternative = 'block: {
-        for alternative in &choice_type.alternatives {
+        for alternative in choice_type.resolve_alternatives(parser.context)? {
             if alternative.name.element == choice.element.alternative.element.0 {
                 break 'block alternative;
             }
@@ -773,7 +779,7 @@ fn parse_choice_value(
             }
             let (resolved_type, kind) = parse_object_class_field_reference(
                 parser,
-                alternative,
+                &alternative,
                 choice.loc,
                 ocf,
                 root_container,
@@ -1006,8 +1012,7 @@ pub fn parse_value(
             AstBuiltinValue::OpenTypeValue(otv) => {
                 let mut value_type = match &otv.element.open_type.element {
                     AstOpenTypeValueTypeReference::Type(ast_type) => {
-                        let tagged_type =
-                            types::parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
+                        let tagged_type = types::parse_type(parser, ast_type, &[])?;
                         tagged_type.resolve(parser.context)?
                     }
                     AstOpenTypeValueTypeReference::ObjectFieldReference(field_ref) => {
@@ -1293,12 +1298,7 @@ pub fn parse_value_assignment(
 
     Ok(match stage {
         ParseValueAssignmentStage::Normal | ParseValueAssignmentStage::ClassReference => {
-            let mut ty = types::parse_type(
-                parser,
-                &value_assignment.element.ty,
-                &[],
-                types::TypeContext::Contextless,
-            )?;
+            let mut ty = types::parse_type(parser, &value_assignment.element.ty, &[])?;
             let mut resolved_ty = ty.resolve(parser.context)?;
 
             if let Some(typeref) =
@@ -1319,7 +1319,7 @@ pub fn parse_value_assignment(
                         .map(|(name, param)| (name, param))
                         .collect(),
                 )?;
-                apply_pending_constraint(&mut ty, pending);
+                apply_pending_constraint(parser.context, &mut ty, pending)?;
                 resolved_ty = ty.resolve(parser.context)?;
             }
 

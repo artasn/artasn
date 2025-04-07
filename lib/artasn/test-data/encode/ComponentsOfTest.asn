@@ -1,0 +1,240 @@
+ComponentsOfTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+Inner1 ::= SEQUENCE {
+    a INTEGER,
+    b BOOLEAN,
+    c UTF8String
+}
+
+Inner1-Container1 ::= SEQUENCE {
+    COMPONENTS OF Inner1
+}
+inner1-container1 Inner1-Container1 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Container1 ::= SEQUENCE {
+    COMPONENTS OF SEQUENCE {
+        a INTEGER,
+        b BOOLEAN,
+        c UTF8String
+    }
+}
+container1 Container1 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Inner1-Container2 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner1
+}
+inner1-container2 Inner1-Container2 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Inner1-Container3 ::= SEQUENCE {
+    COMPONENTS OF Inner1,
+    y BIT STRING
+}
+inner1-container3 Inner1-Container3 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner1-Container4 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner1,
+    y BIT STRING
+}
+inner1-container4 Inner1-Container4 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner1-Container5 ::= SEQUENCE {
+    x [PRIVATE 1] OCTET STRING,
+    COMPONENTS OF Inner1,
+    y BIT STRING
+}
+inner1-container5 Inner1-Container5 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner1-Container6 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner1,
+    y [PRIVATE 1] BIT STRING
+}
+inner1-container6 Inner1-Container6 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner1-Container7 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF [PRIVATE 1] Inner1,
+    y BIT STRING
+}
+inner1-container7 Inner1-Container7 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner2 ::= SEQUENCE {
+    a INTEGER,
+    b [PRIVATE 1] BOOLEAN,
+    c UTF8String
+}
+
+Inner2-Container1 ::= SEQUENCE {
+    COMPONENTS OF Inner2
+}
+inner2-container1 Inner2-Container1 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Container2 ::= SEQUENCE {
+    COMPONENTS OF SEQUENCE {
+        a INTEGER,
+        b [PRIVATE 1] BOOLEAN,
+        c UTF8String
+    }
+}
+container2 Container2 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Inner2-Container2 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner2
+}
+inner2-container2 Inner2-Container2 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!"
+}
+
+Inner2-Container3 ::= SEQUENCE {
+    COMPONENTS OF Inner2,
+    y BIT STRING
+}
+inner2-container3 Inner2-Container3 ::= {
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner2-Container4 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner2,
+    y BIT STRING
+}
+inner2-container4 Inner2-Container4 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner2-Container5 ::= SEQUENCE {
+    x [PRIVATE 1] OCTET STRING,
+    COMPONENTS OF Inner2,
+    y BIT STRING
+}
+inner2-container5 Inner2-Container5 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner2-Container6 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF Inner2,
+    y [PRIVATE 1] BIT STRING
+}
+inner2-container6 Inner2-Container6 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Inner2-Container7 ::= SEQUENCE {
+    x OCTET STRING,
+    COMPONENTS OF [PRIVATE 1] Inner2,
+    y BIT STRING
+}
+inner2-container7 Inner2-Container7 ::= {
+    x 'DEADBEEF'H,
+    a 1,
+    b TRUE,
+    c "Hello, World!",
+    y '10101010'B
+}
+
+Nested ::= SEQUENCE {
+    COMPONENTS OF SEQUENCE {
+        a OCTET STRING,
+        COMPONENTS OF SEQUENCE {
+            b INTEGER,
+            c BOOLEAN,
+            d UTF8String
+        },
+        e BIT STRING
+    },
+    COMPONENTS OF SEQUENCE {
+        v OCTET STRING,
+        COMPONENTS OF SEQUENCE {
+            w INTEGER,
+            x BOOLEAN,
+            y UTF8String
+        },
+        z BIT STRING
+    }
+}
+nested Nested ::= {
+    a 'DEADBEEF'H,
+    b 1,
+    c TRUE,
+    d "Hello, World!",
+    e '10101010'B,
+    v 'DEADBEEF'H,
+    w 1,
+    x TRUE,
+    y "Hello, World!",
+    z '10101010'B
+}
+
+END

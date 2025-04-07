@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     extra::AstSyntaxTokenLiteral,
-    types::{self, TypeContext},
+    types,
     values::{self, ParseValueAssignmentStage},
     AstParser,
 };
@@ -33,8 +33,7 @@ fn parse_class_value_field(
 ) -> Result<ObjectClassField> {
     Ok(match &ast_field.element.subject.element {
         AstValueFieldSubject::Type(ast_field_type) => {
-            let mut field_type =
-                types::parse_type(parser, ast_field_type, &[], TypeContext::Contextless)?;
+            let mut field_type = types::parse_type(parser, ast_field_type, &[])?;
 
             match is_type_class(class_idents, &field_type) {
                 Some(class) => ObjectClassField::Object(ObjectClassFieldObject {
@@ -91,7 +90,11 @@ fn parse_class_value_field(
                             &target_type,
                             &[],
                         )?;
-                        constraints::apply_pending_constraint(&mut field_type, constraint);
+                        constraints::apply_pending_constraint(
+                            parser.context,
+                            &mut field_type,
+                            constraint,
+                        )?;
 
                         let option = match (
                             ast_field.element.unique,
@@ -209,12 +212,7 @@ fn parse_fields(
                 ));
             }
             AstObjectClassField::SetField(ast_field) => {
-                let field_type = types::parse_type(
-                    parser,
-                    &ast_field.element.element_type,
-                    &[],
-                    TypeContext::Contextless,
-                )?;
+                let field_type = types::parse_type(parser, &ast_field.element.element_type, &[])?;
 
                 let field = match is_type_class(class_idents, &field_type) {
                     Some(class) => ObjectClassField::ObjectSet(ObjectClassFieldObject {
@@ -410,7 +408,7 @@ fn parse_next_syntax_node(
         _ => match item.kind {
             ObjectClassSyntaxNodeKind::TypeField => {
                 let ast_type = try_parse!(ParseContext::new(token_stream), AstType::parse);
-                let ty = types::parse_type(parser, &ast_type, &[], TypeContext::Contextless)?;
+                let ty = types::parse_type(parser, &ast_type, &[])?;
                 fields.push((item.associated_data.clone(), ObjectField::Type(ty)));
             }
             ObjectClassSyntaxNodeKind::ValueField => {

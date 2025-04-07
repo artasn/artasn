@@ -16,25 +16,29 @@ use crate::{
     values::*,
 };
 
-struct ComponentData<'a> {
+struct ComponentData {
     pub name: Option<String>,
-    pub tagged_type: &'a TaggedType,
+    pub tagged_type: TaggedType,
     pub index: usize,
 }
 
-fn get_component_by_tag<'a>(
+fn get_component_by_tag(
     context: &Context,
-    mode: &'a DecodeMode,
+    mode: &DecodeMode,
     tlv_tag: &TlvElement<TlvTag>,
     index: usize,
-) -> DecodeResult<Option<ComponentData<'a>>> {
+) -> DecodeResult<Option<ComponentData>> {
     // TODO: implement SET
     Ok(match mode {
         DecodeMode::Contextless => None,
         DecodeMode::SpecificType { resolved, .. } => match &resolved.ty {
             BuiltinType::Structure(structure) => {
-                for (component_index, component) in
-                    structure.components.iter().enumerate().skip(index)
+                for (component_index, component) in structure
+                    .resolve_components(context)
+                    .map_err(DecodeError::Parser)?
+                    .into_iter()
+                    .enumerate()
+                    .skip(index)
                 {
                     let component_type = component
                         .component_type
@@ -64,7 +68,7 @@ fn get_component_by_tag<'a>(
 
                     let data = ComponentData {
                         name: Some(component.name.element.clone()),
-                        tagged_type: &component.component_type,
+                        tagged_type: *component.component_type,
                         index: component_index,
                     };
                     if tag_matches {
@@ -75,7 +79,7 @@ fn get_component_by_tag<'a>(
             }
             BuiltinType::StructureOf(of) => Some(ComponentData {
                 name: None,
-                tagged_type: &of.component_type,
+                tagged_type: *of.component_type.clone(),
                 index,
             }),
             _ => None,

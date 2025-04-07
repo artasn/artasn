@@ -1,7 +1,12 @@
-use crate::{compiler::parser::*, module::QualifiedIdentifier, types::*, values::TypedValue};
+use crate::{
+    compiler::{parser::*, Context},
+    module::QualifiedIdentifier,
+    types::*,
+    values::TypedValue,
+};
 
 use super::{
-    types::{self, Parameter, TypeContext},
+    types::{self, Parameter},
     values::{self, ParseValueAssignmentStage},
     AstParser,
 };
@@ -252,14 +257,9 @@ fn parse_subtype_element(
             });
             SubtypeElement::SingleValue(single_value)
         }
-        AstSubtypeElement::ContainedSubtype(contained_subtype) => {
-            SubtypeElement::ContainedSubtype(types::parse_type(
-                parser,
-                &contained_subtype.element.0,
-                parameters,
-                TypeContext::Contextless,
-            )?)
-        }
+        AstSubtypeElement::ContainedSubtype(contained_subtype) => SubtypeElement::ContainedSubtype(
+            types::parse_type(parser, &contained_subtype.element.0, parameters)?,
+        ),
         AstSubtypeElement::ValueRangeConstraint(value_range) => {
             match &constrained_type.ty {
                 BuiltinType::Integer(_) => (),
@@ -468,7 +468,7 @@ fn parse_contents_constraint(
         AstContentsConstraint::Containing(containing) => (&containing.element.0, None),
         AstContentsConstraint::EncodedBy(eb) => (&eb.element.ty, Some(&eb.element.value)),
     };
-    let ty = types::parse_type(parser, ty, parameters, TypeContext::Contextless)?;
+    let ty = types::parse_type(parser, ty, parameters)?;
     let encoded_by = match encoded_by {
         Some(encoded_by) => Some(values::parse_value(
             parser,
@@ -514,44 +514,38 @@ fn parse_inner_type_constraints(
             )?)
         }
         AstInnerTypeConstraints::MultipleTypeConstraints(multiple) => {
-            let (is_choice, components): (
-                bool,
-                Vec<(&AstElement<String>, &Box<TaggedType>, bool)>,
-            ) = match &constrained_type.ty {
-                BuiltinType::Structure(structure) => (
-                    false,
-                    structure
-                        .components
-                        .iter()
-                        .map(|component| {
-                            (
-                                &component.name,
-                                &component.component_type,
-                                component.optional,
-                            )
+            let (is_choice, components): (bool, Vec<(AstElement<String>, Box<TaggedType>, bool)>) =
+                match &constrained_type.ty {
+                    BuiltinType::Structure(structure) => (
+                        false,
+                        structure
+                            .resolve_components(parser.context)?
+                            .into_iter()
+                            .map(|component| {
+                                (component.name, component.component_type, component.optional)
+                            })
+                            .collect(),
+                    ),
+                    BuiltinType::Choice(choice) => (
+                        true,
+                        choice
+                            .resolve_alternatives(parser.context)?
+                            .into_iter()
+                            .map(|alternative| {
+                                (alternative.name, alternative.alternative_type, false)
+                            })
+                            .collect(),
+                    ),
+                    other => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "inner type constraints cannot be applied to type {}",
+                                other
+                            )),
+                            loc: itc.loc,
                         })
-                        .collect(),
-                ),
-                BuiltinType::Choice(choice) => (
-                    true,
-                    choice
-                        .alternatives
-                        .iter()
-                        .map(|alternative| {
-                            (&alternative.name, &alternative.alternative_type, false)
-                        })
-                        .collect(),
-                ),
-                other => {
-                    return Err(Error {
-                        kind: ErrorKind::Ast(format!(
-                            "inner type constraints cannot be applied to type {}",
-                            other
-                        )),
-                        loc: itc.loc,
-                    })
-                }
-            };
+                    }
+                };
 
             let (kind, ast_components) = match &multiple.element.0.element {
                 AstTypeConstraintSpec::FullSpec(spec) => {
@@ -731,7 +725,9 @@ fn parse_constrained_type(
             AstUntaggedType::BuiltinType(builtin) => match &builtin.element {
                 AstBuiltinType::Structure(structure) => {
                     let resolved_components = match &constrained_type.ty {
-                        BuiltinType::Structure(structure) => &structure.components,
+                        BuiltinType::Structure(structure) => {
+                            &structure.resolve_components(parser.context)?
+                        }
                         _ => unreachable!(),
                     };
 
@@ -787,7 +783,7 @@ fn parse_constrained_type(
                 }
                 AstBuiltinType::Choice(choice) => {
                     let resolved_alternatives = match &constrained_type.ty {
-                        BuiltinType::Choice(choice) => &choice.alternatives,
+                        BuiltinType::Choice(choice) => &choice.resolve_alternatives(parser.context)?,
                         _ => unreachable!(),
                     };
 
@@ -1000,7 +996,7 @@ pub(crate) fn parse_type_assignment_constraint_with_resolved_type(
         if let Parameter::Type { ast, tagged_type } = param {
             let constrained_type = tagged_type.resolve(parser.context)?;
             let constraint = parse_type_constraint(parser, ast, &constrained_type, &[])?;
-            apply_pending_constraint(tagged_type, constraint);
+            apply_pending_constraint(parser.context, tagged_type, constraint)?;
         }
     }
 
@@ -1051,7 +1047,11 @@ pub fn parse_type_assignment_constraint(
     }
 }
 
-pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingConstraint) {
+pub fn apply_pending_constraint(
+    context: &Context,
+    tagged_type: &mut TaggedType,
+    pending: PendingConstraint,
+) -> Result<()> {
     if let Some(constraints) = pending.constraints {
         tagged_type.constraints = Some(constraints);
     }
@@ -1059,14 +1059,15 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
         match &mut tagged_type.ty {
             UntaggedType::BuiltinType(builtin) => match builtin {
                 BuiltinType::Structure(structure) => {
+                    let mut components = structure.resolve_components(context)?;
                     for (component_name, pending) in pending.component_constraints {
-                        let component = structure
-                            .components
+                        let component = components
                             .iter_mut()
                             .find(|component| component.name.element == component_name)
                             .expect("pending constraint component not found in type");
-                        apply_pending_constraint(&mut component.component_type, pending);
+                        apply_pending_constraint(context, &mut component.component_type, pending)?;
                     }
+                    structure.set_resolved_components(components);
                 }
                 BuiltinType::StructureOf(of) => {
                     if pending.component_constraints.len() != 1 {
@@ -1077,7 +1078,11 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
                     }
                     let (_, component_constraint) =
                         pending.component_constraints.into_iter().next().unwrap();
-                    apply_pending_constraint(&mut of.component_type, component_constraint);
+                    apply_pending_constraint(
+                        context,
+                        &mut of.component_type,
+                        component_constraint,
+                    )?;
                 }
                 BuiltinType::Choice(choice) => {
                     for (alternative_name, pending) in pending.component_constraints {
@@ -1086,7 +1091,11 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
                             .iter_mut()
                             .find(|alternative| alternative.name.element == alternative_name)
                             .expect("pending constraint alternative not found in type");
-                        apply_pending_constraint(&mut alternative.alternative_type, pending);
+                        apply_pending_constraint(
+                            context,
+                            &mut alternative.alternative_type,
+                            pending,
+                        )?;
                     }
                 }
                 _ => unreachable!(),
@@ -1094,4 +1103,6 @@ pub fn apply_pending_constraint(tagged_type: &mut TaggedType, pending: PendingCo
             _ => unreachable!("typereference aliases can't have constrained components"),
         }
     }
+
+    Ok(())
 }
