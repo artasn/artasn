@@ -277,50 +277,68 @@ fn parse_subtype_element(
             }
             SubtypeElement::ValueRange(ValueRange {
                 lower: match &value_range.element.lower.element {
-                    AstRangeLowerBound::Value(value) => {
-                        RangeLowerBound::Eq(resolve_value!(value, {
-                            values::parse_value(
-                                parser,
-                                ParseValueAssignmentStage::Normal,
-                                value,
-                                constrained_type,
-                            )?
-                        }))
+                    AstRangeLowerBound::RangeLowerBoundValue(value) => {
+                        RangeLowerBound::Eq(match &value.element {
+                            AstRangeLowerBoundValue::Min(_) => RangeBoundValue::Unbounded,
+                            AstRangeLowerBoundValue::Value(value) => {
+                                RangeBoundValue::Integer(resolve_value!(value, {
+                                    values::parse_value(
+                                        parser,
+                                        ParseValueAssignmentStage::Normal,
+                                        value,
+                                        constrained_type,
+                                    )?
+                                }))
+                            }
+                        })
                     }
                     AstRangeLowerBound::GtValue(value) => {
-                        RangeLowerBound::Gt(resolve_value!(&value.element.0, {
-                            values::parse_value(
-                                parser,
-                                ParseValueAssignmentStage::Normal,
-                                &value.element.0,
-                                constrained_type,
-                            )?
-                        }))
+                        RangeLowerBound::Gt(match &value.element.0.element {
+                            AstRangeLowerBoundValue::Min(_) => RangeBoundValue::Unbounded,
+                            AstRangeLowerBoundValue::Value(value) => {
+                                RangeBoundValue::Integer(resolve_value!(value, {
+                                    values::parse_value(
+                                        parser,
+                                        ParseValueAssignmentStage::Normal,
+                                        value,
+                                        constrained_type,
+                                    )?
+                                }))
+                            }
+                        })
                     }
-                    AstRangeLowerBound::Min(_) => RangeLowerBound::Min,
                 },
                 upper: match &value_range.element.upper.element {
-                    AstRangeUpperBound::Value(value) => {
-                        RangeUpperBound::Eq(resolve_value!(value, {
-                            values::parse_value(
-                                parser,
-                                ParseValueAssignmentStage::Normal,
-                                value,
-                                constrained_type,
-                            )?
-                        }))
+                    AstRangeUpperBound::RangeUpperBoundValue(value) => {
+                        RangeUpperBound::Eq(match &value.element {
+                            AstRangeUpperBoundValue::Max(_) => RangeBoundValue::Unbounded,
+                            AstRangeUpperBoundValue::Value(value) => {
+                                RangeBoundValue::Integer(resolve_value!(value, {
+                                    values::parse_value(
+                                        parser,
+                                        ParseValueAssignmentStage::Normal,
+                                        value,
+                                        constrained_type,
+                                    )?
+                                }))
+                            }
+                        })
                     }
                     AstRangeUpperBound::LtValue(value) => {
-                        RangeUpperBound::Lt(resolve_value!(&value.element.0, {
-                            values::parse_value(
-                                parser,
-                                ParseValueAssignmentStage::Normal,
-                                &value.element.0,
-                                constrained_type,
-                            )?
-                        }))
+                        RangeUpperBound::Lt(match &value.element.0.element {
+                            AstRangeUpperBoundValue::Max(_) => RangeBoundValue::Unbounded,
+                            AstRangeUpperBoundValue::Value(value) => {
+                                RangeBoundValue::Integer(resolve_value!(value, {
+                                    values::parse_value(
+                                        parser,
+                                        ParseValueAssignmentStage::Normal,
+                                        value,
+                                        constrained_type,
+                                    )?
+                                }))
+                            }
+                        })
                     }
-                    AstRangeUpperBound::Max(_) => RangeUpperBound::Max,
                 },
             })
         }

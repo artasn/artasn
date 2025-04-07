@@ -434,6 +434,10 @@ json_compile_test!(
     "../../test-data/compile/ChoiceInnerTypeConstraintTest"
 );
 json_compile_test!(
+    test_constraint_subsets,
+    "../../test-data/compile/ConstraintSubsetTest"
+);
+json_compile_test!(
     test_matching_imports,
     "../../test-data/compile/import/",
     "MatchingImportTest",

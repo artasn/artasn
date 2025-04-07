@@ -562,27 +562,31 @@ rule SizeConstraint {
     return constraint
 }
 
-variant RangeLowerBound = Min {
-    keyword MIN
-} | GtValue {
+variant RangeLowerBound = GtValue {
     captures {
-        value = Value
+        value = RangeLowerBoundValue
     }
-    value = Value
+    value = RangeLowerBoundValue
     operator <
     return value
+} | RangeLowerBoundValue | error { "expecting a range lower bound" };
+
+variant RangeLowerBoundValue = Min {
+    keyword MIN
 } | Value | error { "expecting a range lower bound" };
 
-variant RangeUpperBound = Max {
-    keyword MAX
-} | LtValue {
+variant RangeUpperBound = LtValue {
     captures {
-        value = Value
+        value = RangeUpperBoundValue
     }
     operator <
     persist
-    value = Value
+    value = RangeUpperBoundValue
     return value
+} | RangeUpperBoundValue | error { "expecting a range upper bound" };
+
+variant RangeUpperBoundValue = Max {
+    keyword MAX
 } | Value | error { "expecting a range upper bound" };
 
 variant InnerTypeConstraints = SingleTypeConstraint | MultipleTypeConstraints;

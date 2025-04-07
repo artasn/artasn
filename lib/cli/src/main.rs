@@ -50,7 +50,7 @@ enum TransferSyntaxName {
     XER,
     #[value(name = "CXER")]
     CXER,
-    #[value(name = "E-CER")]
+    #[value(name = "E-XER")]
     EXER,
     #[value(name = "OER")]
     OER,

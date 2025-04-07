@@ -199,11 +199,9 @@ pub fn verify_type(context: &Context, declared_type: &TaggedType) -> Result<()> 
         _ => (),
     }
 
-    if let Some(constraints) = resolved_ty.constraints {
+    if let Some(constraints) = &resolved_ty.constraints {
         // verify that the type's constraint is valid
-        for constraint in constraints {
-            constraint.resolve(context, &resolved_ty.ty)?;
-        }
+        Constraint::resolve_subsets(context, constraints, &resolved_ty.ty)?;
     }
 
     Ok(())

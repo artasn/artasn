@@ -1,0 +1,12 @@
+[
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:8",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:9",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:14",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:15",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:20",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:21",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:28",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:29",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:35",
+    "compile error: value violates constraints of type at ConstraintSubsetTest.asn:36"
+]

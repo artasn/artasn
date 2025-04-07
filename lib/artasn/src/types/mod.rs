@@ -217,7 +217,7 @@ impl TaggedType {
         let mut tag = self.tag.as_ref();
         let mut constraint_subsets = Vec::new();
         if let Some(constraints) = &self.constraints {
-            constraint_subsets.extend(constraints);
+            constraint_subsets.extend(constraints.iter().rev());
         }
         loop {
             match &tagged_ty.ty {
@@ -240,8 +240,11 @@ impl TaggedType {
                         // this is equivalent to the definition:
                         //   I ::= INTEGER (0..10) (8..<MAX)
                         constraints: {
-                            let constraints =
-                                constraint_subsets.into_iter().cloned().collect::<Vec<_>>();
+                            let constraints = constraint_subsets
+                                .into_iter()
+                                .rev()
+                                .cloned()
+                                .collect::<Vec<_>>();
                             if constraints.is_empty() {
                                 None
                             } else {
@@ -262,7 +265,7 @@ impl TaggedType {
                     tagged_ty = &decl.ty;
                     tag = tag.or(tagged_ty.tag.as_ref());
                     if let Some(constraints) = &tagged_ty.constraints {
-                        constraint_subsets.extend(constraints);
+                        constraint_subsets.extend(constraints.iter().rev());
                     }
                 }
                 UntaggedType::ObjectClassField(ocf) => {
@@ -277,7 +280,7 @@ impl TaggedType {
                                     tagged_ty = tagged_type;
                                     tag = tag.or(tagged_ty.tag.as_ref());
                                     if let Some(constraints) = &tagged_ty.constraints {
-                                        constraint_subsets.extend(constraints);
+                                        constraint_subsets.extend(constraints.iter().rev());
                                     }
                                 }
                                 _ => return Err(Error {

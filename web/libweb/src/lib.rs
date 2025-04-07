@@ -159,7 +159,10 @@ fn serialize_tagged_type(context: &Context, tagged_type: &TaggedType) -> JsValue
             Reflect::set(
                 &obj,
                 &"class".into(),
-                &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&ocf.class_type.as_ref().element)).unwrap(),
+                &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(
+                    &ocf.class_type.as_ref().element,
+                ))
+                .unwrap(),
             )
             .unwrap();
             Reflect::set(&obj, &"field".into(), &ocf.field.as_ref().element.into()).unwrap();
@@ -247,18 +250,7 @@ fn serialize_builtin_value(
     resolved_type: &ResolvedType,
 ) -> JsValue {
     let obj = Object::new();
-    Reflect::set(
-        &obj,
-        &"type".into(),
-        &match value {
-            BuiltinValue::SequenceOf(_) => String::from("SEQUENCE OF"),
-            BuiltinValue::SetOf(_) => String::from("SET OF"),
-            BuiltinValue::Choice(_) => String::from("CHOICE"),
-            other => other.tag_type(context).expect("tag_type").to_string(),
-        }
-        .into(),
-    )
-    .unwrap();
+    Reflect::set(&obj, &"type".into(), &resolved_type.ty.to_string().into()).unwrap();
     let (field, data) = match value {
         BuiltinValue::Boolean(boolean) => ("value", (*boolean).into()),
         BuiltinValue::Integer(int) => {
@@ -321,7 +313,7 @@ fn serialize_builtin_value(
             ("value", oid.to_string().into())
         }
         BuiltinValue::RealLiteral(lit) => ("value", lit.to_string().into()),
-        BuiltinValue::Sequence(sequence) => {
+        BuiltinValue::Structure(_, sequence) => {
             let components = Array::new();
             for component in &sequence.components {
                 let obj = Object::new();
@@ -336,7 +328,7 @@ fn serialize_builtin_value(
             }
             ("components", components.into())
         }
-        BuiltinValue::SequenceOf(seq_of) => {
+        BuiltinValue::StructureOf(_, seq_of) => {
             let elements = Array::new();
             for ast_element in seq_of {
                 elements.push(&serialize_typed_value(context, &ast_element.element));

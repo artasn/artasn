@@ -1,0 +1,38 @@
+ConstraintSubsetTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+I1 ::= INTEGER (1..4)
+i1-valid1   I1 ::= 1
+i1-valid2   I1 ::= 2
+i1-valid3   I1 ::= 3
+i1-valid4   I1 ::= 4
+i1-invalid1 I1 ::= 0
+i1-invalid2 I1 ::= 5
+
+I1-Subset1 ::= I1 (1<..<4)
+i1-subset1-valid1   I1-Subset1 ::= 2
+i1-subset1-valid2   I1-Subset1 ::= 3
+i1-subset1-invalid1 I1-Subset1 ::= 1
+i1-subset1-invalid2 I1-Subset1 ::= 4
+
+I1-Subset2 ::= I1 (MIN<..<MAX)
+i1-subset2-valid1   I1-Subset2 ::= 2
+i1-subset2-valid2   I1-Subset2 ::= 3
+i1-subset2-invalid1 I1-Subset2 ::= 1
+i1-subset2-invalid2 I1-Subset2 ::= 4
+
+I2 ::= INTEGER (0..5)
+
+I2-Derived1 ::= I2 (1..4) (2..3)
+i2-derived1-valid1   I2-Derived1 ::= 2
+i2-derived1-valid2   I2-Derived1 ::= 3
+i2-derived1-invalid1 I2-Derived1 ::= 1
+i2-derived1-invalid2 I2-Derived1 ::= 4
+
+I2-Derived2-P ::= I2 (1..4)
+I2-Derived2 ::= I2-Derived2-P (2..3)
+i2-derived2-valid1   I2-Derived2 ::= 2
+i2-derived2-valid2   I2-Derived2 ::= 3
+i2-derived2-invalid1 I2-Derived2 ::= 1
+i2-derived2-invalid2 I2-Derived2 ::= 4
+
+END

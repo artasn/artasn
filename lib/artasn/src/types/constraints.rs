@@ -8,15 +8,12 @@ use itertools::Itertools;
 use num::{bigint::Sign, BigInt};
 
 use crate::{
-    compiler::{
-        parser::{AstElement, Error, ErrorKind, Loc, Result},
-        Context,
-    },
+    compiler::{parser::*, Context},
     module::QualifiedIdentifier,
-    values::{BuiltinValue, ResolvedValue, TryEq, TypedValue, ValueResolve},
+    values::*,
 };
 
-use super::{BuiltinType, ResolvedType, TagType, TaggedType};
+use super::*;
 
 macro_rules! resolve_integer {
     ( $context:expr, $constant:expr ) => {{
@@ -485,11 +482,12 @@ impl ConstraintTree {
         &self,
         context: &Context,
         constrained_type: &BuiltinType,
+        parent_bounds: (Option<&BigInt>, Option<&BigInt>),
     ) -> Result<Vec<ConstraintSpecItem>> {
         Ok(match self {
             Self::BinaryExpr { lhs, op, rhs } => {
-                let lhs = lhs.resolve(context, constrained_type)?;
-                let rhs = rhs.resolve(context, constrained_type)?;
+                let lhs = lhs.resolve(context, constrained_type, parent_bounds)?;
+                let rhs = rhs.resolve(context, constrained_type, parent_bounds)?;
                 eval_binary_expr(constrained_type, lhs, op, rhs)?
             }
             Self::Element(element) => match &element.element {
@@ -501,7 +499,7 @@ impl ConstraintTree {
                     ))]
                 }
                 SubtypeElement::ValueRange(range) => {
-                    let range = range.resolve(context)?;
+                    let range = range.resolve(context, parent_bounds)?;
                     vec![ConstraintSpecItem::Value(AstElement::new(
                         ValueConstraint::Range(range),
                         element.loc,
@@ -532,8 +530,11 @@ impl ConstraintTree {
                     }
                 }
                 SubtypeElement::Size(size) => {
-                    let size_constraint =
-                        size.resolve(context, &BuiltinType::universal(TagType::Integer))?;
+                    let size_constraint = size.resolve(
+                        context,
+                        &BuiltinType::universal(TagType::Integer),
+                        parent_bounds,
+                    )?;
                     vec![ConstraintSpecItem::Size(size_constraint)]
                 }
                 SubtypeElement::InnerType(inner_type) => {
@@ -925,7 +926,12 @@ fn eval_value_set_binary_expr<
                                 ty: ResolvedType::universal(TagType::Integer),
                                 value: BuiltinValue::Integer(int),
                             }),
-                            Bound::Unbounded => panic!("start == end but bound == Unbounded"),
+                            // this only happens when expr is MIN..MAX ^ MIN..MAX
+                            // TODO: test for other cases that this occurs
+                            Bound::Unbounded => ValueConstraint::Range(ResolvedValueRange {
+                                lower: Bound::Unbounded,
+                                upper: Bound::Unbounded,
+                            }),
                         }),
                         Ordering::Greater => None,
                     };
@@ -969,17 +975,39 @@ impl Constraint {
         subsets: &[Constraint],
         constrained_type: &BuiltinType,
     ) -> Result<ResolvedConstraint> {
+        let mut resolved = subsets[0].resolve(context, constrained_type, (None, None))?;
         if subsets.len() > 1 {
-            let resolved = subsets[0].resolve(context, constrained_type)?;
-            let mut last_loc = resolved.loc;
-            let mut is_extensible = resolved.is_extensible;
-            let mut resolved_specs = resolved.specs;
+            let mut has_value_constraint = subsets[0].element_sets[0]
+                .tree
+                .has_value_constraint(context)?;
             for subset in subsets.iter().skip(1) {
-                let resolved_subset = subset.resolve(context, constrained_type)?;
+                if !has_value_constraint {
+                    has_value_constraint =
+                        subset.element_sets[0].tree.has_value_constraint(context)?;
+                }
+
+                let integer_value_bounds = resolved.integer_value_bounds()?;
+                let parent_bounds = match integer_value_bounds {
+                    Some(bounds) => (
+                        match bounds.lower_bound {
+                            Bound::Integer(int) => Some(int),
+                            Bound::Unbounded => None,
+                        },
+                        match bounds.upper_bound.expect("upper_bound") {
+                            Bound::Integer(int) => Some(int),
+                            Bound::Unbounded => None,
+                        },
+                    ),
+                    None => (None, None),
+                };
+
+                let resolved_subset = subset.resolve(
+                    context,
+                    constrained_type,
+                    (parent_bounds.0.as_ref(), parent_bounds.1.as_ref()),
+                )?;
                 let op = AstElement::new(ConstraintTreeOperator::Intersection, resolved_subset.loc);
-                is_extensible = resolved_subset.is_extensible;
-                last_loc = resolved_subset.loc;
-                resolved_specs = resolved_subset
+                let resolved_specs = resolved_subset
                     .specs
                     .into_iter()
                     .map(|spec| {
@@ -987,33 +1015,51 @@ impl Constraint {
                             is_extension: spec.is_extension,
                             items: eval_binary_expr(
                                 constrained_type,
-                                resolved_specs[0].items.clone(),
+                                resolved.specs[0].items.clone(),
                                 &op,
                                 spec.items,
                             )?,
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
+                resolved = ResolvedConstraint {
+                    specs: resolved_specs,
+                    is_extensible: subset.is_extensible,
+                    loc: subset.loc,
+                };
             }
-            Ok(ResolvedConstraint {
-                specs: resolved_specs,
-                is_extensible,
-                loc: last_loc,
-            })
+
+            if has_value_constraint {
+                let kinds = collect_spec_item_kinds(&resolved.specs[0].items);
+                if !kinds.contains(&ConstraintSpecItemKind::Value) {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "there must be at least one value that satisfies the constraint"
+                                .to_string(),
+                        ),
+                        loc: resolved.loc,
+                    });
+                }
+            }
+
+            Ok(resolved)
         } else {
-            subsets[0].resolve(context, constrained_type)
+            Ok(resolved)
         }
     }
 
-    pub fn resolve(
+    fn resolve(
         &self,
         context: &Context,
         constrained_type: &BuiltinType,
+        parent_bounds: (Option<&BigInt>, Option<&BigInt>),
     ) -> Result<ResolvedConstraint> {
         let mut specs = Vec::with_capacity(self.element_sets.len());
         for element_set in &self.element_sets {
             specs.push(ConstraintSpec {
-                items: element_set.tree.resolve(context, constrained_type)?,
+                items: element_set
+                    .tree
+                    .resolve(context, constrained_type, parent_bounds)?,
                 is_extension: element_set.is_extension,
             });
         }
@@ -1021,8 +1067,8 @@ impl Constraint {
         let mut has_value_constraint = false;
         let mut one_value_satisfies = false;
         for (element_set, spec) in self.element_sets.iter().zip(&specs) {
-            if !has_value_constraint && element_set.tree.has_value_constraint(context)? {
-                has_value_constraint = true;
+            if !has_value_constraint {
+                has_value_constraint = element_set.tree.has_value_constraint(context)?;
             }
 
             if has_value_constraint {
@@ -1184,6 +1230,29 @@ impl MultipleTypeConstraints {
         value_type: &BuiltinType,
         value: &BuiltinValue,
     ) -> Result<bool> {
+        macro_rules! resolve_constraints {
+            ($constraint:expr, $constrained_type:expr) => {{
+                let constraint = $constraint;
+                let constrained_type = $constrained_type;
+                // if the component has constraints, use them as the parent, and use the component constraint as the subset
+                let mut constraints = match &constrained_type.constraints {
+                    Some(constraints) => {
+                        let mut subsets = Vec::with_capacity(constraints.len() + 1);
+                        subsets.extend(constraints.iter().cloned());
+                        subsets
+                    }
+                    None => Vec::with_capacity(1),
+                };
+                constraints.push(constraint.clone());
+
+                Constraint::resolve_subsets(
+                    context,
+                    &constraints,
+                    &constrained_type.ty,
+                )?
+            }};
+        }
+
         match (value_type, value) {
             (BuiltinType::Structure(ty), BuiltinValue::Structure(_, val)) => {
                 match self.kind {
@@ -1227,10 +1296,9 @@ impl MultipleTypeConstraints {
                     if let (Some(constraint), Some(component)) =
                         (&constraint.value, value_component)
                     {
-                        // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
                         let constrained_type =
                             ty_component.unwrap().component_type.resolve(context)?;
-                        let constraint = constraint.resolve(context, &constrained_type.ty)?;
+                        let constraint = resolve_constraints!(constraint, &constrained_type);
 
                         if constrained_type
                             .ty
@@ -1280,9 +1348,8 @@ impl MultipleTypeConstraints {
                     }
 
                     if let Some(constraint) = &alternative_constraint.value {
-                        // TODO: ensure that (component's original constraint) INTERSECTION (component constraint in ITC) != None
                         let constrained_type = ty_alternative.alternative_type.resolve(context)?;
-                        let constraint = constraint.resolve(context, &constrained_type.ty)?;
+                        let constraint = resolve_constraints!(constraint, &constrained_type);
 
                         if constrained_type
                             .ty
@@ -1327,42 +1394,88 @@ pub struct ValueRange {
 }
 
 impl ValueRange {
-    pub fn resolve(&self, context: &Context) -> Result<ResolvedValueRange> {
+    pub fn resolve(
+        &self,
+        context: &Context,
+        parent_bounds: (Option<&BigInt>, Option<&BigInt>),
+    ) -> Result<ResolvedValueRange> {
         Ok(ResolvedValueRange {
-            lower: self.lower_value(context)?,
-            upper: self.upper_value(context)?,
+            lower: self.lower_value(context, parent_bounds.0)?,
+            upper: self.upper_value(context, parent_bounds.1)?,
         })
     }
 
-    pub fn lower_value(&self, context: &Context) -> Result<Bound> {
+    pub fn lower_value(
+        &self,
+        context: &Context,
+        parent_lower_bound: Option<&BigInt>,
+    ) -> Result<Bound> {
         Ok(match &self.lower {
-            RangeLowerBound::Min => Bound::Unbounded,
-            RangeLowerBound::Eq(value) => Bound::Integer(resolve_integer!(context, value).clone()),
-            RangeLowerBound::Gt(value) => Bound::Integer(resolve_integer!(context, value) + 1),
+            RangeLowerBound::Eq(value) => match (value, parent_lower_bound) {
+                (RangeBoundValue::Unbounded, None) => Bound::Unbounded,
+                (RangeBoundValue::Unbounded, Some(parent_lower_bound)) => {
+                    Bound::Integer(parent_lower_bound.clone())
+                }
+                (RangeBoundValue::Integer(value), _) => {
+                    Bound::Integer(resolve_integer!(context, value).clone())
+                }
+            },
+            RangeLowerBound::Gt(value) => match (value, parent_lower_bound) {
+                (RangeBoundValue::Unbounded, None) => Bound::Unbounded,
+                (RangeBoundValue::Unbounded, Some(parent_lower_bound)) => {
+                    Bound::Integer(parent_lower_bound + 1)
+                }
+                (RangeBoundValue::Integer(value), _) => {
+                    Bound::Integer(resolve_integer!(context, value) + 1)
+                }
+            },
         })
     }
 
-    pub fn upper_value(&self, context: &Context) -> Result<Bound> {
+    pub fn upper_value(
+        &self,
+        context: &Context,
+        parent_upper_bound: Option<&BigInt>,
+    ) -> Result<Bound> {
         Ok(match &self.upper {
-            RangeUpperBound::Max => Bound::Unbounded,
-            RangeUpperBound::Eq(value) => Bound::Integer(resolve_integer!(context, value).clone()),
-            RangeUpperBound::Lt(value) => Bound::Integer(resolve_integer!(context, value) - 1),
+            RangeUpperBound::Eq(value) => match (value, parent_upper_bound) {
+                (RangeBoundValue::Unbounded, None) => Bound::Unbounded,
+                (RangeBoundValue::Unbounded, Some(parent_upper_bound)) => {
+                    Bound::Integer(parent_upper_bound.clone())
+                }
+                (RangeBoundValue::Integer(value), _) => {
+                    Bound::Integer(resolve_integer!(context, value).clone())
+                }
+            },
+            RangeUpperBound::Lt(value) => match (value, parent_upper_bound) {
+                (RangeBoundValue::Unbounded, None) => Bound::Unbounded,
+                (RangeBoundValue::Unbounded, Some(parent_upper_bound)) => {
+                    Bound::Integer(parent_upper_bound - 1)
+                }
+                (RangeBoundValue::Integer(value), _) => {
+                    Bound::Integer(resolve_integer!(context, value) - 1)
+                }
+            },
         })
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum RangeLowerBound {
-    Eq(AstElement<TypedValue>),
-    Gt(AstElement<TypedValue>),
-    Min,
+    Eq(RangeBoundValue),
+    Gt(RangeBoundValue),
 }
 
 #[derive(Debug, Clone)]
 pub enum RangeUpperBound {
-    Eq(AstElement<TypedValue>),
-    Lt(AstElement<TypedValue>),
-    Max,
+    Eq(RangeBoundValue),
+    Lt(RangeBoundValue),
+}
+
+#[derive(Debug, Clone)]
+pub enum RangeBoundValue {
+    Integer(AstElement<TypedValue>),
+    Unbounded,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1642,7 +1755,7 @@ mod test {
 
                 let decl = context.lookup_type(&ident).unwrap();
                 decl.ty.constraints.as_ref().unwrap()[0]
-                    .resolve(context, &decl.ty.resolve(context).unwrap().ty)
+                    .resolve(context, &decl.ty.resolve(context).unwrap().ty, (None, None))
                     .expect("failed to resolve constraint")
             }
             _ => panic!(),
