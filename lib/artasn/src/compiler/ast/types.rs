@@ -55,57 +55,73 @@ fn parse_structure_components(
     components: &[&AstElement<AstStructureComponent>],
     parameters: &[(&String, &Parameter)],
 ) -> Result<(Vec<StructureComponent>, bool)> {
-    let has_tags = components
-        .iter()
-        .any(|component| matches!(&component.element.ty.element, AstType::TaggedType(_)));
+    let has_tags = components.iter().any(|component| match &component.element {
+        AstStructureComponent::NamedStructureComponent(named) => {
+            matches!(&named.element.ty.element, AstType::TaggedType(_))
+        }
+        AstStructureComponent::ComponentsOf(_) => false,
+    });
     let components = components
         .iter()
-        .map(|component| {
-            let forbidden_ident = match component.element.name.element.0.as_str() {
-                "artasn-special" if parser.module != REAL_IDENT.module => Some("artasn-special"),
-                "artasn-external" if parser.module != EXTERNAL_IDENT.module => {
-                    Some("artasn-external")
+        .map(|component| match &component.element {
+            AstStructureComponent::NamedStructureComponent(component) => {
+                let forbidden_ident = match component.element.name.element.0.as_str() {
+                    "artasn-special" if parser.module != REAL_IDENT.module => {
+                        Some("artasn-special")
+                    }
+                    "artasn-external" if parser.module != EXTERNAL_IDENT.module => {
+                        Some("artasn-external")
+                    }
+                    _ => None,
+                };
+                if let Some(forbidden_ident) = forbidden_ident {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "{} is a forbidden identifier",
+                            forbidden_ident
+                        )),
+                        loc: component.element.name.loc,
+                    });
                 }
-                _ => None,
-            };
-            if let Some(forbidden_ident) = forbidden_ident {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!("{} is a forbidden identifier", forbidden_ident)),
-                    loc: component.element.name.loc,
-                });
-            }
 
-            let ty = parse_type(parser, &component.element.ty, parameters)?;
+                let ty = parse_type(parser, &component.element.ty, parameters)?;
 
-            Ok(StructureComponent {
-                name: component.element.name.as_ref().map(|name| name.0.clone()),
-                default_value: component.element.default.as_ref().map(|default| {
-                    if let AstValue::DefinedValue(valref) = &default.element {
-                        if valref.element.external_module.is_none() {
-                            let val_param =
-                                parameters
-                                    .iter()
-                                    .find_map(|(name, parameter)| match parameter {
-                                        Parameter::Value { value_type, value } => {
-                                            if *name == &valref.element.value.element.0 {
-                                                Some((value_type, value))
-                                            } else {
-                                                None
+                Ok(StructureComponent::Named(NamedStructureComponent {
+                    name: component.element.name.as_ref().map(|name| name.0.clone()),
+                    default_value: component.element.default.as_ref().map(|default| {
+                        if let AstValue::DefinedValue(valref) = &default.element {
+                            if valref.element.external_module.is_none() {
+                                let val_param =
+                                    parameters.iter().find_map(
+                                        |(name, parameter)| match parameter {
+                                            Parameter::Value { value_type, value } => {
+                                                if *name == &valref.element.value.element.0 {
+                                                    Some((value_type, value))
+                                                } else {
+                                                    None
+                                                }
                                             }
-                                        }
-                                        _ => None,
-                                    });
-                            if let Some((_, value)) = val_param {
-                                return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                                            _ => None,
+                                        },
+                                    );
+                                if let Some((_, value)) = val_param {
+                                    return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                                }
                             }
                         }
-                    }
 
-                    LazyParsedDefaultValue::new(default.clone(), default_value_lazy_parser)
-                }),
-                optional: component.element.optional,
-                component_type: Box::new(ty),
-            })
+                        LazyParsedDefaultValue::new(default.clone(), default_value_lazy_parser)
+                    }),
+                    optional: component.element.optional,
+                    component_type: Box::new(ty),
+                }))
+            }
+            AstStructureComponent::ComponentsOf(of) => {
+                Ok(StructureComponent::ComponentsOf(AstElement::new(
+                    Box::new(parse_type(parser, &of.element.0, parameters)?),
+                    of.element.0.loc,
+                )))
+            }
         })
         .collect::<Result<Vec<StructureComponent>>>()?;
     Ok((components, has_tags))

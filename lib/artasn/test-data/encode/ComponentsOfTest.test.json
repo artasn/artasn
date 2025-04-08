@@ -1,0 +1,98 @@
+{
+    "module": "ComponentsOfTest",
+    "tests": ["Encode"],
+    "values": [
+        {
+            "name": "container1",
+            "der": "30158001018101FF820D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner1-container1",
+            "der": "30158001018101FF820D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner1-container2",
+            "der": "301B8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner1-container3",
+            "der": "30198001018101FF820D48656C6C6F2C20576F726C6421830200AA"
+        },
+        {
+            "name": "inner1-container4",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "inner1-container4-p",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "inner1-container5",
+            "der": "301FC104DEADBEEF8001018101FF820D48656C6C6F2C20576F726C6421030200AA"
+        },
+        {
+            "name": "inner1-container5-p",
+            "der": "301FC104DEADBEEF0201010101FF0C0D48656C6C6F2C20576F726C6421030200AA"
+        },
+        {
+            "name": "inner1-container6",
+            "der": "301F0404DEADBEEF8001018101FF820D48656C6C6F2C20576F726C6421C10200AA"
+        },
+        {
+            "name": "inner1-container7",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "container2",
+            "der": "30158001018101FF820D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner2-container1",
+            "der": "30158001018101FF820D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner2-container2",
+            "der": "301B8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421"
+        },
+        {
+            "name": "inner2-container3",
+            "der": "30198001018101FF820D48656C6C6F2C20576F726C6421830200AA"
+        },
+        {
+            "name": "inner2-container4",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "inner2-container4-p",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "inner2-container5",
+            "der": "301FC104DEADBEEF020101C101FF0C0D48656C6C6F2C20576F726C6421030200AA"
+        },
+        {
+            "name": "inner2-container5-p",
+            "der": "301FC104DEADBEEF020101C101FF0C0D48656C6C6F2C20576F726C6421030200AA"
+        },
+        {
+            "name": "inner2-container6",
+            "der": "301F0404DEADBEEF020101C101FF0C0D48656C6C6F2C20576F726C6421C10200AA"
+        },
+        {
+            "name": "inner2-container7",
+            "der": "301F8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA"
+        },
+        {
+            "name": "nested1",
+            "der": "303E8004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AA8504DEADBEEF8601018701FF880D48656C6C6F2C20576F726C6421890200AA"
+        },
+        {
+            "name": "nested2",
+            "der": "30470201010404DEADBEEF0201010101FF0C0D48656C6C6F2C20576F726C6421030200AAC10102C204DEADBEEF0201010101FF0C0D48656C6C6F2C20576F726C6421030200AA020103"
+        },
+        {
+            "name": "nested3",
+            "der": "30470201018004DEADBEEF8101018201FF830D48656C6C6F2C20576F726C6421840200AAC10102C204DEADBEEF0201010101FF0C0D48656C6C6F2C20576F726C6421030200AA020103"
+        }
+    ]
+}

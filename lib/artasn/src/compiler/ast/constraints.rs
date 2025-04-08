@@ -661,6 +661,138 @@ fn parse_type_with_constraint(
         })
 }
 
+fn flatten_structure_components(
+    parser: &AstParser<'_>,
+    structure: &AstElement<AstStructure>,
+) -> Result<Vec<AstNamedStructureComponent>> {
+    let components = types::flatten_structure_components(structure);
+    let mut flattened = Vec::with_capacity(components.len());
+    for component in components {
+        match &component.element {
+            AstStructureComponent::NamedStructureComponent(named) => {
+                flattened.push(named.element.clone());
+            }
+            AstStructureComponent::ComponentsOf(of) => {
+                macro_rules! return_wrong_type_error {
+                    () => {{
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting {}",
+                                match &structure.element.kind.element {
+                                    AstStructureKind::Sequence(_) => "SEQUENCE",
+                                    AstStructureKind::Set(_) => "SET",
+                                }
+                            )),
+                            loc: of.loc,
+                        });
+                    }};
+                }
+
+                let mut ty = &of.element.0;
+                let builtin = 'block: loop {
+                    match &ty.element {
+                        AstType::TaggedType(tagged) => {
+                            ty = &tagged.element.ty;
+                        }
+                        AstType::ConstrainedType(constrained) => match &constrained.element {
+                            AstConstrainedType::Suffixed(suffixed) => {
+                                match &suffixed.element.ty.element {
+                                    AstUntaggedType::BuiltinType(builtin) => break 'block builtin,
+                                    AstUntaggedType::DefinedType(defined) => {
+                                        let defined = types::resolve_defined_type(parser, defined)?;
+                                        let ast_defined = parser.run_with_context(
+                                            &defined.element.module,
+                                            |parser| {
+                                                for assignment in
+                                                    &parser.ast_module.element.body.element.0
+                                                {
+                                                    if let AstAssignment::TypeAssignment(
+                                                        type_assignment,
+                                                    ) = &assignment.element
+                                                    {
+                                                        match &type_assignment
+                                                            .element
+                                                            .subject
+                                                            .element
+                                                        {
+                                                            AstTypeAssignmentSubject::Type(ty) => {
+                                                                return Ok(Some(ty))
+                                                            }
+                                                            _ => return Ok(None),
+                                                        }
+                                                    }
+                                                }
+
+                                                // the call to resolve_defined_type should ensure this never is reached
+                                                unreachable!()
+                                            },
+                                        )?;
+                                        match ast_defined {
+                                            Some(ast_defined) => {
+                                                ty = ast_defined;
+                                            }
+                                            None => return_wrong_type_error!(),
+                                        }
+                                    }
+                                    _ => return_wrong_type_error!(),
+                                }
+                            }
+                            AstConstrainedType::TypeWithConstraint(_) => {
+                                return_wrong_type_error!()
+                            }
+                        },
+                    }
+                };
+
+                match &builtin.element {
+                    AstBuiltinType::Structure(inner_structure) => {
+                        match (
+                            &structure.element.kind.element,
+                            &inner_structure.element.kind.element,
+                        ) {
+                            (AstStructureKind::Sequence(_), AstStructureKind::Sequence(_))
+                            | (AstStructureKind::Set(_), AstStructureKind::Set(_)) => {
+                                flattened
+                                    .extend(flatten_structure_components(parser, inner_structure)?);
+                            }
+                            (expected, found) => {
+                                return Err(Error {
+                                    kind: ErrorKind::Ast(format!(
+                                        "expecting {}, but found {}",
+                                        match expected {
+                                            AstStructureKind::Sequence(_) => "SEQUENCE",
+                                            AstStructureKind::Set(_) => "SET",
+                                        },
+                                        match found {
+                                            AstStructureKind::Sequence(_) => "SEQUENCE",
+                                            AstStructureKind::Set(_) => "SET",
+                                        }
+                                    )),
+                                    loc: inner_structure.loc,
+                                });
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::Ast(format!(
+                                "expecting {}",
+                                match &structure.element.kind.element {
+                                    AstStructureKind::Sequence(_) => "SEQUENCE",
+                                    AstStructureKind::Set(_) => "SET",
+                                }
+                            )),
+                            loc: builtin.loc,
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(flattened)
+}
+
 fn parse_constrained_type(
     parser: &AstParser<'_>,
     ast_constrained_type: &AstElement<AstConstrainedType>,
@@ -731,13 +863,13 @@ fn parse_constrained_type(
                         _ => unreachable!(),
                     };
 
-                    let components = types::flatten_structure_components(structure);
+                    let components = flatten_structure_components(parser, structure)?;
                     let mut component_constraints = Vec::with_capacity(components.len());
                     for component in components {
                         let resolved_component = resolved_components
                             .iter()
                             .find(|resolved_component| {
-                                resolved_component.name.element == component.element.name.element.0
+                                resolved_component.name.element == component.name.element.0
                             })
                             .expect("resolved type missing component from ast type");
                         let component_type = match &resolved_component.component_type.ty {
@@ -747,7 +879,7 @@ fn parse_constrained_type(
                             _ => resolved_component.component_type.resolve(parser.context)?,
                         };
                         if let Some(typeref) =
-                            types::ast_type_as_parameterized_type_reference(&component.element.ty)
+                            types::ast_type_as_parameterized_type_reference(&component.ty)
                         {
                             let (type_assignment, parameters) =
                                 resolve_type_assignment_from_parameterized_type_reference(
@@ -772,7 +904,7 @@ fn parse_constrained_type(
                                 resolved_component.name.element.clone(),
                                 parse_type_constraint(
                                     parser,
-                                    &component.element.ty,
+                                    &component.ty,
                                     &component_type,
                                     parameters,
                                 )?,
@@ -783,7 +915,9 @@ fn parse_constrained_type(
                 }
                 AstBuiltinType::Choice(choice) => {
                     let resolved_alternatives = match &constrained_type.ty {
-                        BuiltinType::Choice(choice) => &choice.resolve_alternatives(parser.context)?,
+                        BuiltinType::Choice(choice) => {
+                            &choice.resolve_alternatives(parser.context)?
+                        }
                         _ => unreachable!(),
                     };
 

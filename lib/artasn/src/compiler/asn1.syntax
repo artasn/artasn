@@ -880,7 +880,16 @@ variant StructureComponentGroup = Extensible | ComponentExtensionGroup {
     operator ]]
 } | StructureComponent;
 
-rule StructureComponent {
+variant StructureComponent = ComponentsOf {
+    captures {
+        structure_type = Type
+    }
+    keyword COMPONENTS
+    persist
+    keyword OF
+    structure_type = Type
+    return structure_type
+} | NamedStructureComponent {
     captures {
         name = ValueReference
         ty = Type
@@ -898,7 +907,7 @@ rule StructureComponent {
         keyword OPTIONAL
         optional = true
     }
-}
+};
 
 rule ObjectClassFieldType {
     captures {

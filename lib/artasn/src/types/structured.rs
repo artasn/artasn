@@ -17,14 +17,20 @@ pub trait ComponentLike: Clone {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructureComponent {
+pub enum StructureComponent {
+    Named(NamedStructureComponent),
+    ComponentsOf(AstElement<Box<TaggedType>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct NamedStructureComponent {
     pub name: AstElement<String>,
     pub component_type: Box<TaggedType>,
     pub optional: bool,
     pub default_value: Option<LazyParsedDefaultValue>,
 }
 
-impl ComponentLike for StructureComponent {
+impl ComponentLike for NamedStructureComponent {
     fn name(&self) -> &AstElement<String> {
         &self.name
     }
@@ -66,7 +72,7 @@ pub struct Structure {
     pub automatic_tagging: bool,
 
     pub(crate) components: Vec<StructureComponent>,
-    resolved_components: RefCell<Option<Vec<StructureComponent>>>,
+    resolved_components: RefCell<Option<Vec<NamedStructureComponent>>>,
 }
 
 impl Structure {
@@ -83,17 +89,17 @@ impl Structure {
         }
     }
 
-    pub fn resolve_components(&self, context: &Context) -> Result<Vec<StructureComponent>> {
+    pub fn resolve_components(&self, context: &Context) -> Result<Vec<NamedStructureComponent>> {
         if self.resolved_components.borrow().is_none() {
             let mut components = Vec::with_capacity(self.components.len());
-            self.resolve_components_internal(context, &mut components, self.automatic_tagging)?;
+            self.resolve_components_internal(context, &mut components, self.automatic_tagging, 0)?;
             *self.resolved_components.borrow_mut() = Some(components);
         }
 
         Ok(self.get_resolved_components())
     }
 
-    pub(crate) fn get_resolved_components(&self) -> Vec<StructureComponent> {
+    pub(crate) fn get_resolved_components(&self) -> Vec<NamedStructureComponent> {
         self.resolved_components
             .borrow()
             .as_ref()
@@ -101,28 +107,72 @@ impl Structure {
             .expect("resolved_components is not yet initialized")
     }
 
-    pub(crate) fn set_resolved_components(&self, components: Vec<StructureComponent>) {
+    pub(crate) fn set_resolved_components(&self, components: Vec<NamedStructureComponent>) {
         *self.resolved_components.borrow_mut() = Some(components);
     }
 
     fn resolve_components_internal(
         &self,
         context: &Context,
-        components: &mut Vec<StructureComponent>,
+        components: &mut Vec<NamedStructureComponent>,
         automatic_tagging: bool,
-    ) -> Result<()> {
+        mut component_offset: u16,
+    ) -> Result<u16> {
+        let start_offset = component_offset;
         for component in &self.components {
-            let mut component = component.clone();
-            resolve_structure_tag(
-                context,
-                &mut component.component_type,
-                automatic_tagging,
-                components.len() as u16,
-            )?;
-            components.push(component);
+            match component {
+                StructureComponent::Named(component) => {
+                    let mut component = component.clone();
+                    resolve_structure_tag(
+                        context,
+                        &mut component.component_type,
+                        automatic_tagging,
+                        component_offset,
+                    )?;
+                    component_offset += 1;
+                    components.push(component);
+                }
+                StructureComponent::ComponentsOf(of) => {
+                    let resolved = of.element.resolve(context)?;
+                    match &resolved.ty {
+                        BuiltinType::Structure(structure) if structure.ty == self.ty => {
+                            let (automatic_tagging, inner_component_offset) = if !automatic_tagging
+                            {
+                                match &of.element.ty {
+                                    UntaggedType::BuiltinType(_) => {
+                                        (false, components.len() as u16)
+                                    }
+                                    UntaggedType::Reference(_) => (structure.automatic_tagging, 0),
+                                    other => panic!("{other:#?}"),
+                                }
+                            } else {
+                                (true, component_offset)
+                            };
+                            let tags_written = structure.resolve_components_internal(
+                                context,
+                                components,
+                                automatic_tagging,
+                                inner_component_offset,
+                            )?;
+                            if self.automatic_tagging {
+                                component_offset += tags_written;
+                            }
+                        }
+                        other => {
+                            return Err(Error {
+                                kind: ErrorKind::Ast(format!(
+                                    "expecting {}, but found {}",
+                                    self.ty, other
+                                )),
+                                loc: of.loc,
+                            })
+                        }
+                    }
+                }
+            }
         }
 
-        Ok(())
+        Ok(component_offset - start_offset)
     }
 }
 

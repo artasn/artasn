@@ -168,7 +168,7 @@ fn find_matching_object_in_set<'a>(
 
 fn find_component_from_series(
     parser: &AstParser<'_>,
-    structures: (&[StructureComponent], &[StructureValueComponent]),
+    structures: (&[NamedStructureComponent], &[StructureValueComponent]),
     component_series: &[AstElement<String>],
 ) -> Result<(TaggedType, AstElement<TypedValue>)> {
     if component_series.is_empty() {
@@ -251,10 +251,10 @@ fn parse_object_class_field_reference<C: ComponentLike>(
     ocf: &ObjectClassFieldReference,
     // If the top-level type is a SEQUENCE or SET type, `root_container` represents the components of that structure.
     // Otherwise, if the root container is a CHOICE, `root_container` is None.
-    root_container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+    root_container: Option<(&[NamedStructureComponent], &[StructureValueComponent])>,
     // If the reference-type field is within a SEQUENCE or SET type, `container` represents the components of that structure.
     // Otherwise, if the container is a CHOICE, `container` is None.
-    container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+    container: Option<(&[NamedStructureComponent], &[StructureValueComponent])>,
 ) -> Result<(ResolvedType, ObjectClassFieldReferenceKind)> {
     let (field, table_constraint) = parse_object_class_field(
         parser,
@@ -420,7 +420,7 @@ fn parse_structure_value(
     stage: ParseValueAssignmentStage,
     struct_val: &AstElement<AstStructureValue>,
     target_type: &ResolvedType,
-    root_container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+    root_container: Option<(&[NamedStructureComponent], &[StructureValueComponent])>,
 ) -> Result<BuiltinValue> {
     let tag_type = target_type.ty.tag_type().expect("tag_type");
     let struct_ty_components = match &target_type.ty {
@@ -745,7 +745,7 @@ fn parse_choice_value(
     stage: ParseValueAssignmentStage,
     choice: &AstElement<AstChoiceValue>,
     target_type: &ResolvedType,
-    root_container: Option<(&[StructureComponent], &[StructureValueComponent])>,
+    root_container: Option<(&[NamedStructureComponent], &[StructureValueComponent])>,
 ) -> Result<BuiltinValue> {
     let choice_type = match &target_type.ty {
         BuiltinType::Choice(ty) => ty,
