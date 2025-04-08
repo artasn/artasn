@@ -747,7 +747,7 @@ rule Real {
     keyword REAL
 }
 
-rule EnumerationItem {
+variant EnumerationItem = Extensible | NamedEnumerationItem {
     captures {
         name = ValueReference
         num = optional: EnumerationItemNum
@@ -757,7 +757,7 @@ rule EnumerationItem {
     optional {
         num = EnumerationItemNum
     }
-}
+};
 
 rule EnumerationItemNum {
     captures {
@@ -773,7 +773,6 @@ rule EnumerationItemNum {
 rule Enumerated {
     captures {
         items = repeated: EnumerationItem
-        extensible = bool
     }
     keyword ENUMERATED
     persist
@@ -782,11 +781,6 @@ rule Enumerated {
     optional repeated {
         operator ,
         items = EnumerationItem
-    }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
     }
     operator }
     return items
@@ -923,7 +917,6 @@ rule ObjectClassFieldType {
 rule Choice {
     captures {
         alternatives = repeated: ChoiceAlternative
-        extensible = bool
     }
     keyword CHOICE
     persist
@@ -933,16 +926,11 @@ rule Choice {
         operator ,
         alternatives = ChoiceAlternative
     }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
-    }
     operator }
     return alternatives
 }
 
-rule ChoiceAlternative {
+variant ChoiceAlternative = Extensible | NamedChoiceAlternative {
     captures {
         name = ValueReference
         ty = Type
@@ -950,7 +938,7 @@ rule ChoiceAlternative {
     name = ValueReference
     persist
     ty = Type
-}
+};
 
 rule NumericString {
     keyword NumericString

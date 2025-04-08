@@ -923,30 +923,34 @@ fn parse_constrained_type(
 
                     let mut alternative_constraints = Vec::with_capacity(choice.element.0.len());
                     for alternative in &choice.element.0 {
-                        let resolved_alternative = resolved_alternatives
-                            .iter()
-                            .find(|resolved_alternative| {
-                                resolved_alternative.name.element
-                                    == alternative.element.name.element.0
-                            })
-                            .expect("resolved type missing alternative from ast type");
-                        let component_type = match &resolved_alternative.alternative_type.ty {
-                            UntaggedType::ObjectClassField(_) => {
-                                ResolvedType::universal(TagType::Any)
-                            }
-                            _ => resolved_alternative
-                                .alternative_type
-                                .resolve(parser.context)?,
-                        };
-                        alternative_constraints.push((
-                            resolved_alternative.name.element.clone(),
-                            parse_type_constraint(
-                                parser,
-                                &alternative.element.ty,
-                                &component_type,
-                                parameters,
-                            )?,
-                        ));
+                        if let AstChoiceAlternative::NamedChoiceAlternative(alternative) =
+                            &alternative.element
+                        {
+                            let resolved_alternative = resolved_alternatives
+                                .iter()
+                                .find(|resolved_alternative| {
+                                    resolved_alternative.name.element
+                                        == alternative.element.name.element.0
+                                })
+                                .expect("resolved type missing alternative from ast type");
+                            let component_type = match &resolved_alternative.alternative_type.ty {
+                                UntaggedType::ObjectClassField(_) => {
+                                    ResolvedType::universal(TagType::Any)
+                                }
+                                _ => resolved_alternative
+                                    .alternative_type
+                                    .resolve(parser.context)?,
+                            };
+                            alternative_constraints.push((
+                                resolved_alternative.name.element.clone(),
+                                parse_type_constraint(
+                                    parser,
+                                    &alternative.element.ty,
+                                    &component_type,
+                                    parameters,
+                                )?,
+                            ));
+                        }
                     }
                     alternative_constraints
                 }

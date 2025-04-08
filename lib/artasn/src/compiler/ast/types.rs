@@ -193,7 +193,12 @@ fn parse_choice_type(
 ) -> Result<BuiltinType> {
     let has_tags = alternatives
         .iter()
-        .any(|alternative| matches!(&alternative.element.ty.element, AstType::TaggedType(_)));
+        .any(|alternative| match &alternative.element {
+            AstChoiceAlternative::NamedChoiceAlternative(alternative) => {
+                matches!(&alternative.element.ty.element, AstType::TaggedType(_))
+            }
+            AstChoiceAlternative::Extensible(_) => false,
+        });
     let tag_default = parser
         .context
         .lookup_module(&parser.module)
@@ -202,6 +207,10 @@ fn parse_choice_type(
     Ok(BuiltinType::Choice(Choice {
         alternatives: alternatives
             .iter()
+            .filter_map(|alternative| match &alternative.element {
+                AstChoiceAlternative::NamedChoiceAlternative(alternative) => Some(alternative),
+                AstChoiceAlternative::Extensible(_) => None,
+            })
             .map(|alternative| {
                 let ty = parse_type(parser, &alternative.element.ty, parameters)?;
 
@@ -222,27 +231,29 @@ fn parse_enumerated_type(
     let mut items = Vec::new();
     let mut implied_index = 0;
     for ast_item in &enumerated.element.0 {
-        let value = match &ast_item.element.num {
-            Some(num) => EnumerationItemValue::Specified(values::parse_value(
-                parser,
-                ParseValueAssignmentStage::Normal,
-                &num.element.0,
-                &ResolvedType {
-                    tag: Some(Tag::universal(TagType::Enumerated)),
-                    ty: BuiltinType::Enumerated(Vec::new()),
-                    constraints: None,
-                },
-            )?),
-            None => {
-                let value = EnumerationItemValue::Implied(implied_index);
-                implied_index += 1;
-                value
-            }
-        };
-        items.push(EnumerationItem {
-            name: ast_item.element.name.as_ref().map(|name| name.0.clone()),
-            value,
-        });
+        if let AstEnumerationItem::NamedEnumerationItem(ast_item) = &ast_item.element {
+            let value = match &ast_item.element.num {
+                Some(num) => EnumerationItemValue::Specified(values::parse_value(
+                    parser,
+                    ParseValueAssignmentStage::Normal,
+                    &num.element.0,
+                    &ResolvedType {
+                        tag: Some(Tag::universal(TagType::Enumerated)),
+                        ty: BuiltinType::Enumerated(Vec::new()),
+                        constraints: None,
+                    },
+                )?),
+                None => {
+                    let value = EnumerationItemValue::Implied(implied_index);
+                    implied_index += 1;
+                    value
+                }
+            };
+            items.push(EnumerationItem {
+                name: ast_item.element.name.as_ref().map(|name| name.0.clone()),
+                value,
+            });
+        }
     }
     Ok(BuiltinType::Enumerated(items))
 }

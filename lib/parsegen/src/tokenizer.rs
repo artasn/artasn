@@ -702,6 +702,22 @@ impl StringTokenizer {
             let mut name = String::with_capacity(1);
             while !self.is_ended() {
                 if Self::is_name_char(self.current_char()) {
+                    // if we encounter a '--' in the name, it is a comment
+                    // drop the trailing '-' we already took from the name
+                    // break this loop, return the identifier, and allow the tokenizer loop to tokenize (i.e. skip) the comment
+                    if self.current_char() == '-' {
+                        match name.chars().last() {
+                            Some(last_char) if last_char == '-' => {
+                                // return the cursor to the start of the '--'
+                                self.cursor -= 1;
+                                // drop the '-' we already took from the end oof the string
+                                name.pop().unwrap();
+                                break;
+                            }
+                            _ => (),
+                        }
+                    }
+
                     name.write_char(self.current_char()).unwrap();
                     self.cursor += 1;
                 } else if self.current_char() == '\n' {
