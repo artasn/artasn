@@ -183,7 +183,7 @@ impl ResolvedType {
             Some(tag) => tags.push((tag.clone(), self.ty.clone())),
             None => match &self.ty {
                 BuiltinType::Choice(choice) => {
-                    for alternative in &choice.alternatives {
+                    for alternative in choice.resolve_alternatives(context)? {
                         let alternative_ty = alternative.alternative_type.resolve(context)?;
                         alternative_ty.extend_possible_tags(context, tags)?;
                     }
@@ -623,7 +623,7 @@ impl BuiltinType {
         if let (Self::Structure(seq), BuiltinValue::Structure(_, value)) =
             (self, &typed_value.value)
         {
-            for seq_component in &seq.components {
+            for seq_component in seq.resolve_components(context)? {
                 let val_component = value
                     .components
                     .iter()

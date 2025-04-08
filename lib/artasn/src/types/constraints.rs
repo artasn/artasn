@@ -1269,8 +1269,9 @@ impl MultipleTypeConstraints {
                     MultipleTypeConstraintsKind::Partial => (),
                 }
 
+                let ty_components = ty.resolve_components(context)?;
                 for component_constraint in &self.components {
-                    let ty_component = ty.components.iter().find(|component| {
+                    let ty_component = ty_components.iter().find(|component| {
                         component.name.element == component_constraint.name.element
                     });
                     let value_component = val.components.iter().find(|component| {
@@ -1314,8 +1315,8 @@ impl MultipleTypeConstraints {
             }
             (BuiltinType::Choice(ty), BuiltinValue::Choice(val)) => {
                 let ty_alternative = ty
-                    .alternatives
-                    .iter()
+                    .resolve_alternatives(context)?
+                    .into_iter()
                     .find(|alternative| alternative.name.element == val.alternative.element)
                     .expect("CHOICE value alternative does not exist in type");
 
@@ -1749,8 +1750,13 @@ mod test {
                 };
 
                 {
-                    let decl = context.lookup_type_mut(&ident).unwrap();
-                    ast::constraints::apply_pending_constraint(&mut decl.ty, pending);
+                    let mut ty = context
+                        .lookup_type(&ident)
+                        .map(|decl| &decl.ty)
+                        .cloned()
+                        .expect("lookup_type");
+                    ast::constraints::apply_pending_constraint(context, &mut ty, pending).unwrap();
+                    context.lookup_type_mut(&ident).expect("lookup_type").ty = ty;
                 }
 
                 let decl = context.lookup_type(&ident).unwrap();

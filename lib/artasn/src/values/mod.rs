@@ -395,4 +395,8 @@ mod test {
         test_instance_of,
         "../../test-data/encode/classes/InstanceOfTest"
     );
+    json_test!(
+        test_components_of,
+        "../../test-data/encode/ComponentsOfTest"
+    );
 }

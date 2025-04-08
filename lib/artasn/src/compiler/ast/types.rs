@@ -54,69 +54,77 @@ fn parse_structure_components(
     parser: &AstParser<'_>,
     components: &[&AstElement<AstStructureComponent>],
     parameters: &[(&String, &Parameter)],
-) -> Result<Vec<StructureComponent>> {
-    let has_tags = components
+) -> Result<(Vec<StructureComponent>, bool)> {
+    let has_tags = components.iter().any(|component| match &component.element {
+        AstStructureComponent::NamedStructureComponent(named) => {
+            matches!(&named.element.ty.element, AstType::TaggedType(_))
+        }
+        AstStructureComponent::ComponentsOf(_) => false,
+    });
+    let components = components
         .iter()
-        .any(|component| matches!(&component.element.ty.element, AstType::TaggedType(_)));
-    components
-        .iter()
-        .enumerate()
-        .map(|(i, component)| {
-            let forbidden_ident = match component.element.name.element.0.as_str() {
-                "artasn-special" if parser.module != REAL_IDENT.module => Some("artasn-special"),
-                "artasn-external" if parser.module != EXTERNAL_IDENT.module => {
-                    Some("artasn-external")
+        .map(|component| match &component.element {
+            AstStructureComponent::NamedStructureComponent(component) => {
+                let forbidden_ident = match component.element.name.element.0.as_str() {
+                    "artasn-special" if parser.module != REAL_IDENT.module => {
+                        Some("artasn-special")
+                    }
+                    "artasn-external" if parser.module != EXTERNAL_IDENT.module => {
+                        Some("artasn-external")
+                    }
+                    _ => None,
+                };
+                if let Some(forbidden_ident) = forbidden_ident {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "{} is a forbidden identifier",
+                            forbidden_ident
+                        )),
+                        loc: component.element.name.loc,
+                    });
                 }
-                _ => None,
-            };
-            if let Some(forbidden_ident) = forbidden_ident {
-                return Err(Error {
-                    kind: ErrorKind::Ast(format!("{} is a forbidden identifier", forbidden_ident)),
-                    loc: component.element.name.loc,
-                });
-            }
 
-            let ty = parse_type(
-                parser,
-                &component.element.ty,
-                parameters,
-                TypeContext::StructureComponent(StructureComponentContext {
-                    index: i as u16,
-                    has_tags,
-                }),
-            )?;
+                let ty = parse_type(parser, &component.element.ty, parameters)?;
 
-            Ok(StructureComponent {
-                name: component.element.name.as_ref().map(|name| name.0.clone()),
-                default_value: component.element.default.as_ref().map(|default| {
-                    if let AstValue::DefinedValue(valref) = &default.element {
-                        if valref.element.external_module.is_none() {
-                            let val_param =
-                                parameters
-                                    .iter()
-                                    .find_map(|(name, parameter)| match parameter {
-                                        Parameter::Value { value_type, value } => {
-                                            if *name == &valref.element.value.element.0 {
-                                                Some((value_type, value))
-                                            } else {
-                                                None
+                Ok(StructureComponent::Named(NamedStructureComponent {
+                    name: component.element.name.as_ref().map(|name| name.0.clone()),
+                    default_value: component.element.default.as_ref().map(|default| {
+                        if let AstValue::DefinedValue(valref) = &default.element {
+                            if valref.element.external_module.is_none() {
+                                let val_param =
+                                    parameters.iter().find_map(
+                                        |(name, parameter)| match parameter {
+                                            Parameter::Value { value_type, value } => {
+                                                if *name == &valref.element.value.element.0 {
+                                                    Some((value_type, value))
+                                                } else {
+                                                    None
+                                                }
                                             }
-                                        }
-                                        _ => None,
-                                    });
-                            if let Some((_, value)) = val_param {
-                                return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                                            _ => None,
+                                        },
+                                    );
+                                if let Some((_, value)) = val_param {
+                                    return LazyParsedDefaultValue::precomputed(Ok(value.clone()));
+                                }
                             }
                         }
-                    }
 
-                    LazyParsedDefaultValue::new(default.clone(), default_value_lazy_parser)
-                }),
-                optional: component.element.optional,
-                component_type: Box::new(ty),
-            })
+                        LazyParsedDefaultValue::new(default.clone(), default_value_lazy_parser)
+                    }),
+                    optional: component.element.optional,
+                    component_type: Box::new(ty),
+                }))
+            }
+            AstStructureComponent::ComponentsOf(of) => {
+                Ok(StructureComponent::ComponentsOf(AstElement::new(
+                    Box::new(parse_type(parser, &of.element.0, parameters)?),
+                    of.element.0.loc,
+                )))
+            }
         })
-        .collect::<Result<Vec<StructureComponent>>>()
+        .collect::<Result<Vec<StructureComponent>>>()?;
+    Ok((components, has_tags))
 }
 
 // TODO: in the future, versioning should matter; but for now, pretend like the versioning does not exist
@@ -144,13 +152,22 @@ fn parse_structure_type(
     parameters: &[(&String, &Parameter)],
 ) -> Result<BuiltinType> {
     let components = flatten_structure_components(structure);
-    Ok(BuiltinType::Structure(Structure {
-        ty: match structure.element.kind.element {
-            AstStructureKind::Sequence(_) => TagType::Sequence,
-            AstStructureKind::Set(_) => TagType::Set,
-        },
-        components: parse_structure_components(parser, &components, parameters)?,
-    }))
+    let (components, has_tags) = parse_structure_components(parser, &components, parameters)?;
+    let tag_default = parser
+        .context
+        .lookup_module(&parser.module)
+        .expect("lookup_module")
+        .tag_default;
+    let ty = match structure.element.kind.element {
+        AstStructureKind::Sequence(_) => TagType::Sequence,
+        AstStructureKind::Set(_) => TagType::Set,
+    };
+    let automatic_tagging = tag_default == TagDefault::Automatic && !has_tags;
+    Ok(BuiltinType::Structure(Structure::new(
+        ty,
+        automatic_tagging,
+        components,
+    )))
 }
 
 fn parse_structure_of_type(
@@ -164,12 +181,7 @@ fn parse_structure_of_type(
                 AstStructureKind::Sequence(_) => TagType::Sequence,
                 AstStructureKind::Set(_) => TagType::Set,
             },
-            component_type: Box::new(parse_type(
-                parser,
-                &of.element.ty,
-                parameters,
-                TypeContext::Contextless,
-            )?),
+            component_type: Box::new(parse_type(parser, &of.element.ty, parameters)?),
         },
     )))
 }
@@ -182,20 +194,16 @@ fn parse_choice_type(
     let has_tags = alternatives
         .iter()
         .any(|alternative| matches!(&alternative.element.ty.element, AstType::TaggedType(_)));
+    let tag_default = parser
+        .context
+        .lookup_module(&parser.module)
+        .expect("lookup_module")
+        .tag_default;
     Ok(BuiltinType::Choice(Choice {
         alternatives: alternatives
             .iter()
-            .enumerate()
-            .map(|(i, alternative)| {
-                let ty = parse_type(
-                    parser,
-                    &alternative.element.ty,
-                    parameters,
-                    TypeContext::StructureComponent(StructureComponentContext {
-                        index: i as u16,
-                        has_tags,
-                    }),
-                )?;
+            .map(|alternative| {
+                let ty = parse_type(parser, &alternative.element.ty, parameters)?;
 
                 Ok(ChoiceAlternative {
                     name: alternative.element.name.as_ref().map(|name| name.0.clone()),
@@ -203,6 +211,7 @@ fn parse_choice_type(
                 })
             })
             .collect::<Result<Vec<ChoiceAlternative>>>()?,
+        automatic_tagging: tag_default == TagDefault::Automatic && !has_tags,
     }))
 }
 
@@ -472,8 +481,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
         .map(|(parameter, decl)| {
             Ok(match (&parameter.element, &decl.element) {
                 (AstParameter::TypeParameter(ast), AstParameterDecl::TypeParameterDecl(_)) => {
-                    let tagged_type =
-                        parse_type(parser, &ast.element.0, parameters, TypeContext::Contextless)?;
+                    let tagged_type = parse_type(parser, &ast.element.0, parameters)?;
                     if let UntaggedType::Reference(typeref) = &tagged_type.ty {
                         if typeref
                             .element
@@ -494,12 +502,7 @@ pub(crate) fn resolve_parameterized_type_reference<'a>(
                 }
                 (AstParameter::ValueParameter(ast), AstParameterDecl::ValueParameterDecl(decl)) => {
                     // TODO: somehow move this to be after we parse all the non-parameterized types?
-                    let value_type = parse_type(
-                        parser,
-                        &decl.element.ty,
-                        parameters,
-                        TypeContext::Contextless,
-                    )?;
+                    let value_type = parse_type(parser, &decl.element.ty, parameters)?;
                     let resolved_type = value_type.resolve(parser.context)?;
                     let value = values::parse_value(
                         parser,
@@ -597,7 +600,6 @@ fn parse_untagged_type(
                                 class_ref: class_ref.clone(),
                             },
                         )],
-                        TypeContext::Contextless,
                     )
                 });
             }
@@ -717,16 +719,6 @@ fn parse_constrained_type(
     })
 }
 
-pub struct StructureComponentContext {
-    pub index: u16,
-    pub has_tags: bool,
-}
-
-pub enum TypeContext {
-    Contextless,
-    StructureComponent(StructureComponentContext),
-}
-
 // ASN.1 Tagging Rules
 //
 // Any TagDefault + [CLASS N] IMPLICIT = encoded as [CLASS N]
@@ -742,7 +734,6 @@ pub fn parse_type(
     parser: &AstParser<'_>,
     ty: &AstElement<AstType>,
     parameters: &[(&String, &Parameter)],
-    type_context: TypeContext,
 ) -> Result<TaggedType> {
     let tag_default = parser
         .context
@@ -751,12 +742,7 @@ pub fn parse_type(
         .tag_default;
     Ok(match &ty.element {
         AstType::TaggedType(ast_tagged_type) => {
-            let tagged_type = parse_type(
-                parser,
-                &ast_tagged_type.element.ty,
-                parameters,
-                TypeContext::Contextless,
-            )?;
+            let tagged_type = parse_type(parser, &ast_tagged_type.element.ty, parameters)?;
             let tag = &ast_tagged_type.element.tag;
             let class = match tag.element.class {
                 Some(ref class) => match class.element {
@@ -845,44 +831,11 @@ pub fn parse_type(
         }
         AstType::ConstrainedType(constrained) => {
             let tagged_type = parse_constrained_type(parser, constrained, parameters)?;
-
-            let index = match type_context {
-                TypeContext::StructureComponent(context) => {
-                    match context.has_tags || tagged_type.tag.is_some() {
-                        true => None,
-                        false => Some(context.index),
-                    }
-                }
-                TypeContext::Contextless => None,
-            };
-            let mut tag = match (tag_default, index) {
-                (TagDefault::Automatic, Some(index)) => {
-                    // Automatic is not always Implicit, there are special cases where it means Explicit
-                    // see below for how this is done with CHOICE
-                    Some(Tag::new(
-                        Class::ContextSpecific,
-                        index,
-                        TagKind::Implicit,
-                        TagSource::TagImplied,
-                    ))
-                }
-                _ => tagged_type.tag.or(match &tagged_type.ty {
+            TaggedType {
+                tag: tagged_type.tag.or(match &tagged_type.ty {
                     UntaggedType::BuiltinType(builtin) => builtin.tag_type().map(Tag::universal),
                     UntaggedType::Reference(_) | UntaggedType::ObjectClassField(_) => None,
                 }),
-            };
-            if let Some(tag) = &mut tag {
-                if matches!(
-                    &tagged_type.ty,
-                    UntaggedType::BuiltinType(BuiltinType::Choice(_))
-                ) || matches!(&tagged_type.ty,
-                        UntaggedType::ObjectClassField(field_ref) if field_ref.kind == ObjectClassFieldReferenceKind::TypeLike)
-                {
-                    tag.kind = TagKind::Explicit(None);
-                }
-            }
-            TaggedType {
-                tag,
                 ty: tagged_type.ty,
                 constraints: tagged_type.constraints, // TODO: should constraints from parameterized types be applied here?
             }
@@ -993,7 +946,7 @@ pub fn parse_type_assignment(
                     {
                         Ok(None)
                     } else {
-                        let ty = parse_type(parser, ast_type, &[], TypeContext::Contextless)?;
+                        let ty = parse_type(parser, ast_type, &[])?;
 
                         Ok(Some((ident.clone(), DeclaredType { name: ident, ty })))
                     }
@@ -1017,12 +970,7 @@ pub fn parse_type_assignment(
                             .map(|param| &param.name)
                             .zip(parameters)
                             .collect::<Vec<(&String, &Parameter)>>();
-                        let ty = parse_type(
-                            parser,
-                            ast_type,
-                            &named_parameters,
-                            TypeContext::Contextless,
-                        )?;
+                        let ty = parse_type(parser, ast_type, &named_parameters)?;
 
                         Ok(Some((ident.clone(), DeclaredType { name: ident, ty })))
                     }

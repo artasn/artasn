@@ -584,8 +584,13 @@ pub fn register_all_constraints(
     }) {
         Ok(pending_constraints) => {
             for (ident, pending) in pending_constraints {
-                let decl = context.lookup_type_mut(&ident).expect("lookup_type");
-                constraints::apply_pending_constraint(&mut decl.ty, pending);
+                let mut ty = context
+                    .lookup_type(&ident)
+                    .map(|decl| &decl.ty)
+                    .cloned()
+                    .expect("lookup_type");
+                constraints::apply_pending_constraint(context, &mut ty, pending).unwrap();
+                context.lookup_type_mut(&ident).expect("lookup_type").ty = ty;
             }
             Vec::new()
         }

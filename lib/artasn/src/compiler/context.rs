@@ -135,7 +135,9 @@ impl Context {
     }
 
     pub fn lookup_module_by_oid<'a>(&'a self, oid: &Oid) -> Option<&'a ModuleHeader> {
-        self.modules.values().find(|value| matches!(&value.ident.oid, Some(module_oid) if module_oid == oid))
+        self.modules
+            .values()
+            .find(|value| matches!(&value.ident.oid, Some(module_oid) if module_oid == oid))
     }
 
     pub fn lookup_module<'a>(&'a self, ident: &ModuleIdentifier) -> Option<&'a ModuleHeader> {

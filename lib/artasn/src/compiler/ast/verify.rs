@@ -19,15 +19,16 @@ struct ComponentData {
 
 // See X.680 clauses 25.6, 25.6.1, and 27.3 to see exactly what is being enforced here.
 fn verify_unique_component_tags(context: &Context, structure: &Structure) -> Result<()> {
-    if structure.components.len() <= 1 {
+    let components = structure.resolve_components(context)?;
+    if components.len() <= 1 {
         return Ok(());
     }
 
     match structure.ty {
         TagType::Sequence => {
             let mut consecutive_optionals: Vec<ComponentData> = Vec::new();
-            for i in 0..structure.components.len() {
-                let component = &structure.components[i];
+            for i in 0..components.len() {
+                let component = &components[i];
                 match &component.component_type.ty {
                     UntaggedType::ObjectClassField(_) => {
                         // TODO: implement this
@@ -79,8 +80,7 @@ fn verify_unique_component_tags(context: &Context, structure: &Structure) -> Res
             }
         }
         TagType::Set => {
-            let all_tags = structure
-                .components
+            let all_tags = components
                 .iter()
                 .map(|component| {
                     Ok((
@@ -130,7 +130,7 @@ fn get_choice_alternative_leaves(
     choice: &Choice,
     parent_tag_series: Vec<TagData>,
 ) -> Result<()> {
-    for alternative in &choice.alternatives {
+    for alternative in choice.resolve_alternatives(context)? {
         let alternative_ty = alternative.alternative_type.resolve(context)?;
         match &alternative_ty.ty {
             BuiltinType::Choice(choice) => {

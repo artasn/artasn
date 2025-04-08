@@ -296,7 +296,7 @@ fn is_real_type(ty: &BuiltinType) -> bool {
         BuiltinType::Structure(structure) => structure
             .components
             .iter()
-            .any(|component| component.name.element == "artasn-special"),
+            .any(|component| matches!(component, StructureComponent::Named(component) if component.name.element == "artasn-special")),
         _ => false,
     }
 }
@@ -306,7 +306,7 @@ fn is_external_type(ty: &BuiltinType) -> bool {
         BuiltinType::Structure(structure) => structure
             .components
             .iter()
-            .any(|component| component.name.element == "artasn-external"),
+            .any(|component| matches!(component, StructureComponent::Named(component) if component.name.element == "artasn-external")),
         _ => false,
     }
 }
