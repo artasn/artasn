@@ -1,6 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import * as compiler from '../compiler';
-import { DecodedValue, DecodedValueKind, DecodeOptions, isCharacterStringType, QualifiedIdentifier, TagClass, TlvPos, TlvTag, TransferSyntax } from '../wasm-definitions';
+import { DecodedValue, DecodedValueKind, DecodedValueMetadata, DecodeOptions, isCharacterStringType, QualifiedIdentifier, TagClass, TlvPos, TlvTag, TransferSyntax } from '../wasm-definitions';
 import { Grid2 as Grid, Box, IconButton, Typography } from '@mui/material';
 import { joinNodes, stringifyJSON } from '../util';
 import { ChevronRight } from '@mui/icons-material';
@@ -93,6 +93,28 @@ const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProp
             marginLeft: '-40px',
         };
     }
+
+    const getTypeIdent = (metadata?: DecodedValueMetadata) => {
+        if (!metadata) {
+            return getTagElement(value.tag);
+        }
+        if (metadata.typeIdent.kind === 'reference') {
+            return (
+                <>
+                    {value.tag.class !== TagClass.Universal && <>{getTagElement(value.tag)}&nbsp;</>}
+                    <span style={{ color: 'gray' }}>{metadata.typeIdent.reference.module.name}.{metadata.typeIdent.reference.name}</span>
+                </>
+            );
+        } else if (metadata.typeIdent.kind === 'type') {
+            return (
+                <>
+                    {value.tag.class !== TagClass.Universal && <>{getTagElement(value.tag)}&nbsp;</>}
+                    <span style={{ color: IDENT_COLOR }}>{metadata.typeIdent.type.type}</span>
+                </>
+            );
+        }
+    };
+
     return (
         <div style={rootStyle}>
             <span style={{ display: 'inline-flex', alignItems: 'center', }}>
@@ -120,13 +142,9 @@ const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProp
                 ) : (
                     <>
                         {value.metadata?.componentName && (
-                            <span>{value.metadata.componentName}&nbsp;</span>
+                            <span style={{ whiteSpace: 'nowrap' }}>{value.metadata.componentName}&nbsp;</span>
                         )}
-                        {value.metadata?.typeIdent ? (
-                            <span style={{ color: 'gray' }}>{value.metadata.typeIdent.name}</span>
-                        ) : (
-                            getTagElement(value.tag)
-                        )}
+                        {getTypeIdent(value.metadata)}
                         &nbsp;
                         {value.form.type == 'primitive' && getValueKindElement(value.form.kind, false)}
                     </>
@@ -261,6 +279,19 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
                 return null;
             }
             return 'NULL';
+        case 'ENUMERATED':
+            if (!kind.data.item) {
+                return <span style={{ color: LITERAL_COLOR }}>{kind.data.value}</span>
+            } else {
+                return (
+                    <>
+                        <span style={{ color: IDENT_COLOR }}>{kind.data.item}</span>
+                        <span>(</span>
+                        <span style={{ color: LITERAL_COLOR }}>{kind.data.value}</span>
+                        <span>)</span>
+                    </>
+                );
+            }
         case 'UTCTime':
             const { year, month, day, hour, minute, second, tz } = kind.data;
             const date = new Date(Date.UTC(year, month, day, hour, minute, second));

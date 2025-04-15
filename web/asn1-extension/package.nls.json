@@ -1,4 +1,4 @@
 {
-	"displayName": "ASN.1",
-	"description": "ASN.1 language support for VSCode Web"
+	"displayName": "ASN.1 by ArtASN",
+	"description": "ASN.1 language server provided by ArtASN, the ASN.1 development and experimentation platform"
 }

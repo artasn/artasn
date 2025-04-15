@@ -13,7 +13,7 @@ pub enum DecodedValueForm {
 
 #[derive(Debug)]
 pub struct DecodedValueMetadata {
-    pub type_ident: Option<QualifiedIdentifier>,
+    pub type_ident: UntaggedType,
     pub component_name: Option<String>,
 }
 
@@ -70,7 +70,7 @@ pub enum DecodedValueKind {
     Null,
     ObjectIdentifier(Oid),
     Real(f64),
-    Enumerated(i64),
+    Enumerated(DecodedEnumerationItem),
     Time(Time),
     CharacterString(TagType, String),
     UTCTime(UTCTime),
@@ -78,4 +78,10 @@ pub enum DecodedValueKind {
     TimeOfDay(TimeOfDay),
     DateTime(DateTime),
     Duration(Duration),
+}
+
+#[derive(Debug)]
+pub struct DecodedEnumerationItem {
+    pub item: Option<String>,
+    pub value: i64,
 }

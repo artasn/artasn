@@ -1,11 +1,14 @@
+use code_builder::Language;
 use core::panic;
 use quote::ToTokens;
 use std::{
     collections::HashMap,
+    env,
     fs::{self, File},
     io::{self, Write},
 };
 use syn::*;
+use syntax::list_definitions;
 mod code_builder;
 mod parser;
 mod syntax;
@@ -62,12 +65,26 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         (keywords.unwrap(), operators.unwrap())
     };
 
-    let rust_code = match syntax::parse_syntax(syntax_path, syntax_defs, &keywords, &operators) {
+    let rust_code = match syntax::parse_syntax(
+        Language::Rust,
+        syntax_path,
+        syntax_defs,
+        &keywords,
+        &operators,
+    ) {
         Ok(rust_code) => rust_code,
         Err(err) => panic!("{}", err),
     };
 
-    let gen_files: &[&str] = &[include_str!("./parser.rs"), include_str!("./tokenizer.rs")];
+    let gen_files: &[&str] = if cfg!(feature = "js-serialize") {
+        &[
+            include_str!("./parser.rs"),
+            include_str!("./tokenizer.rs"),
+            include_str!("./js_serialize.rs"),
+        ]
+    } else {
+        &[include_str!("./parser.rs"), include_str!("./tokenizer.rs")]
+    };
     let gen_files = gen_files
         .iter()
         .map(|gen_file| syn::parse_file(gen_file).unwrap());
@@ -83,6 +100,14 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
     composite_module.items.push(Item::Use(syn::parse_quote!(
         use std::fmt::{Display, Write};
     )));
+    if cfg!(feature = "js-serialize") {
+        composite_module.items.push(Item::Use(syn::parse_quote!(
+            use wasm_bindgen::prelude::*;
+        )));
+        composite_module.items.push(Item::Use(syn::parse_quote!(
+            use js_sys::{Array, Object, Reflect};
+        )));
+    }
     for mut gen_file in gen_files {
         // all module-level attributes are combined
         composite_module.attrs.append(&mut gen_file.attrs);
@@ -131,4 +156,34 @@ pub fn generate_parser(syntax_path: &str, syntax_defs: &str, output_path: &str, 
         .write_all(composite_module.to_token_stream().to_string().as_bytes())
         .unwrap();
     output_file.write_all(rust_code.as_bytes()).unwrap();
+
+    if cfg!(feature = "js-serialize") {
+        let base_ts = include_bytes!("./js_serialize.ts");
+        if let Ok(out_path) = env::var("PARSEGEN_TS_BINDINGS") {
+            let ts_code = match syntax::parse_syntax(
+                Language::TypeScript,
+                syntax_path,
+                syntax_defs,
+                &keywords,
+                &operators,
+            ) {
+                Ok(ts_code) => ts_code,
+                Err(err) => panic!("{}", err),
+            };
+            let mut file = File::options()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(out_path)
+                .expect("open file");
+            file.write_all(base_ts).expect("write base_ts");
+            file.write_all(&ts_code.into_bytes())
+                .expect("write ts_code");
+
+            let defs = list_definitions(syntax_defs);
+            let sum_type = format!("export type AstItem = Soi | Eoi | AstTypeReference | AstUppercaseReference | AstValueReference | AstStringLiteral | AstNumber | Keyword | Operator | AstBracedTokenStream | AstSyntaxTokenLiteral | {};\n", defs.join(" | "));
+            file.write_all(&sum_type.into_bytes())
+                .expect("write sum_type");
+        }
+    }
 }

@@ -14,9 +14,9 @@ const path = require('path');
 module.exports = /** @type WebpackConfig */ {
 	context: __dirname,
 	mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
-	target: 'webworker', // extensions run in a webworker context
+	target: 'node',
 	entry: {
-		extension: './src/extension.ts',
+		extension: './src/desktop/extension.ts',
 	},
 	resolve: {
 		mainFields: ['module', 'main'],
@@ -27,7 +27,7 @@ module.exports = /** @type WebpackConfig */ {
 	module: {
 		rules: [{
 			test: /\.ts$/,
-			exclude: /node_modules/,
+			exclude: [/node_modules/, /src\/web/],
 			use: [{
 				// configure TypeScript loader:
 				// * enable sources maps for end-to-end source maps
@@ -36,7 +36,8 @@ module.exports = /** @type WebpackConfig */ {
 					compilerOptions: {
 						'sourceMap': true,
 						'declaration': false
-					}
+					},
+					configFile: 'tsconfig.desktop.json',
 				}
 			}]
 		}]
@@ -49,7 +50,7 @@ module.exports = /** @type WebpackConfig */ {
 	},
 	output: {
 		filename: 'extension.js',
-		path: path.join(__dirname, 'dist'),
+		path: path.join(__dirname, 'dist', 'desktop'),
 		libraryTarget: 'commonjs'
 	},
 	devtool: 'source-map'

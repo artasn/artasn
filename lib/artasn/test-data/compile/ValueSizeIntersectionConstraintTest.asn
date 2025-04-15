@@ -1,0 +1,118 @@
+ValueSizeIntersectionConstraintTest DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+OS1-A ::= OCTET STRING (SIZE(2..4))
+OS1-B ::= OCTET STRING ('DEADBEEF'H)
+
+OS1-C ::= OCTET STRING (OS1-A INTERSECTION OS1-B)
+os1c-valid1   OS1-C ::= 'DEADBEEF'H
+os1c-invalid1 OS1-C ::= 'FEEDFACE'H
+os1c-invalid2 OS1-C ::= ''H
+os1c-invalid3 OS1-C ::= '1337'H
+os1c-invalid4 OS1-C ::= 'FEEDDEADFACE'H
+
+OS1-C-P ::= OCTET STRING ('DEADBEEF'H)
+os1cp-valid1   OS1-C-P ::= 'DEADBEEF'H
+os1cp-invalid1 OS1-C-P ::= 'FEEDFACE'H
+os1cp-invalid2 OS1-C-P ::= ''H
+os1cp-invalid3 OS1-C-P ::= '1337'H
+os1cp-invalid4 OS1-C-P ::= 'FEEDDEADFACE'H
+
+OS2-A ::= OCTET STRING (SIZE(2..4))
+OS2-B ::= OCTET STRING ('DEADBEEF'H UNION SIZE(4..6))
+
+OS2-C ::= OCTET STRING (OS2-A INTERSECTION OS2-B)
+os2c-valid1   OS2-C ::= 'DEADBEEF'H
+os2c-valid2   OS2-C ::= 'FEEDFACE'H
+os2c-invalid1 OS2-C ::= ''H
+os2c-invalid2 OS2-C ::= '1337'H
+os2c-invalid3 OS2-C ::= 'FEEDDEADFACE'H
+
+OS2-C-P ::= OCTET STRING (SIZE(4))
+os2cp-valid1   OS2-C-P ::= 'DEADBEEF'H
+os2cp-valid2   OS2-C-P ::= 'FEEDFACE'H
+os2cp-invalid1 OS2-C-P ::= ''H
+os2cp-invalid2 OS2-C-P ::= '1337'H
+os2cp-invalid3 OS2-C-P ::= 'FEEDDEADFACE'H
+
+OS3-A ::= OCTET STRING (SIZE(2..4) UNION 'FEEDFACE'H)
+OS3-B ::= OCTET STRING ('DEADBEEF'H UNION SIZE(4..6))
+
+OS3-C ::= OCTET STRING (OS3-A INTERSECTION OS3-B)
+os3c-valid1   OS3-C ::= 'DEADBEEF'H
+os3c-valid2   OS3-C ::= 'FEEDFACE'H
+os3c-valid3   OS3-C ::= 'FACEBEEF'H
+os3c-invalid1 OS3-C ::= ''H
+os3c-invalid2 OS3-C ::= '1337'H
+os3c-invalid3 OS3-C ::= 'FEEDDEADFACE'H
+
+OS3-C-P ::= OCTET STRING (SIZE(4))
+os3cp-valid1   OS3-C-P ::= 'DEADBEEF'H
+os3cp-valid2   OS3-C-P ::= 'FEEDFACE'H
+os3pc-valid3   OS3-C-P ::= 'FACEBEEF'H
+os3cp-invalid1 OS3-C-P ::= ''H
+os3cp-invalid2 OS3-C-P ::= '1337'H
+os3cp-invalid3 OS3-C-P ::= 'FEEDDEADFACE'H
+
+OS4-A ::= OCTET STRING (SIZE(2..4) UNION 'FEEDFACEBEEF'H)
+OS4-B ::= OCTET STRING ('DEADBEEF'H UNION SIZE(4..6))
+
+OS4-C ::= OCTET STRING (OS4-A INTERSECTION OS4-B)
+os4c-valid1   OS4-C ::= 'DEADBEEF'H
+os4c-valid2   OS4-C ::= 'FEEDFACE'H
+os4c-valid3   OS4-C ::= 'FEEDFACEBEEF'H
+os4c-invalid1 OS4-C ::= ''H
+os4c-invalid2 OS4-C ::= '1337'H
+os4c-invalid3 OS4-C ::= 'FEEDFACEDEAD'H
+
+OS4-C-P ::= OCTET STRING ('FEEDFACEBEEF'H UNION SIZE(4))
+os4cp-valid1   OS4-C-P ::= 'DEADBEEF'H
+os4cp-valid2   OS4-C-P ::= 'FEEDFACE'H
+os4cp-valid3   OS4-C-P ::= 'FEEDFACEBEEF'H
+os4cp-invalid1 OS4-C-P ::= ''H
+os4cp-invalid2 OS4-C-P ::= '1337'H
+os4cp-invalid3 OS4-C-P ::= 'FEEDFACEDEAD'H
+
+OS5-A ::= OCTET STRING (SIZE(2..4) UNION 'FEEDFACEBEEF'H)
+OS5-B ::= OCTET STRING ('1337'H UNION SIZE(4..6))
+
+OS5-C ::= OCTET STRING (OS5-A INTERSECTION OS5-B)
+os5c-valid1   OS5-C ::= 'DEADBEEF'H
+os5c-valid2   OS5-C ::= 'FEEDFACE'H
+os5c-valid3   OS5-C ::= 'FEEDFACEBEEF'H
+os5c-valid4   OS5-C ::= '1337'H
+os5c-invalid1 OS5-C ::= ''H
+os5c-invalid2 OS5-C ::= '7331'H
+os5c-invalid3 OS5-C ::= 'FEEDFACEDEAD'H
+
+OS5-C-P ::= OCTET STRING ('1337'H UNION SIZE(4) UNION 'FEEDFACEBEEF'H)
+os5cp-valid1   OS5-C-P ::= 'DEADBEEF'H
+os5cp-valid2   OS5-C-P ::= 'FEEDFACE'H
+os5cp-valid3   OS5-C-P ::= 'FEEDFACEBEEF'H
+os5cp-valid4   OS5-C-P ::= '1337'H
+os5cp-invalid1 OS5-C-P ::= ''H
+os5cp-invalid2 OS5-C-P ::= '7331'H
+os5cp-invalid3 OS5-C-P ::= 'FEEDFACEDEAD'H
+
+OS6-A ::= OCTET STRING (SIZE(2..4), ..., SIZE(4..6) UNION 'FEEDFACE'H)
+OS6-B ::= OCTET STRING ('DEADBEEF'H UNION 'FEEDFACEBEEF'H, ..., SIZE(4..6))
+
+OS6-C ::= OCTET STRING (OS6-A INTERSECTION OS6-B)
+os6c-valid1   OS6-C ::= 'DEADBEEF'H
+os6c-valid2   OS6-C ::= 'FEEDFACE'H
+os6c-valid3   OS6-C ::= 'FACEBEEF'H
+os6c-invalid1 OS6-C ::= ''H
+os6c-invalid2 OS6-C ::= '1337'H
+os6c-invalid3 OS6-C ::= 'FEEDFACEBEEF'H
+
+OS7-A ::= OCTET STRING (SIZE(2..4, ..., 4..6), ..., 'FEEDFACE'H)
+OS7-B ::= OCTET STRING ('DEADBEEF'H UNION 'FEEDFACEBEEF'H, ..., SIZE(4..6))
+
+OS7-C ::= OCTET STRING (OS7-A INTERSECTION OS7-B)
+os7c-valid1   OS7-C ::= 'DEADBEEF'H
+os7c-valid2   OS7-C ::= 'FEEDFACE'H
+os7c-valid3   OS7-C ::= 'FACEBEEF'H
+os7c-invalid1 OS7-C ::= ''H
+os7c-invalid2 OS7-C ::= '1337'H
+os7c-invalid3 OS7-C ::= 'FEEDFACEBEEF'H
+
+END

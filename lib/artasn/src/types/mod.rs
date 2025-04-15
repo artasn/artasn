@@ -509,10 +509,8 @@ impl BuiltinType {
         let size_ok = match &constraint {
             Some(constraint) => {
                 match &typed_value.value {
-                    BuiltinValue::BitString(value) => 'block: {
-                        let total_bits = BigInt::from(
-                            (value.data.len() * 8) as i64 - (value.unused_bits as i64),
-                        );
+                    value @ BuiltinValue::BitString(_) => 'block: {
+                        let total_bits = BigInt::from(value.size().expect("size() of BitString"));
 
                         match self {
                             Self::BitString(bs) => {
@@ -540,15 +538,11 @@ impl BuiltinType {
 
                         constraint.includes_integer(ConstraintCheckMode::Size, &total_bits)?
                     }
-                    BuiltinValue::OctetString(value) => constraint.includes_integer(
-                        ConstraintCheckMode::Size,
-                        &BigInt::from(value.len() as i64),
-                    )?,
-                    BuiltinValue::StructureOf(_, value) => constraint.includes_integer(
-                        ConstraintCheckMode::Size,
-                        &BigInt::from(value.len() as i64),
-                    )?,
-                    _ => None,
+                    other => match other.size() {
+                        Some(size) => constraint
+                            .includes_integer(ConstraintCheckMode::Size, &BigInt::from(size))?,
+                        None => None,
+                    },
                 }
             }
             None => None,

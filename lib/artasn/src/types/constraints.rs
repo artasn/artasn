@@ -380,6 +380,7 @@ pub enum ConstraintSpecItem {
     Contents(ContentsConstraint),
     Table(TableConstraint),
     UserDefined,
+    Pattern(AstElement<String>),
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -418,7 +419,8 @@ impl ConstraintSpecItem {
             Self::InnerType(_) => "inner type",
             Self::Contents(_) => "contents",
             Self::Table(_) => "reference table",
-            Self::UserDefined => "user-defined",
+            Self::UserDefined => "user defined",
+            Self::Pattern(_) => "pattern",
         }
     }
 }
@@ -545,6 +547,9 @@ impl ConstraintTree {
                 }
                 SubtypeElement::Table(table) => vec![ConstraintSpecItem::Table(table.clone())],
                 SubtypeElement::UserDefined => vec![ConstraintSpecItem::UserDefined],
+                SubtypeElement::Pattern(pattern) => {
+                    vec![ConstraintSpecItem::Pattern(pattern.clone())]
+                }
             },
         })
     }
@@ -655,114 +660,140 @@ fn eval_value_and_size_set_binary_expr(
     rhs: &[ConstraintSpecItem],
     constrained_type: &BuiltinType,
 ) -> Result<Vec<ConstraintSpecItem>> {
-    // step 1: op all the values
-    let values = eval_value_set_binary_expr(
-        lhs.iter().filter_map(|item| match item {
-            ConstraintSpecItem::Value(value) => Some(value.clone()),
-            _ => None,
-        }),
-        op.element,
-        rhs.iter().filter_map(|item| match item {
-            ConstraintSpecItem::Value(value) => Some(value.clone()),
-            _ => None,
-        }),
-        constrained_type,
-    )?
-    .into_iter()
-    .map(ConstraintSpecItem::Value)
-    .collect::<Vec<_>>();
-
-    // step 2: op all the sizes
-    let lhs_size = iter_exactly_zero_or_one(lhs.iter().filter_map(|item| match item {
-        ConstraintSpecItem::Size(size) => Some(size),
-        _ => None,
-    }));
-    let rhs_size = iter_exactly_zero_or_one(rhs.iter().filter_map(|item| match item {
-        ConstraintSpecItem::Size(size) => Some(size),
-        _ => None,
-    }));
-
-    let size_spec = match (lhs_size, rhs_size) {
-        (Some(lhs_size), Some(rhs_size)) => {
-            let mut size_specs = Vec::with_capacity(2);
-
-            let lhs_base = lhs_size.specs[0].items.iter().map(|item| match item {
-                ConstraintSpecItem::Value(value) => value.clone(),
-                _ => unreachable!(),
-            });
-            let rhs_base = rhs_size.specs[0].items.iter().map(|item| match item {
-                ConstraintSpecItem::Value(value) => value.clone(),
-                _ => unreachable!(),
-            });
-
-            size_specs.push(ConstraintSpec {
-                items: eval_value_set_binary_expr(
-                    lhs_base,
-                    op.element,
-                    rhs_base,
-                    &BuiltinType::universal(TagType::Integer),
-                )?
-                .into_iter()
-                .map(ConstraintSpecItem::Value)
-                .collect(),
-                is_extension: false,
-            });
-
-            if lhs_size.specs.len() > 1 || rhs_size.specs.len() > 1 {
-                let lhs_ext = lhs_size.specs.iter().skip(1).flat_map(|spec| {
-                    spec.items.iter().map(|item| match item {
-                        ConstraintSpecItem::Value(value) => value.clone(),
-                        _ => unreachable!(),
-                    })
-                });
-                let rhs_ext = rhs_size.specs.iter().skip(1).flat_map(|spec| {
-                    spec.items.iter().map(|item| match item {
-                        ConstraintSpecItem::Value(value) => value.clone(),
-                        _ => unreachable!(),
-                    })
-                });
-                size_specs.push(ConstraintSpec {
-                    items: eval_value_set_binary_expr(
-                        lhs_ext,
-                        op.element,
-                        rhs_ext,
-                        &BuiltinType::universal(TagType::Integer),
-                    )?
-                    .into_iter()
-                    .map(ConstraintSpecItem::Value)
-                    .collect(),
-                    is_extension: true,
-                });
+    match constrained_type {
+        // INTERSECTION with BIT STRING/OCTET STRING/character string types are a special case
+        // because their value constraints have sizes, the intersection of the size constraints
+        // and the value constraints needs to be taken
+        BuiltinType::BitString(_) | BuiltinType::OctetString | BuiltinType::CharacterString(_)
+            if op.element == ConstraintTreeOperator::Intersection =>
+        {
+            let mut intersection = Vec::with_capacity(lhs.len() + rhs.len());
+            for lhs_item in lhs {
+                for rhs_item in rhs {
+                    match (lhs_item, rhs_item) {
+                        (
+                            ConstraintSpecItem::Size(lhs_size),
+                            ConstraintSpecItem::Size(rhs_size),
+                        ) => {
+                            intersection.push(eval_size_set_binary_expr(lhs_size, op, rhs_size)?);
+                        }
+                        (ConstraintSpecItem::Size(size), ConstraintSpecItem::Value(value))
+                        | (ConstraintSpecItem::Value(value), ConstraintSpecItem::Size(size)) => {
+                            let resolved_value = match &value.element {
+                                ValueConstraint::SingleValue(single_value) => single_value,
+                                // src/compiler/ast/constraints.rs ensures range constraints are only applied
+                                // to INTEGER types
+                                ValueConstraint::Range(_) => unreachable!(),
+                            };
+                            let value_size = BigInt::from(
+                                resolved_value
+                                    .value
+                                    .size()
+                                    .expect("size() of SIZE-constrained value"),
+                            );
+                            let inclusion = size
+                                .includes_integer(ConstraintCheckMode::Value, &value_size)?
+                                .expect("include_integer of a SIZE constraint returned None");
+                            match inclusion {
+                                IntegerInclusion::Included { is_extension } if !is_extension => {
+                                    intersection.push(ConstraintSpecItem::Value(value.clone()));
+                                }
+                                _ => (),
+                            }
+                        }
+                        (
+                            ConstraintSpecItem::Value(lhs_item),
+                            ConstraintSpecItem::Value(rhs_item),
+                        ) => {
+                            let lhs_value = match &lhs_item.element {
+                                ValueConstraint::SingleValue(single_value) => single_value,
+                                ValueConstraint::Range(_) => unreachable!(),
+                            };
+                            let rhs_value = match &rhs_item.element {
+                                ValueConstraint::SingleValue(single_value) => single_value,
+                                ValueConstraint::Range(_) => unreachable!(),
+                            };
+                            let equal = match (&lhs_value.value, &rhs_value.value) {
+                                (BuiltinValue::BitString(a), BuiltinValue::BitString(b)) => a == b,
+                                (BuiltinValue::OctetString(a), BuiltinValue::OctetString(b)) => {
+                                    a == b
+                                }
+                                (
+                                    BuiltinValue::CharacterString(_, a),
+                                    BuiltinValue::CharacterString(_, b),
+                                ) => a == b,
+                                _ => unreachable!(),
+                            };
+                            if equal {
+                                intersection.push(ConstraintSpecItem::Value(lhs_item.clone()));
+                            }
+                        }
+                        (lhs_item, rhs_item) => panic!("lhs = {lhs_item:#?}\nrhs = {rhs_item:#?}"),
+                    }
+                }
             }
-
-            Some(ConstraintSpecItem::Size(ResolvedConstraint {
-                is_extensible: size_specs.len() > 1
-                    || lhs_size.is_extensible
-                    || rhs_size.is_extensible,
-                specs: size_specs,
-                loc: Loc::span(lhs_size.loc, rhs_size.loc),
-            }))
+            Ok(intersection)
         }
-        (Some(size), None) | (None, Some(size)) => Some(ConstraintSpecItem::Size(size.clone())),
-        _ => None,
-    };
+        _ => {
+            // step 1: op all the values
+            let values = eval_value_set_binary_expr(
+                lhs.iter().filter_map(|item| match item {
+                    ConstraintSpecItem::Value(value) => Some(value.clone()),
+                    _ => None,
+                }),
+                op.element,
+                rhs.iter().filter_map(|item| match item {
+                    ConstraintSpecItem::Value(value) => Some(value.clone()),
+                    _ => None,
+                }),
+                constrained_type,
+            )?
+            .into_iter()
+            .map(ConstraintSpecItem::Value)
+            .collect::<Vec<_>>();
 
-    // step 3: op the results of each
-    match op.element {
-        ConstraintTreeOperator::Union => {
-            let mut union = Vec::with_capacity(values.len() + 1);
-            union.extend(values);
-            if let Some(size_spec) = size_spec {
-                union.push(size_spec);
-            }
-            Ok(union)
-        }
-        ConstraintTreeOperator::Intersection => {
-            if size_spec.is_some() {
-                todo!("intersection w/ SIZE constraint")
-            }
+            // step 2: op all the sizes
+            let lhs_size = iter_exactly_zero_or_one(lhs.iter().filter_map(|item| match item {
+                ConstraintSpecItem::Size(size) => Some(size),
+                _ => None,
+            }));
+            let rhs_size = iter_exactly_zero_or_one(rhs.iter().filter_map(|item| match item {
+                ConstraintSpecItem::Size(size) => Some(size),
+                _ => None,
+            }));
 
-            Ok(values)
+            let size_spec = match (lhs_size, rhs_size) {
+                (Some(lhs_size), Some(rhs_size)) => {
+                    Some(eval_size_set_binary_expr(lhs_size, op, rhs_size)?)
+                }
+                (Some(size), None) | (None, Some(size)) => {
+                    Some(ConstraintSpecItem::Size(size.clone()))
+                }
+                _ => None,
+            };
+
+            // step 3: op the results of each
+            match op.element {
+                ConstraintTreeOperator::Union => {
+                    let mut union = Vec::with_capacity(values.len() + 1);
+                    union.extend(values);
+                    if let Some(size_spec) = size_spec {
+                        union.push(size_spec);
+                    }
+                    Ok(union)
+                }
+                ConstraintTreeOperator::Intersection => match (size_spec, values.len()) {
+                    (None, _) => Ok(values),
+                    (Some(size_spec), 0) => Ok(vec![size_spec]),
+                    (Some(_), 1..) => Err(Error {
+                        kind: ErrorKind::Ast(format!(
+                            "INTERSECTION of value and SIZE constraints is illegal for type {}",
+                            constrained_type
+                        )),
+                        loc: op.loc,
+                    }),
+                },
+            }
         }
     }
 }
@@ -895,6 +926,10 @@ fn eval_value_set_binary_expr<
         ConstraintTreeOperator::Intersection => {
             let lhs = lhs.collect::<Vec<_>>();
             let rhs = rhs.collect::<Vec<_>>();
+            if lhs.is_empty() || rhs.is_empty() {
+                return Ok([lhs, rhs].concat());
+            }
+
             let loc = Loc::span(
                 lhs.first().expect("lhs.first").loc,
                 rhs.last().expect("rhs.last").loc,
@@ -945,6 +980,69 @@ fn eval_value_set_binary_expr<
         }
     };
     Ok(items)
+}
+
+fn eval_size_set_binary_expr(
+    lhs_size: &ResolvedConstraint,
+    op: &AstElement<ConstraintTreeOperator>,
+    rhs_size: &ResolvedConstraint,
+) -> Result<ConstraintSpecItem> {
+    let mut size_specs = Vec::with_capacity(2);
+
+    let lhs_base = lhs_size.specs[0].items.iter().map(|item| match item {
+        ConstraintSpecItem::Value(value) => value.clone(),
+        _ => unreachable!(),
+    });
+    let rhs_base = rhs_size.specs[0].items.iter().map(|item| match item {
+        ConstraintSpecItem::Value(value) => value.clone(),
+        _ => unreachable!(),
+    });
+
+    size_specs.push(ConstraintSpec {
+        items: eval_value_set_binary_expr(
+            lhs_base,
+            op.element,
+            rhs_base,
+            &BuiltinType::universal(TagType::Integer),
+        )?
+        .into_iter()
+        .map(ConstraintSpecItem::Value)
+        .collect(),
+        is_extension: false,
+    });
+
+    if lhs_size.specs.len() > 1 || rhs_size.specs.len() > 1 {
+        let lhs_ext = lhs_size.specs.iter().skip(1).flat_map(|spec| {
+            spec.items.iter().map(|item| match item {
+                ConstraintSpecItem::Value(value) => value.clone(),
+                _ => unreachable!(),
+            })
+        });
+        let rhs_ext = rhs_size.specs.iter().skip(1).flat_map(|spec| {
+            spec.items.iter().map(|item| match item {
+                ConstraintSpecItem::Value(value) => value.clone(),
+                _ => unreachable!(),
+            })
+        });
+        size_specs.push(ConstraintSpec {
+            items: eval_value_set_binary_expr(
+                lhs_ext,
+                op.element,
+                rhs_ext,
+                &BuiltinType::universal(TagType::Integer),
+            )?
+            .into_iter()
+            .map(ConstraintSpecItem::Value)
+            .collect(),
+            is_extension: true,
+        });
+    }
+
+    Ok(ConstraintSpecItem::Size(ResolvedConstraint {
+        is_extensible: size_specs.len() > 1 || lhs_size.is_extensible || rhs_size.is_extensible,
+        specs: size_specs,
+        loc: Loc::span(lhs_size.loc, rhs_size.loc),
+    }))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1137,6 +1235,7 @@ pub enum SubtypeElement {
     Contents(ContentsConstraint),
     Table(TableConstraint),
     UserDefined,
+    Pattern(AstElement<String>),
 }
 
 #[derive(Debug, Clone)]

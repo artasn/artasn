@@ -452,7 +452,7 @@ variant SubtypeElement = SubtypeElementGroup {
     group = SubtypeElementSet
     operator )
     return group
-} | UserDefinedConstraint | TableConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | ValueRangeConstraint {
+} | UserDefinedConstraint | PatternConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | TableConstraint | ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -477,6 +477,16 @@ variant SubtypeElement = SubtypeElementGroup {
     ty = Type
     return ty
 } | error { "expecting a constraint" };
+
+rule PatternConstraint {
+    captures {
+        pattern = StringLiteral
+    }
+    keyword PATTERN
+    persist
+    pattern = StringLiteral
+    return pattern
+}
 
 rule TableConstraint {
     captures {
@@ -814,7 +824,6 @@ rule Structure {
     captures {
         kind = StructureKind
         component_groups = repeated: StructureComponentGroup
-        extensible = bool
     }
     kind = StructureKind
     operator {
@@ -825,11 +834,6 @@ rule Structure {
     optional repeated {
         operator ,
         component_groups = StructureComponentGroup
-    }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
     }
     operator }
 }
@@ -1173,7 +1177,6 @@ variant ObjectSetAssignmentSubject = EmptyExtensible {
 } | ObjectSet {
     captures {
         element_groups = repeated: ObjectSetElementGroup
-        extensible = bool
     }
     operator {
     element_groups = ObjectSetElementGroup
@@ -1181,11 +1184,6 @@ variant ObjectSetAssignmentSubject = EmptyExtensible {
     optional repeated {
         operator ,
         element_groups = ObjectSetElementGroup
-    }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
     }
     operator }
 } | error { "expecting object set definition" };
@@ -1207,7 +1205,6 @@ variant ObjectSetElement = ObjectFieldReference | Object | DefinedType | error {
 rule ValueSet {
     captures {
         element_groups = repeated: ValueSetElementGroup
-        extensible = bool
     }
     operator {
     element_groups = ValueSetElementGroup
@@ -1216,12 +1213,8 @@ rule ValueSet {
         operator ,
         element_groups = ValueSetElementGroup
     }
-    optional {
-        operator ,
-        operator ...
-        extensible = true
-    }
     operator }
+    return element_groups
 }
 
 variant ValueSetElementGroup = Extensible | ValueSetElements {

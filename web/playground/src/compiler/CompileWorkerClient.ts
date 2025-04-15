@@ -1,3 +1,4 @@
+import { ParseError, Token } from 'asn1-extension-protocol';
 import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TransferSyntax, TypeDefinition, ValueDefinition } from '../wasm-definitions';
 
 type WorkerCallback = (res: any) => void;
@@ -59,4 +60,8 @@ export async function encodeValue(transfer: TransferSyntax, ident: QualifiedIden
 
 export async function decodeValue(transfer: TransferSyntax, valueHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
     return await callWorker('decodeValue', { transfer, valueHex, options });
+}
+
+export async function tokenizeCode(source: string): Promise<Token[] | ParseError> {
+    return await callWorker('tokenizeCode', { source });
 }

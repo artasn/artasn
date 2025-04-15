@@ -12,6 +12,9 @@ use wasm_bindgen::prelude::*;
 
 mod codec;
 
+#[cfg(feature = "code")]
+mod code;
+
 #[cfg(target_arch = "wasm32")]
 use lol_alloc::{AssumeSingleThreaded, FreeListAllocator};
 
@@ -201,7 +204,10 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
     match ty {
         BuiltinType::Structure(structure) => {
             let components = Array::new();
-            for component in &structure.components {
+            for component in structure
+                .resolve_components(context)
+                .expect("resolve_components")
+            {
                 let obj = Object::new();
                 Reflect::set(&obj, &"name".into(), &(&component.name.element).into()).unwrap();
                 Reflect::set(
@@ -222,6 +228,24 @@ fn serialize_builtin_type(context: &Context, ty: &BuiltinType) -> JsValue {
                 &serialize_tagged_type(context, &of.component_type),
             )
             .unwrap();
+        }
+        BuiltinType::Choice(choice) => {
+            let alternatives = Array::new();
+            for alternative in choice
+                .resolve_alternatives(context)
+                .expect("resolve_alternatives")
+            {
+                let obj = Object::new();
+                Reflect::set(&obj, &"name".into(), &(&alternative.name.element).into()).unwrap();
+                Reflect::set(
+                    &obj,
+                    &"alternativeType".into(),
+                    &serialize_tagged_type(context, &alternative.alternative_type),
+                )
+                .unwrap();
+                alternatives.push(&obj.into());
+            }
+            Reflect::set(&obj, &"alternatives".into(), &alternatives.into()).unwrap();
         }
         _ => (),
     }
@@ -336,6 +360,17 @@ fn serialize_builtin_value(
             ("elements", elements.into())
         }
         BuiltinValue::CharacterString(_, str) => ("value", str.into()),
+        BuiltinValue::Choice(choice) => ("alternative", {
+            let obj = Object::new();
+            Reflect::set(&obj, &"name".into(), &(&choice.alternative.element).into()).unwrap();
+            Reflect::set(
+                &obj,
+                &"value".into(),
+                &serialize_typed_value(context, &choice.value.element),
+            )
+            .unwrap();
+            obj.into()
+        }),
         other => todo!("{:#?}", other),
     };
     Reflect::set(&obj, &field.into(), &data).unwrap();
@@ -406,18 +441,6 @@ pub unsafe fn compiler_compile(libweb_ptr: *mut LibWeb) -> JsValue {
     }
 }
 
-#[wasm_bindgen]
-pub unsafe fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
-    let libweb = Box::from_raw(libweb_ptr);
-    let modules = libweb.context.list_modules();
-    let definitions = modules
-        .into_iter()
-        .map(|module| ModuleIdentifier::new(&module.ident))
-        .collect::<Vec<ModuleIdentifier>>();
-    let _ = Box::into_raw(libweb);
-    serde_wasm_bindgen::to_value(&definitions).expect("Vec<ModuleIdentifier> to_value")
-}
-
 lazy_static::lazy_static! {
     static ref IGNORE_MODULES: HashSet<module::ModuleIdentifier> = HashSet::from_iter(vec![
         module::ModuleIdentifier::with_name(String::from("CharacterString")),
@@ -425,7 +448,28 @@ lazy_static::lazy_static! {
         module::ModuleIdentifier::with_name(String::from("External")),
         module::ModuleIdentifier::with_name(String::from("InformationObjectClasses")),
         module::ModuleIdentifier::with_name(String::from("Real")),
+        module::ModuleIdentifier::with_id(String::from("ASN1-Object-Identifier-Module"), Oid(vec![
+            2, 1, 0, 0, 1,
+        ])),
     ]);
+}
+
+#[wasm_bindgen]
+pub unsafe fn compiler_list_modules(libweb_ptr: *mut LibWeb) -> JsValue {
+    let libweb = Box::from_raw(libweb_ptr);
+    let modules = libweb.context.list_modules();
+    let definitions = modules
+        .into_iter()
+        .filter_map(|module| {
+            if IGNORE_MODULES.contains(&module.ident) {
+                None
+            } else {
+                Some(ModuleIdentifier::new(&module.ident))
+            }
+        })
+        .collect::<Vec<ModuleIdentifier>>();
+    let _ = Box::into_raw(libweb);
+    serde_wasm_bindgen::to_value(&definitions).expect("Vec<ModuleIdentifier> to_value")
 }
 
 #[wasm_bindgen]

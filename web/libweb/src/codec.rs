@@ -1,8 +1,8 @@
-use artasn::{encoding::*, module, values::*};
+use artasn::{compiler::Context, encoding::*, module, types::UntaggedType, values::*};
 use js_sys::{Array, BigInt, Object, Reflect};
 use wasm_bindgen::{prelude::*, JsValue};
 
-use crate::{LibWeb, QualifiedIdentifier};
+use crate::{serialize_builtin_type, LibWeb, QualifiedIdentifier};
 
 fn serialize_tlv_pos(loc: TlvPos) -> JsValue {
     let obj = Object::new();
@@ -26,7 +26,7 @@ fn serialize_tlv_len(len: TlvElement<u32>) -> JsValue {
     obj.into()
 }
 
-fn serialize_decoded_value_form(form: DecodedValueForm) -> JsValue {
+fn serialize_decoded_value_form(context: &Context, form: DecodedValueForm) -> JsValue {
     let obj = Object::new();
     let (form, field, value) = match form {
         DecodedValueForm::Primitive(kind) => {
@@ -35,7 +35,7 @@ fn serialize_decoded_value_form(form: DecodedValueForm) -> JsValue {
         DecodedValueForm::Constructed(elements) => {
             let arr = Array::new();
             for element in elements {
-                arr.push(&serialize_decoded_value(element));
+                arr.push(&serialize_decoded_value(context, element));
             }
             ("constructed", "elements", arr.into())
         }
@@ -70,7 +70,14 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             ("data", "OBJECT IDENTIFIER".into(), data.to_string().into())
         }
         DecodedValueKind::Real(data) => ("data", "REAL".into(), data.to_string().into()),
-        DecodedValueKind::Enumerated(variant) => ("data", "ENUMERATED".into(), variant.into()),
+        DecodedValueKind::Enumerated(enumeration) => {
+            let obj = Object::new();
+            if let Some(item) = &enumeration.item {
+                Reflect::set(&obj, &"item".into(), &item.into()).unwrap();
+            }
+            Reflect::set(&obj, &"value".into(), &enumeration.item.into()).unwrap();
+            ("data", "ENUMERATED".into(), obj.into())
+        },
         DecodedValueKind::Time(time) => ("data", "TIME".into(), time.source.into()),
         DecodedValueKind::CharacterString(tag_type, str) => {
             ("data", tag_type.to_string().into(), str.into())
@@ -142,24 +149,31 @@ fn serialize_time_of_day(time_of_day: &TimeOfDay) -> JsValue {
     obj.into()
 }
 
-fn serialize_decoded_value_metadata(metadata: &DecodedValueMetadata) -> JsValue {
+fn serialize_decoded_value_metadata(context: &Context, metadata: &DecodedValueMetadata) -> JsValue {
     let obj = Object::new();
-    if let Some(type_ident) = &metadata.type_ident {
-        Reflect::set(
-            &obj,
-            &"typeIdent".into(),
-            &serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(type_ident))
+    let (kind, ty) = match &metadata.type_ident {
+        UntaggedType::Reference(typeref) => (
+            "reference",
+            serde_wasm_bindgen::to_value(&QualifiedIdentifier::new(&typeref.element))
                 .expect("serialize typeIdent"),
-        )
-        .unwrap();
-    }
+        ),
+        UntaggedType::BuiltinType(builtin) => ("type", serialize_builtin_type(context, builtin)),
+        other => unimplemented!("{:#?}", other),
+    };
+    let type_ident = {
+        let obj = Object::new();
+        Reflect::set(&obj, &"kind".into(), &kind.into()).unwrap();
+        Reflect::set(&obj, &kind.into(), &ty).unwrap();
+        obj.into()
+    };
+    Reflect::set(&obj, &"typeIdent".into(), &type_ident).unwrap();
     if let Some(component_name) = &metadata.component_name {
         Reflect::set(&obj, &"componentName".into(), &component_name.into()).unwrap();
     }
     obj.into()
 }
 
-fn serialize_decoded_value(value: DecodedValue) -> JsValue {
+fn serialize_decoded_value(context: &Context, value: DecodedValue) -> JsValue {
     let obj = Object::new();
     Reflect::set(&obj, &"tag".into(), &serialize_tlv_tag(value.tag)).unwrap();
     Reflect::set(&obj, &"len".into(), &serialize_tlv_len(value.len)).unwrap();
@@ -172,14 +186,14 @@ fn serialize_decoded_value(value: DecodedValue) -> JsValue {
     Reflect::set(
         &obj,
         &"form".into(),
-        &serialize_decoded_value_form(value.form),
+        &serialize_decoded_value_form(context, value.form),
     )
     .unwrap();
     if let Some(metadata) = &value.metadata {
         Reflect::set(
             &obj,
             &"metadata".into(),
-            &serialize_decoded_value_metadata(metadata),
+            &serialize_decoded_value_metadata(context, metadata),
         )
         .unwrap();
     }
@@ -258,12 +272,14 @@ pub fn compiler_decode_value(
             return err.to_string().into();
         }
     };
-    let _ = Box::into_raw(libweb);
 
     let arr = Array::new();
     for value in values {
-        arr.push(&serialize_decoded_value(value));
+        arr.push(&serialize_decoded_value(&libweb.context, value));
     }
+
+    let _ = Box::into_raw(libweb);
+
     arr.into()
 }
 
@@ -314,12 +330,9 @@ pub unsafe fn compiler_encode_value(
                     &value,
                 ) {
                     Ok(()) => {
-                        let mut reverse = Vec::with_capacity(libweb.buffer.len());
-                        for b in libweb.buffer.iter().rev() {
-                            reverse.push(*b);
-                        }
+                        let hex = hex::encode_upper(&libweb.buffer);
                         let _ = Box::into_raw(libweb);
-                        hex::encode_upper(&reverse)
+                        hex
                     }
                     Err(err) => {
                         let _ = Box::into_raw(libweb);

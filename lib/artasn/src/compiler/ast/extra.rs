@@ -5,6 +5,15 @@ pub struct AstSyntaxTokenLiteral {
     pub token: std::string::String,
 }
 
+#[cfg(feature = "parsegen-js-serialize")]
+impl JsSerialize for AstSyntaxTokenLiteral {
+    fn serialize(&self) -> wasm_bindgen::prelude::JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"kind".into(), &"SyntaxTokenLiteral".into()).unwrap();
+        obj.into()
+    }
+}
+
 lazy_static::lazy_static! {
     // from X.681 clause 10.6
     static ref ILLEGAL_TOKEN_LITERALS: std::collections::HashSet<&'static str> = std::collections::HashSet::from_iter(vec![

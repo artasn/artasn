@@ -757,6 +757,9 @@
     "@types/babel__core" "^7.20.5"
     react-refresh "^0.14.2"
 
+asn1-extension-protocol@../asn1-extension-protocol:
+  version "1.0.0"
+
 babel-plugin-macros@^3.1.0:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/babel-plugin-macros/-/babel-plugin-macros-3.1.0.tgz#9ef6dc74deb934b4db344dc973ee851d148c50c1"

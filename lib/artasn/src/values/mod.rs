@@ -76,6 +76,18 @@ impl BuiltinValue {
             Self::Containing(containing) => containing.container_type,
         })
     }
+
+    pub fn size(&self) -> Option<u64> {
+        match self {
+            Self::BitString(bit_string) => {
+                Some(bit_string.data.len() as u64 * 8 - bit_string.unused_bits as u64)
+            }
+            Self::OctetString(octet_string) => Some(octet_string.len() as u64),
+            Self::StructureOf(_, of) => Some(of.len() as u64),
+            Self::CharacterString(_, str) => Some(str.chars().count() as u64),
+            _ => None,
+        }
+    }
 }
 
 impl Display for BuiltinValue {

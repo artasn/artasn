@@ -1,4 +1,4 @@
-import { postASN1ExtensionMessage } from '../code/asn1';
+import { sendASN1ExtensionResponse } from '../code/asn1';
 import { CompileError, ModuleIdentifier, TypeDefinition, ValueDefinition } from '../wasm-definitions';
 import * as webfs from '../webfs';
 import * as client from './CompileWorkerClient';
@@ -88,13 +88,9 @@ function dispatchEvent(event: CompileEvent) {
             kind: 'result',
             result,
         });
-        await postASN1ExtensionMessage({
-            type: 'custom',
-            message: {
-                extension: 'asn1',
-                type: 'diagnostics',
-                errors: result.kind === 'error' ? result.errors : [],
-            }
+        await sendASN1ExtensionResponse({
+            type: 'diagnostics',
+            errors: result.kind === 'error' ? result.errors : [],
         })
     });
 })();

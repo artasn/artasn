@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "target": "es6",
+        "module": "NodeNext",
+        "moduleResolution": "nodenext",
+        "rootDir": "src",
+        "outDir": "out",
+        "strict": true,
+        "lib": [
+            "es2016",
+            "WebWorker"
+        ],
+        "sourceMap": true
+    }
+}

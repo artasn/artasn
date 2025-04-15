@@ -393,6 +393,34 @@ fn parse_subtype_element(
             SubtypeElement::Table(parse_table_constraint(parser, table, parameters)?)
         }
         AstSubtypeElement::UserDefinedConstraint(_) => SubtypeElement::UserDefined,
+        AstSubtypeElement::PatternConstraint(pattern) => {
+            let lit = &pattern.element.0;
+
+            match &constrained_type.ty {
+                BuiltinType::CharacterString(_) => (),
+                _ => {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "PATTERN constraint can only be applied to character string types"
+                                .to_string(),
+                        ),
+                        loc: lit.loc,
+                    })
+                }
+            }
+
+            if lit.element.kind != StringKind::C {
+                return Err(Error {
+                    kind: ErrorKind::Ast(format!(
+                        "expecting cstring for PATTERN constraint, but found {}",
+                        lit.element.kind
+                    )),
+                    loc: lit.loc,
+                });
+            }
+            let str = pattern.element.0.as_ref().map(|lit| lit.data.clone());
+            SubtypeElement::Pattern(str)
+        }
     })
 }
 

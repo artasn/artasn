@@ -52,6 +52,24 @@ scr6-valid3   SizeConstraintRange6 ::= '000000'H
 scr6-valid4   SizeConstraintRange6 ::= '00000000'H
 scr6-invalid1 SizeConstraintRange6 ::= '0000'H
 
+SizeConstraintRange7 ::= OCTET STRING (SIZE(MIN..2))
+scr7-valid1   SizeConstraintRange7 ::= ''H
+scr7-valid2   SizeConstraintRange7 ::= '00'H
+scr7-valid3   SizeConstraintRange7 ::= '0000'H
+scr7-invalid1 SizeConstraintRange7 ::= '000000'H
+
+SizeConstraintRange8 ::= OCTET STRING (SIZE(0..MAX))
+scr8-valid1   SizeConstraintRange8 ::= ''H
+scr8-valid2   SizeConstraintRange8 ::= '00'H
+scr8-valid3   SizeConstraintRange8 ::= '0000'H
+-- there are no invalid values for SizeConstraintRange8
+
+SizeConstraintRange9 ::= OCTET STRING (SIZE(MIN..MAX))
+scr9-valid1   SizeConstraintRange9 ::= ''H
+scr9-valid2   SizeConstraintRange9 ::= '00'H
+scr9-valid3   SizeConstraintRange9 ::= '0000'H
+-- there are no invalid values for SizeConstraintRange9
+
 ValueConstraint1 ::= INTEGER (0)
 vc1-valid1   ValueConstraint1 ::= 0
 vc1-invalid1 ValueConstraint1 ::= 1
@@ -120,5 +138,8 @@ nvc1-valid1   NestedValueConstraint1 ::= { foo 0,  bar { baz 10 }}
 nvc1-invalid1 NestedValueConstraint1 ::= { foo 11, bar { baz 10 }}
 nvc1-invalid2 NestedValueConstraint1 ::= { foo 0,  bar { baz 15 }}
 nvc1-invalid3 NestedValueConstraint1 ::= { foo 11, bar { baz 15 }}
+-- currently, the second value in nvc1-invalid3 does not result in an error,
+-- because the constraint verifier exits after verification of `foo` returns an error
+-- TODO: make it so that structure values can return multiple verification failures
 
 END

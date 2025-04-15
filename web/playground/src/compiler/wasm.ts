@@ -1,5 +1,6 @@
 import init, * as lib from '../wasm/libartasn';
 import { CompileError, DecodedValue, DecodeOptions, ModuleIdentifier, QualifiedIdentifier, TransferSyntax, TypeDefinition, ValueDefinition } from '../wasm-definitions';
+import { ParseError, Token } from 'asn1-extension-protocol';
 
 let libweb: number | null = null;
 
@@ -50,6 +51,10 @@ export async function encodeValue(transfer: TransferSyntax, ident: QualifiedIden
 export async function decodeValue(transfer: TransferSyntax, valueHex: string, options: DecodeOptions): Promise<DecodedValue[] | string> {
     ensureInit(libweb);
     return lib.compiler_decode_value(libweb, transfer, valueHex, options);
+}
+
+export async function tokenizeCode(source: string): Promise<Token[] | ParseError> {
+    return lib.code_tokenize(source);
 }
 
 export async function ensureLoaded(): Promise<void> {

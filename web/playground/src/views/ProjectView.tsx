@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { RichTreeView } from '@mui/x-tree-view/RichTreeView';
 import { getWebFS } from '../webfs';
 import * as compiler from '../compiler';
-import { Box, Card, Checkbox, FormControlLabel } from '@mui/material';
-import { CompileError, CharacterStringType, ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueDefinition, ValueReference, TagSource, isCharacterStringType, TransferSyntax } from '../wasm-definitions';
+import { Grid2 as Grid, Box, Card, Checkbox, FormControlLabel, Switch } from '@mui/material';
+import { ModuleIdentifier, QualifiedIdentifier, TagClass, BuiltinType, TypeDefinition, TaggedType, ValueReference, TagSource, isCharacterStringType, TransferSyntax } from '../wasm-definitions';
 import ComplexTreeItem, { TreeItemData } from '../components/ComplexTreeItem';
 import IconModule from '../icons/IconModule';
 import IconType from '../icons/IconType';
 import IconValue from '../icons/IconValue';
-import DecodedValueInfo from '../components/DecodedValueInfo';
+import DecodedValueInfo, { DecodedValueViewMode } from '../components/DecodedValueInfo';
 import { stringifyJSON } from '../util';
 
 function getModuleString(module: ModuleIdentifier): string {
@@ -82,49 +82,29 @@ function qualifiedIdentifierEquals(a: QualifiedIdentifier, b: QualifiedIdentifie
     return false;
 }
 
-function resolveType(typeDefs: TypeDefinition[], type: TaggedType): BuiltinType | null {
-    if (type.mode === 'type') {
-        return type;
-    } else {
-        const resolved = typeDefs.find(typeDef => qualifiedIdentifierEquals(typeDef.ident, type)) ?? null;
-        if (resolved === null) {
-            return null;
-        }
-        return resolveType(typeDefs, resolved.ty);
-    }
-}
+function getTypeItem(id: string, ty: TaggedType, name: string): TreeItemData {
+    let label = name;
+    let secondaryLabel = getTypeString(ty);
 
-function getValueItem(id: string, ref: ValueReference, name?: string, type?: TaggedType): TreeItemData {
     let children: TreeItemData[] | undefined;
-    if (ref.mode === 'value') {
-        if (ref.type === 'SEQUENCE') {
+    if (ty.mode === 'type') {
+        if (ty.type === 'SEQUENCE') {
             children = [];
-            for (const component of ref.components) {
-                children.push(getValueItem(`${id}/${component.name}`, component.value, component.name));
+            for (const component of ty.components) {
+                children.push(getTypeItem(`${id}/${component.name}`, component.componentType, component.name));
             }
-        } else if (ref.type === 'SEQUENCE OF') {
+        } else if (ty.type === 'CHOICE') {
             children = [];
-            for (const [index, element] of ref.elements.entries()) {
-                children.push(getValueItem(`${id}/${index}`, element));
+            for (const alternative of ty.alternatives) {
+                children.push(getTypeItem(`${id}/${alternative.name}`, alternative.alternativeType, alternative.name));
             }
         }
-    }
-
-    let label;
-    let subtext;
-    let secondaryLabel = type && getTypeString(type);
-    if (name) {
-        label = name;
-        subtext = getValueString(ref);
-    } else {
-        label = getValueString(ref);
     }
 
     return {
         id,
         label,
         secondaryLabel,
-        subtext,
         children,
     };
 }
@@ -177,29 +157,8 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
             icon: IconType,
         };
         for (const typeDef of declarations.types) {
-            let label = typeDef.ident.name;
-            let secondaryLabel = getTypeString(typeDef.ty);
-            let children: TreeItemData[] | undefined;
-
-            if (typeDef.ty.mode === 'type') {
-                const { ty } = typeDef;
-                if (ty.type === 'SEQUENCE') {
-                    children = [];
-                    for (const component of ty.components) {
-                        children.push({
-                            id: `types/${JSON.stringify(typeDef.ident)}/${component.name}`,
-                            label: component.name,
-                            secondaryLabel: getTypeString(component.componentType),
-                        });
-                    }
-                }
-            }
-
             typesItem.children!.push({
-                id: `types/${JSON.stringify(typeDef.ident)}`,
-                label,
-                secondaryLabel,
-                children,
+                ...getTypeItem(`types/${JSON.stringify(typeDef.ident)}`, typeDef.ty, typeDef.ident.name),
                 data: { kind: 'type', ident: typeDef.ident }
             });
         }
@@ -216,9 +175,12 @@ function getFlatTree(declarations: compiler.Declarations): TreeItemData[] {
                 module: valueDef.ty.module,
                 name: valueDef.ty.name,
             };
+
             valuesItem.children!.push({
-                ...getValueItem(`values/${JSON.stringify(valueDef.ident)}`, valueDef.value, valueDef.ident.name, valueDef.ty),
-                data: { kind: 'value', ident: valueDef.ident, type  },
+                id: `values/${JSON.stringify(valueDef.ident)}`,
+                label: valueDef.ident.name,
+                secondaryLabel: getTypeString(valueDef.ty),
+                data: { kind: 'value', ident: valueDef.ident, type },
             });
         }
         items.push(valuesItem);
@@ -242,6 +204,7 @@ const ProjectView = () => {
         items: [],
     });
     const [selectedItemType, setSelectedItemType] = useState<QualifiedIdentifier | null>(null);
+    const [viewMode, setViewMode] = useState<DecodedValueViewMode>('components');
     const [derValue, setDerValue] = useState('');
 
     const refreshTree = (res: compiler.CompileResult) => {
@@ -370,7 +333,19 @@ const ProjectView = () => {
                     maxWidth: '100%',
                     fontSize: '1rem',
                     userSelect: 'text',
-                }}><DecodedValueInfo typeIdent={selectedItemType ?? undefined} viewMode="components" encodedValue={derValue} /></Card>
+                }}>
+                    <Grid component="label" container alignItems="center" justifyContent="center" spacing={1}>
+                        <Grid>TLV</Grid>
+                        <Grid>
+                            <Switch
+                                checked={viewMode === 'components'}
+                                onChange={() => setViewMode(viewMode === 'components' ? 'tlv' : 'components')}
+                                disabled={derValue === ''} />
+                        </Grid>
+                        <Grid>Components</Grid>
+                    </Grid>
+                    <DecodedValueInfo typeIdent={selectedItemType ?? undefined} viewMode={viewMode} encodedValue={derValue} />
+                </Card>
             </Box>
         </Box>
     );

@@ -458,19 +458,14 @@ impl Tokenizer for StringTokenizer {
                     len: 0,
                 },
             });
-        } else {
-            if let Some(string) = self.tokenize_string()? {
-                return Ok(string);
-            }
-            if let Some(number) = self.tokenize_number()? {
-                return Ok(number);
-            }
-            if let Some(named) = self.tokenize_name()? {
-                return Ok(named);
-            }
-            if let Some(op) = self.tokenize_operator(operator_mode) {
-                return Ok(op);
-            }
+        } else if let Some(string) = self.tokenize_string()? {
+            return Ok(string);
+        } else if let Some(number) = self.tokenize_number()? {
+            return Ok(number);
+        } else if let Some(named) = self.tokenize_name()? {
+            return Ok(named);
+        } else if let Some(op) = self.tokenize_operator(operator_mode) {
+            return Ok(op);
         }
 
         Err(Error {
@@ -706,15 +701,12 @@ impl StringTokenizer {
                     // drop the trailing '-' we already took from the name
                     // break this loop, return the identifier, and allow the tokenizer loop to tokenize (i.e. skip) the comment
                     if self.current_char() == '-' {
-                        match name.chars().last() {
-                            Some(last_char) if last_char == '-' => {
-                                // return the cursor to the start of the '--'
-                                self.cursor -= 1;
-                                // drop the '-' we already took from the end oof the string
-                                name.pop().unwrap();
-                                break;
-                            }
-                            _ => (),
+                        if let Some('-') = name.chars().last() {
+                            // return the cursor to the start of the '--'
+                            self.cursor -= 1;
+                            // drop the '-' we already took from the end oof the string
+                            name.pop().unwrap();
+                            break;
                         }
                     }
 

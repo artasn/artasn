@@ -1,72 +1,94 @@
 {
-  "name": "asn1-extension",
-  "displayName": "ASN.1",
-  "description": "ASN.1 language support for VSCode Web",
-  "icon": "./icons/ASN1-128x128.png",
-  "version": "1.0.0",
-  "publisher": "artasn",
-  "license": "MIT",
-  "categories": [
-    "Programming Languages"
-  ],
-  "contributes": {
-    "languages": [
-      {
-        "id": "asn1",
-        "aliases": [
-          "ASN.1",
-          "asn.1",
-          "ASN1",
-          "asn1"
-        ],
-        "extensions": [
-          ".asn",
-          ".asn1"
-        ],
-        "configuration": "./config/asn1.language-config.json",
-        "icon": {
-          "light": "./icons/ASN1-light.png",
-          "dark": "./icons/ASN1-light.png"
-        }
-      }
+    "name": "asn1-extension",
+    "displayName": "ASN.1 by ArtASN",
+    "description": "ASN.1 language server provided by ArtASN, the ASN.1 development and experimentation platform",
+    "icon": "./icons/ASN1-128x128.png",
+    "version": "1.0.0",
+    "publisher": "artasn",
+    "license": "MIT",
+    "categories": [
+        "Programming Languages"
     ],
-    "grammars": [
-      {
-        "language": "asn1",
-        "scopeName": "source.asn1",
-        "path": "./config/asn1.tmLanguage.json"
-      },
-      {
-        "scopeName": "markdown.asn1.codeblock",
-        "path": "./config/asn1.codeblock.json",
-        "injectTo": [
-          "text.html.markdown"
+    "contributes": {
+        "languages": [
+            {
+                "id": "asn1",
+                "aliases": [
+                    "ASN.1",
+                    "asn.1",
+                    "ASN1",
+                    "asn1"
+                ],
+                "extensions": [
+                    ".asn",
+                    ".asn1"
+                ],
+                "configuration": "./config/asn1.language-config.json",
+                "icon": {
+                    "light": "./icons/ASN1-light.png",
+                    "dark": "./icons/ASN1-light.png"
+                }
+            }
         ],
-        "embeddedLanguages": {
-          "meta.embedded.block.asn": "asn1"
+        "grammars": [
+            {
+                "language": "asn1",
+                "scopeName": "source.asn1",
+                "path": "./config/asn1.tmLanguage.json"
+            },
+            {
+                "scopeName": "markdown.asn1.codeblock",
+                "path": "./config/asn1.codeblock.json",
+                "injectTo": [
+                    "text.html.markdown"
+                ],
+                "embeddedLanguages": {
+                    "meta.embedded.block.asn": "asn1"
+                }
+            }
+        ],
+        "configurationDefaults": {
+            "editor.semanticTokenColorCustomizations": {
+                "enabled": true,
+                "rules": {
+                    "type.builtin": {
+                        "foreground": "#0000ff"
+                    }
+                }
+            }
         }
-      }
-    ]
-  },
-  "keywords": [
-    "ASN",
-    "ASN.1",
-    "BER",
-    "DER"
-  ],
-  "scripts": {
-    "build": "webpack-cli --mode production"
-  },
-  "private": true,
-  "browser": "./dist/extension",
-  "devDependencies": {
-    "@types/vscode": "1.92.0",
-    "ts-loader": "^9.5.2",
-    "typescript": "^5.7.3",
-    "webpack": "^5.97.1",
-    "webpack-cli": "^6.0.1"
-  },
-  "engines": {
-    "vscode": "1.92.0"
-  }
+    },
+    "configurationDefaults": {
+        "asn1": {
+            "editor.semanticHighlighting.enabled": true
+        }
+    },
+    "keywords": [
+        "ArtASN",
+        "ASN",
+        "ASN.1",
+        "BER",
+        "DER",
+        "X.509"
+    ],
+    "scripts": {
+        "build-web": "webpack-cli --mode production --config webpack.web.config.js",
+        "build-desktop": "webpack-cli --mode production --config webpack.desktop.config.js"
+    },
+    "private": true,
+    "browser": "./dist/web/extension",
+    "main": "./dist/desktop/extension.js",
+    "dependencies": {
+        "asn1-extension-protocol": "../asn1-extension-protocol"
+    },
+    "devDependencies": {
+        "@types/vscode": "1.92.0",
+        "ts-loader": "^9.5.2",
+        "typescript": "^5.7.3",
+        "webpack": "^5.97.1",
+        "webpack-cli": "^6.0.1"
+    },
+    "engines": {
+        "vscode": "^1.92.0"
+    }
 }

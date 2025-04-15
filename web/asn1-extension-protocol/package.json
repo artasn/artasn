@@ -1,0 +1,6 @@
+{
+  "name": "asn1-extension-protocol",
+  "version": "1.0.0",
+  "license": "MIT",
+  "types": "./src/index.d.ts"
+}

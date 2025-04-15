@@ -178,7 +178,7 @@ fn compare_decoded_value_to_json_value(
                 assert_eq!(json_value.as_bool().expect("expecting BOOLEAN"), *b)
             }
             DecodedValueKind::Enumerated(i) => {
-                assert_eq!(json_value.as_i64().expect("expecting INTEGER"), *i);
+                assert_eq!(json_value.as_i64().expect("expecting INTEGER"), i.value);
             }
             DecodedValueKind::CharacterString(_, str) => assert_eq!(
                 json_value.as_str().expect("expecting character string"),
@@ -436,6 +436,10 @@ json_compile_test!(
 json_compile_test!(
     test_constraint_subsets,
     "../../test-data/compile/ConstraintSubsetTest"
+);
+json_compile_test!(
+    test_value_size_intersection_constraints,
+    "../../test-data/compile/ValueSizeIntersectionConstraintTest"
 );
 json_compile_test!(
     test_import_matching,

@@ -5,6 +5,7 @@
         "moduleResolution": "node",
         "rootDir": "src",
         "outDir": "out",
+        "strict": true,
         "lib": [
             "es2016",
             "WebWorker"

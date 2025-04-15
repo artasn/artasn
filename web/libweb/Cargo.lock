@@ -26,6 +26,7 @@ dependencies = [
  "int-enum",
  "iso8601",
  "itertools",
+ "js-sys",
  "lazy_static",
  "num",
  "parsegen",
@@ -33,6 +34,7 @@ dependencies = [
  "serde",
  "serde_json",
  "syn",
+ "wasm-bindgen",
  "widestring",
 ]
 
@@ -365,6 +367,7 @@ name = "parsegen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "js-sys",
  "lazy_static",
  "num",
  "pest",
@@ -373,6 +376,7 @@ dependencies = [
  "quote",
  "regex",
  "syn",
+ "wasm-bindgen",
 ]
 
 [[package]]

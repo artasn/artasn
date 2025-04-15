@@ -27,6 +27,8 @@ async function handleCall(call: string, args: any | null): Promise<any> {
             return wasm.encodeValue(args.transfer, args.ident);
         case 'decodeValue':
             return wasm.decodeValue(args.transfer, args.valueHex, args.options);
+        case 'tokenizeCode':
+            return wasm.tokenizeCode(args.source);
         default:
             return { error: `unknown call: ${call}` };
     }

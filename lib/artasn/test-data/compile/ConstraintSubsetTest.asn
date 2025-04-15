@@ -35,4 +35,24 @@ i2-derived2-valid2   I2-Derived2 ::= 3
 i2-derived2-invalid1 I2-Derived2 ::= 1
 i2-derived2-invalid2 I2-Derived2 ::= 4
 
+OS1 ::= OCTET STRING (SIZE(1..4))
+os1-valid1   OS1 ::= '00'H
+os1-valid2   OS1 ::= '0000'H
+os1-valid3   OS1 ::= '000000'H
+os1-valid4   OS1 ::= '00000000'H
+os1-invalid1 OS1 ::= ''H
+os1-invalid2 OS1 ::= '0000000000'H
+
+OS1-Subset1 ::= OS1 (SIZE(1<..<4))
+os1-subset1-valid1   OS1-Subset1 ::= '0000'H
+os1-subset1-valid2   OS1-Subset1 ::= '000000'H
+os1-subset1-invalid1 OS1-Subset1 ::= '00'H
+os1-subset1-invalid2 OS1-Subset1 ::= '00000000'H
+
+-- OS1-Subset2 ::= OS1 (SIZE(MIN<..<MAX))
+-- os1-subset2-valid1   OS1-Subset2 ::= '0000'H
+-- os1-subset2-valid2   OS1-Subset2 ::= '000000'H
+-- os1-subset2-invalid1 OS1-Subset2 ::= '00'H
+-- os1-subset2-invalid2 OS1-Subset2 ::= '00000000'H
+
 END

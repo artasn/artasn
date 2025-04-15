@@ -14,6 +14,7 @@
     "@mui/icons-material": "^6.4.5",
     "@mui/material": "^6.4.3",
     "@mui/x-tree-view": "^7.26.0",
+    "asn1-extension-protocol": "../asn1-extension-protocol",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router-dom": "7.1.5",

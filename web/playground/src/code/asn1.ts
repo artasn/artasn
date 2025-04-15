@@ -1,17 +1,42 @@
-import { CompileError } from '../wasm-definitions';
 import { getExtensionHostIFrame } from './VisualStudioCode';
+import type { Request, RequestMessage, ResponseMessage } from 'asn1-extension-protocol';
+import { tokenizeCode } from '../compiler';
 
-export interface ExtensionMessage {
-    type: 'custom';
-    message: {
-        extension: 'asn1';
-    } & ({
-        type: 'diagnostics';
-        errors: CompileError[];
-    });
+let isInit = false;
+
+export async function initASN1Extension() {
+    if (!isInit) {
+        isInit = true;
+        window.addEventListener('message', event => {
+            const req: Request | undefined = event.data?.data;
+            if (req?.type === 'custom' && req?.message.extension === 'asn1') {
+                handleRequest(req.message, req.message.seq);
+            }
+        });
+    }
 }
 
-export async function postASN1ExtensionMessage(message: ExtensionMessage) {
+async function handleRequest(req: RequestMessage, seq: number) {
+    if (req.type === 'diagnostics') {
+        // ignore diagnostics requests
+        return;
+    } else if (req.type === 'tokenize') {
+        const result = await tokenizeCode(req.source);
+        await sendASN1ExtensionResponse({
+            type: 'tokenize',
+            result,
+        }, seq);
+    }
+}
+
+export async function sendASN1ExtensionResponse(req: ResponseMessage, seq?: number) {
     const iframe = await getExtensionHostIFrame();
-    iframe.contentWindow?.postMessage(message);
+    iframe.contentWindow?.postMessage({
+        type: 'custom',
+        message: {
+            extension: 'asn1',
+            seq,
+            ...req,
+        }
+    });
 }

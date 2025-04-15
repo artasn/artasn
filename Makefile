@@ -14,7 +14,7 @@ clean:
 
 build: build-cli build-playground
 
-.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-cli-deb build-libweb build-webfs build-asn1-extension build-vscode-web build-playground dev-playground test
+.PHONY: .install-cargo .install-wasm .install-wasm-pack build-cli build-cli-deb build-libweb-playground build-libweb-vscode build-webfs build-asn1-extension-playground build-asn1-extension-desktop build-vscode-web build-playground dev-playground test
 
 .install-cargo:
 	$(shell which cargo > /dev/null || (echo "Rust and Cargo are required to build $(PROG). Visit https://rustup.rs/ to do so") && exit 1)
@@ -41,9 +41,10 @@ build-cli-deb: build-cli
 .install-wasm-pack: .install-wasm
 	$(shell which wasm-pack > /dev/null || cargo install wasm-pack)
 
-build-libweb: .install-cargo .install-wasm .install-wasm-pack
+build-libweb-playground: .install-cargo .install-wasm .install-wasm-pack
 	cd web/libweb && \
-	wasm-pack build $(MODE) --target web --no-pack && \
+	PARSEGEN_TS_BINDINGS=../../web/asn1-extension-protocol/src/asn1-ast.d.ts \
+	  wasm-pack build $(MODE) --target web --no-pack -- --features code && \
 	cd .. && \
 	rm -rf playground/src/wasm && \
 	cp -r libweb/pkg playground/src/wasm && \
@@ -51,6 +52,15 @@ build-libweb: .install-cargo .install-wasm .install-wasm-pack
 	mkdir -p playground/public/static && \
 	mv playground/src/wasm/libartasn_bg.wasm playground/public/static && \
 	cd ..
+
+build-libweb-vscode: .install-cargo .install-wasm .install-wasm-pack
+	cd web/libweb && \
+	PARSEGEN_TS_BINDINGS=../../web/asn1-extension-protocol/src/asn1-ast.d.ts \
+	  wasm-pack build $(MODE) --target nodejs --no-pack -- --features code && \
+	cd .. && \
+	cp libweb/pkg/libartasn.js libweb/pkg/libartasn.d.ts asn1-extension/src/desktop/wasm && \
+	mkdir -p asn1-extension/dist/desktop && \
+	cp libweb/pkg/libartasn_bg.* asn1-extension/dist/desktop
 
 build-webfs:
 	cd web/webfs && \
@@ -63,13 +73,18 @@ build-webfs:
 	mkdir -p ../playground/public/static/extensions/webfs && \
 	cp -r package.json package.nls.json dist ../playground/public/static/extensions/webfs/
 
-build-asn1-extension:
+build-asn1-extension-playground: build-libweb-playground
 	cd web/asn1-extension && \
 	yarn && \
-	yarn build && \
+	yarn build-web && \
 	rm -rf ../playground/public/static/extensions/asn1 && \
 	mkdir -p ../playground/public/static/extensions/asn1 && \
 	cp -r package.json package.nls.json config icons dist ../playground/public/static/extensions/asn1/
+
+build-asn1-extension-desktop: build-libweb-vscode
+	cd web/asn1-extension && \
+	yarn && \
+	yarn build-desktop
 
 build-vscode-web:
 	cd web/vscode-web && \
@@ -77,7 +92,7 @@ build-vscode-web:
 	yarn build && \
 	cd ../..
 
-build-playground: build-libweb build-webfs build-asn1-extension
+build-playground: build-libweb-playground build-webfs build-asn1-extension-playground
 	export NODE_OPTIONS=--openssl-legacy-provider && \
 	cd web/playground && \
 	yarn && \

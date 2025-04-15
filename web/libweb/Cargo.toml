@@ -5,9 +5,10 @@ edition = "2021"
 
 [features]
 default = ["console_error_panic_hook"]
+code = ["artasn/parsegen-js-serialize"]
 
 [dependencies]
-artasn = { path = "../../lib/artasn"  }
+artasn = { path = "../../lib/artasn" }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 hex = "0.4.3"
 js-sys = "0.3.77"

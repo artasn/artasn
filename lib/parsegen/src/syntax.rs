@@ -28,6 +28,7 @@ enum BlockType {
 }
 
 struct SyntaxParser {
+    lang: Language,
     data: RuleData,
     block_stack: Vec<BlockType>,
     persist: bool,
@@ -262,29 +263,61 @@ impl SyntaxParser {
                     if type_name != "bool" {
                         type_name = format!("AstElement<Ast{}>", type_name);
                     }
-                    if boxed {
-                        type_name = format!("Box<{}>", type_name);
-                    }
-                    let (full_type, default_value, optional, repeated) =
-                        if let Some(full_type) = type_modifier {
-                            match full_type.as_str() {
-                                "optional" => (
-                                    format!("Option<{}>", type_name),
-                                    Some(String::from("None")),
-                                    true,
-                                    false,
-                                ),
-                                "repeated" => (
-                                    format!("Vec<{}>", type_name),
-                                    Some(String::from("Vec::new()")),
-                                    false,
-                                    true,
-                                ),
-                                _ => unreachable!(),
+                    let (full_type, default_value, optional, repeated) = match self.lang {
+                        Language::Rust => {
+                            if boxed {
+                                type_name = format!("Box<{}>", type_name);
                             }
-                        } else {
-                            (type_name, None, false, false)
-                        };
+
+                            if let Some(full_type) = type_modifier {
+                                match full_type.as_str() {
+                                    "optional" => (
+                                        format!("Option<{}>", type_name),
+                                        Some(String::from("None")),
+                                        true,
+                                        false,
+                                    ),
+                                    "repeated" => (
+                                        format!("Vec<{}>", type_name),
+                                        Some(String::from("Vec::new()")),
+                                        false,
+                                        true,
+                                    ),
+                                    _ => unreachable!(),
+                                }
+                            } else {
+                                (type_name, None, false, false)
+                            }
+                        }
+                        Language::TypeScript => {
+                            if type_name == "bool" {
+                                (
+                                    String::from("boolean"),
+                                    Some(String::from("false")),
+                                    false,
+                                    false,
+                                )
+                            } else if let Some(full_type) = type_modifier {
+                                match full_type.as_str() {
+                                    "optional" => (
+                                        format!("{} | null", type_name),
+                                        Some(String::from("null")),
+                                        true,
+                                        false,
+                                    ),
+                                    "repeated" => (
+                                        format!("{}[]", type_name),
+                                        Some(String::from("[]")),
+                                        false,
+                                        true,
+                                    ),
+                                    _ => unreachable!(),
+                                }
+                            } else {
+                                (type_name, None, false, false)
+                            }
+                        }
+                    };
 
                     let statement = if full_type == "bool" {
                         format!("let mut {}: bool = false;\n", var_name)
@@ -336,10 +369,11 @@ fn parse_rule(
     let name = pairs.next().unwrap().as_str();
     let data = {
         let mut parser = SyntaxParser {
+            lang: cb.lang,
             data: RuleData {
                 rule_name: format!("Ast{}", name),
                 variables: Vec::with_capacity(64),
-                code: CodeBuilder::with_capacity(1024),
+                code: CodeBuilder::with_capacity(Language::Rust, 1024),
                 return_variable: None,
             },
             block_stack: Vec::with_capacity(4),
@@ -355,7 +389,9 @@ fn parse_rule(
         parser.data
     };
     cb.build_struct(&data);
-    cb.build_struct_parser(&data);
+    if cb.lang == Language::Rust {
+        cb.build_struct_parser(&data);
+    }
     data
 }
 
@@ -382,10 +418,13 @@ fn parse_variant(
     }
 
     cb.build_enum(&name, &variants);
-    cb.build_enum_parser(&name, &variants, error_message)
+    if cb.lang == Language::Rust {
+        cb.build_enum_parser(&name, &variants, error_message);
+    }
 }
 
 pub fn parse_syntax(
+    lang: Language,
     syntax_path: &str,
     syntax_defs: &str,
     keywords: &HashMap<String, String>,
@@ -394,7 +433,7 @@ pub fn parse_syntax(
     let parser = PestSyntaxParser::parse(Rule::syntax, syntax_defs);
     match parser {
         Ok(pairs) => {
-            let mut cb = CodeBuilder::with_capacity(64 * 1024);
+            let mut cb = CodeBuilder::with_capacity(lang, 64 * 1024);
             for pair in pairs {
                 match pair.as_rule() {
                     Rule::rule_definition => {
@@ -410,5 +449,26 @@ pub fn parse_syntax(
             Ok(cb.into_string())
         }
         Err(err) => Err(err.with_path(syntax_path)),
+    }
+}
+
+pub fn list_definitions(syntax_defs: &str) -> Vec<String> {
+    let parser = PestSyntaxParser::parse(Rule::syntax, syntax_defs);
+    match parser {
+        Ok(pairs) => {
+            let mut defs = Vec::with_capacity(1024);
+            for pair in pairs {
+                match pair.as_rule() {
+                    Rule::rule_definition | Rule::variant_definition => {
+                        let name = pair.into_inner().next().unwrap().as_str();
+                        defs.push(format!("Ast{name}"));
+                    }
+                    Rule::extern_definition | Rule::EOI => (),
+                    x => unreachable!("{:?}", x),
+                }
+            }
+            defs
+        }
+        Err(err) => panic!("{err}"),
     }
 }

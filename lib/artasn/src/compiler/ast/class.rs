@@ -647,7 +647,7 @@ fn parse_value_set(
 
     let ast_elements: Vec<&AstElement<AstValue>> = set
         .element
-        .element_groups
+        .0
         .iter()
         .filter_map(|group| match &group.element {
             AstValueSetElementGroup::Extensible(_) => None,

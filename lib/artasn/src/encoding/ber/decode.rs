@@ -60,7 +60,7 @@ fn get_component_by_tag(
                                 .collect::<Vec<String>>()
                                 .join(" | ");
                             return Err(DecodeError::Decoder {
-                                message: format!("SEQUENCE component at index {} is defined with tag {} but the encoded value has tag {}", component_index, tag_str, tlv_tag.element),
+                                message: format!("SEQUENCE component at index {} is defined with tag '{}' but the encoded value has tag '{}'", component_index, tag_str, tlv_tag.element),
                                 pos: tlv_tag.pos,
                             });
                         }
@@ -82,6 +82,42 @@ fn get_component_by_tag(
                 tagged_type: *of.component_type.clone(),
                 index,
             }),
+            BuiltinType::Choice(choice) => {
+                if index != 0 {
+                    return Err(DecodeError::Decoder {
+                        message: "CHOICE encoding cannot contain multiple values".to_string(),
+                        pos: tlv_tag.pos,
+                    });
+                }
+
+                for alternative in choice
+                    .resolve_alternatives(context)
+                    .map_err(DecodeError::Parser)?
+                {
+                    let alternative_type = alternative
+                        .alternative_type
+                        .resolve(context)
+                        .map_err(DecodeError::Parser)?;
+                    if type_eq_tlv(context, &alternative_type, &tlv_tag.element)
+                        .map_err(DecodeError::Parser)?
+                        .is_some()
+                    {
+                        return Ok(Some(ComponentData {
+                            name: Some(alternative.name.element.clone()),
+                            tagged_type: *alternative.alternative_type,
+                            index: 0,
+                        }));
+                    }
+                }
+
+                return Err(DecodeError::Decoder {
+                    message: format!(
+                        "CHOICE does not define an alternative with tag '{}'",
+                        tlv_tag.element
+                    ),
+                    pos: tlv_tag.pos,
+                });
+            }
             _ => None,
         },
     })
@@ -204,14 +240,14 @@ fn ber_decode_universal(
             DecodedValueKind::ObjectIdentifier(Oid(nodes))
         }
         TagType::Enumerated => {
-            let int = ber_decode_integer(value)?;
-            let int: i64 = int.try_into().map_err(|_| {
+            let value = ber_decode_integer(value)?;
+            let value: i64 = value.try_into().map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     "ENUMERATED value out of bounds for signed 64-bit integer",
                 )
             })?;
-            DecodedValueKind::Enumerated(int)
+            DecodedValueKind::Enumerated(DecodedEnumerationItem { item: None, value })
         }
         TagType::ObjectDescriptor
         | TagType::NumericString
@@ -335,7 +371,7 @@ fn ber_decode_tlv(
 ) -> DecodeResult<DecodedValue> {
     let form = match tlv.tag.element.form {
         TypeForm::Primitive => {
-            let kind = match tlv.tag.element.class {
+            let mut kind = match tlv.tag.element.class {
                 Class::Universal => match TagType::try_from(tlv.tag.element.num) {
                     Ok(tag_type) => {
                         ber_decode_universal(syntax, &tlv, tag_type).map_err(DecodeError::Io)?
@@ -367,6 +403,38 @@ fn ber_decode_tlv(
                     }
                 },
             };
+            if let (
+                DecodedValueKind::Enumerated(enumeration),
+                DecodeMode::SpecificType { resolved, .. },
+            ) = (&mut kind, mode)
+            {
+                match &resolved.ty {
+                    BuiltinType::Enumerated(enumerated) => {
+                        for item in enumerated {
+                            let item_value = match &item.value {
+                                EnumerationItemValue::Implied(implied) => *implied,
+                                EnumerationItemValue::Specified(spec) => {
+                                    match spec.resolve(context).map_err(DecodeError::Parser)?.value
+                                    {
+                                        BuiltinValue::Integer(int) => {
+                                            int.try_into().expect("out of bounds ENUMERATED item")
+                                        }
+                                        other => panic!("expecting INTEGER but found {}", other),
+                                    }
+                                }
+                            };
+                            if item_value == enumeration.value {
+                                enumeration.item = Some(item.name.element.clone());
+                                break;
+                            }
+                        }
+                    }
+                    other => panic!(
+                        "decoded an ENUMERATED item but the SpecificType is {}",
+                        other
+                    ),
+                }
+            }
             DecodedValueForm::Primitive(kind)
         }
         TypeForm::Constructed => {
@@ -408,9 +476,14 @@ fn ber_decode_tlv(
         DecodeMode::SpecificType {
             source_ident,
             component_name,
-            ..
+            resolved,
         } => Some(DecodedValueMetadata {
-            type_ident: source_ident.clone(),
+            type_ident: match source_ident {
+                Some(source_ident) => {
+                    UntaggedType::Reference(AstElement::new(source_ident.clone(), Loc::default()))
+                }
+                None => UntaggedType::BuiltinType(resolved.ty.clone()),
+            },
             component_name: component_name.clone(),
         }),
     };

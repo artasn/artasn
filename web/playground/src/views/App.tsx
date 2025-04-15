@@ -5,6 +5,7 @@ import AppLoadingView from './AppLoadingView';
 import { ToastContainer } from 'react-toastify';
 
 import './App.css';
+import { initASN1Extension } from '../code/asn1';
 
 const App = () => {
     const [loading, setLoading] = useState(true);
@@ -13,6 +14,7 @@ const App = () => {
         (async () => {
             // wait for the VSCode window to start, with the extension host loaded
             await getExtensionHostIFrame();
+            initASN1Extension();
             setLoading(false);
         })();
     }, []);

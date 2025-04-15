@@ -15,33 +15,32 @@ Features currently include:
 
 - [x] Compiling ASN.1 modules
   - [x] All 35 built-in types
-  - [x] Constraints (currently only enforced when encoding, not when decoding)
+  - [x] Constraints (currently only enforced when compiling/encoding, not when decoding)
     - [x] Single Value and Value Range
     - [x] Size
-    - [x] Inner Type (parsed but not enforced at this time)
+    - [x] Inner Type
     - [x] Contents
     - [ ] Permitted Alphabet
-    - [ ] Pattern
     - [ ] Properties
-    - [ ] Type
+    - [x] Pattern (parsed but unenforced)
   - [x] Parameterized types
-  - [x] X.681: Information object classes, objects, and object sets
+  - [x] Information object classes, objects, and object sets
   - [ ] MACRO definitions
 - [x] ArtASN Playground
   - [x] Visual Studio Code editor window
     - [x] ASN.1 extension providing features including:
-      - [x] Syntax highlighting
+      - [x] Syntax highlighting and semantic highlighting
       - [x] Error and warning messages
       - [ ] Completion options
       - [ ] Jump to declaration and references
       - [ ] Hover information
     - [ ] Importing ASN.1 files and archives containing ASN.1 files from the user's file system into the VSCode editor
-    - [ ] Exporting ASN.1 files from the VSCode editor to a downloadable compressed archive.
+    - [ ] Exporting ASN.1 files from the VSCode editor to a downloadable compressed archive
 - [ ] Local ArtASN Compiler Server with VSCode for Desktop Extension with Playground UI
 - [ ] Cargo-like compiler frontend to declare projects with dependencies
 - [x] Encoding defined values into various tranfer syntaxes
-  - [ ] [BER](https://en.wikipedia.org/wiki/X.690#BER,_CER_and_DER_compared)
-  - [ ] [CER](https://en.wikipedia.org/wiki/X.690#BER,_CER_and_DER_compared)
+  - [x] [BER](https://en.wikipedia.org/wiki/X.690#BER,_CER_and_DER_compared)
+  - [x] [CER](https://en.wikipedia.org/wiki/X.690#BER,_CER_and_DER_compared)
   - [x] [DER](https://en.wikipedia.org/wiki/X.690#BER,_CER_and_DER_compared)
   - [ ] [JER](https://www.oss.com/asn1/resources/asn1-papers/Overview_of_JER.pdf)
   - [ ] [PER](https://www.oss.com/asn1/resources/asn1-made-simple/asn1-quick-reference/packed-encoding-rules.html)

@@ -33,11 +33,11 @@ export interface QualifiedIdentifier {
 
 export type TaggedType = ((QualifiedIdentifier & {
     mode: 'reference',
-    tag?: Tag;
 }) | (BuiltinType & {
     mode: 'type',
-    tag?: Tag,
-}));
+})) & {
+    tag?: Tag;
+};
 
 export enum TagClass {
     Universal = 'UNIVERSAL',
@@ -107,12 +107,20 @@ export type BuiltinType = {
     componentType: TaggedType;
 } | {
     type: CharacterStringType;
+} | {
+    type: 'CHOICE';
+    alternatives: ChoiceAlternative[];
 };
 
 export interface StructureComponent {
     name: string;
     componentType: TaggedType;
     optional: boolean;
+}
+
+export interface ChoiceAlternative {
+    name: string;
+    alternativeType: TaggedType;
 }
 
 export interface TypeDefinition {
@@ -182,6 +190,12 @@ export type Value = {
     type: 'DATE-TIME';
 } | {
     type: 'DURATION';
+} | {
+    type: 'CHOICE';
+    alternative: {
+        name: string;
+        value: ValueReference;
+    };
 };
 
 export interface StructureComponentValue {
@@ -252,7 +266,10 @@ export type DecodedValueKind = {
     data: number;
 } | {
     type: 'ENUMERATED';
-    data: number;
+    data: {
+        item?: string;
+        value: number;
+    };
 } | {
     type: CharacterStringType;
     data: string;
@@ -304,7 +321,13 @@ export interface TimeValue {
 }
 
 export interface DecodedValueMetadata {
-    typeIdent?: QualifiedIdentifier;
+    typeIdent: {
+        kind: 'reference',
+        reference: QualifiedIdentifier;
+    } | {
+        kind: 'type';
+        type: BuiltinType;
+    };
     componentName?: string;
 }
 

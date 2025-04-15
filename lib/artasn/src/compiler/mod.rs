@@ -141,8 +141,8 @@ impl Compiler {
     pub fn add_source(&mut self, path: String, source: String) -> CompileResult<()> {
         let mut token_stream =
             TokenStream::from_string(&source, self.config.permit_lowercase_string_indicator);
-        let parser = parser::AstProgram::parse(ParseContext::new(&mut token_stream));
-        match parser {
+        let result = AstProgram::parse(ParseContext::new(&mut token_stream));
+        match result {
             ParseResult::Ok(program) => {
                 if let Some(existing_source) =
                     self.sources.iter_mut().find(|source| source.path == path)
