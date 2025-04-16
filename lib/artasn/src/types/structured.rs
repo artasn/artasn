@@ -49,7 +49,7 @@ pub struct ObjectClassFieldReference {
 
 impl Display for ObjectClassFieldReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.class_type.element.name)?;
+        self.class_type.element.fmt(f)?;
         f.write_str(".&")?;
         f.write_str(&self.field.element)?;
         Ok(())

@@ -11,5 +11,6 @@
             "WebWorker"
         ],
         "sourceMap": true
-    }
+    },
+    "exclude": ["src/web/**"]
 }

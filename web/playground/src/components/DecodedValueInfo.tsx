@@ -35,6 +35,7 @@ const DecodedValueInfo = ({ typeIdent, encodedValue, viewMode }: DecodedValueInf
             };
         }
 
+        console.log(encodedValue);
         compiler.decodeValue(TransferSyntax.DER, encodedValue, options).then(res => {
             if (typeof res === 'string') {
                 setValues({
@@ -117,7 +118,7 @@ const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProp
 
     return (
         <div style={rootStyle}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
                 {value.form.type === 'constructed' && (
                     <IconButton onClick={() => setExpanded(!expanded)}>
                         <ChevronRight sx={{
@@ -142,7 +143,7 @@ const ValueComponent = ({ encodedValue, mode, value, style }: ValueComponentProp
                 ) : (
                     <>
                         {value.metadata?.componentName && (
-                            <span style={{ whiteSpace: 'nowrap' }}>{value.metadata.componentName}&nbsp;</span>
+                            <span>{value.metadata.componentName}&nbsp;</span>
                         )}
                         {getTypeIdent(value.metadata)}
                         &nbsp;
@@ -283,9 +284,11 @@ function getValueKindElement(kind: DecodedValueKind, includeType: boolean = true
             if (!kind.data.item) {
                 return <span style={{ color: LITERAL_COLOR }}>{kind.data.value}</span>
             } else {
+                console.log(kind);
                 return (
                     <>
                         <span style={{ color: IDENT_COLOR }}>{kind.data.item}</span>
+                        &nbsp;
                         <span>(</span>
                         <span style={{ color: LITERAL_COLOR }}>{kind.data.value}</span>
                         <span>)</span>

@@ -75,7 +75,7 @@ fn serialize_decoded_value_kind(kind: DecodedValueKind) -> JsValue {
             if let Some(item) = &enumeration.item {
                 Reflect::set(&obj, &"item".into(), &item.into()).unwrap();
             }
-            Reflect::set(&obj, &"value".into(), &enumeration.item.into()).unwrap();
+            Reflect::set(&obj, &"value".into(), &enumeration.value.into()).unwrap();
             ("data", "ENUMERATED".into(), obj.into())
         },
         DecodedValueKind::Time(time) => ("data", "TIME".into(), time.source.into()),

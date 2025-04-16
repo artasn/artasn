@@ -2,11 +2,14 @@ use std::{fmt::Display, fs, time::Instant};
 
 use artasn::{
     compiler::{options::CompilerConfig, Compiler, Context},
-    encoding::{EncodeMode, TransferSyntax},
+    encoding::{DecodeMode, EncodeMode, TransferSyntax},
     module::QualifiedIdentifier,
     values::ValueResolve,
 };
 use clap::{Parser, ValueEnum};
+use value_notation::get_asn1_value_str;
+
+mod value_notation;
 
 #[derive(Debug, Parser)]
 #[command(name = "artasn")]
@@ -22,8 +25,15 @@ struct Cli {
     /// Encode an ASN.1 value definition in the format "ModuleName.valueName"
     #[arg(long, group = "group_encode")]
     encode: Option<String>,
-    /// The transfer syntax to encode the value into
-    #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER, requires = "group_encode")]
+    /// Decode a hex-encoded ASN.1 value into ASN.1 value notation.
+    #[arg(long, conflicts_with = "encode", group = "group_decode")]
+    decode: Option<String>,
+    /// When using '--decode', optionally provide the ASN.1 type of the value in the format "ModuleName.TypeName".
+    /// If this argument is not included, the decoder will try each ASN.1 type defined across all provided modules until one of them matches the value.
+    #[arg(long, conflicts_with = "encode", requires = "group_decode")]
+    decode_type: Option<String>,
+    /// The transfer syntax used for encoding or decoding  values.
+    #[clap(long, short = 't', default_value_t = TransferSyntaxName::DER, requires = "group_encode", requires = "group_decode")]
     transfer_syntax: TransferSyntaxName,
     /// ASN.1 module files to compile
     #[arg(required = true, num_args = 1..)]
@@ -170,42 +180,14 @@ fn main() {
             )),
         };
 
-        let dot_count = value.chars().filter(|ch| *ch == '.').count();
-        if dot_count == 0 {
-            exit_with_error(format_args!(
-                "value '{}' is missing module name; use the format 'ModuleName.{}'",
-                value, value
-            ));
-        } else if dot_count > 1 {
-            exit_with_error(format_args!(
-                "value '{}' is malformed; use the format 'ModuleName.valueName'",
-                value
-            ))
-        }
-
-        let split = value.split(".").collect::<Vec<&str>>();
-        let module_name = split[0].trim();
-        let value_name = split[1].trim();
-
-        if module_name.is_empty() {
-            exit_with_error(format_args!("module name cannot be empty"));
-        }
-        if value_name.is_empty() {
-            exit_with_error(format_args!("value name cannot be empty"));
-        }
-
-        let module = match context.lookup_module_by_name(module_name) {
-            Some(module) => module.ident.clone(),
-            None => exit_with_error(format_args!("module '{}' could not be found", module_name)),
+        let value_ident = parse_qualified_identifier(&context, IdentKind::Value, &value);
+        let declared_value = match context.lookup_value(&value_ident) {
+            Some(value) => value,
+            None => exit_with_error(format_args!(
+                "value '{}' could not be found in module '{}'",
+                value_ident.name, value_ident.module
+            )),
         };
-        let declared_value =
-            match context.lookup_value(&QualifiedIdentifier::new(module, value_name.to_string())) {
-                Some(value) => value,
-                None => exit_with_error(format_args!(
-                    "value '{}' could not be found in module '{}'",
-                    value_name, module_name
-                )),
-            };
 
         let value = match declared_value.value.resolve(&context) {
             Ok(value) => value,
@@ -228,5 +210,117 @@ fn main() {
             println!("encoded in {}\n", elapsed_to_string(&start));
         }
         println!("{}", hex);
+    } else if let Some(hex) = args.decode {
+        let binary = match hex::decode(hex) {
+            Ok(binary) => binary,
+            Err(err) => exit_with_error(format_args!("failed to decode hex: {}", err)),
+        };
+
+        let transfer_syntax = args.transfer_syntax;
+        let ts = TransferSyntax::get_by_name(transfer_syntax.to_string().as_str())
+            .expect("invalid transfer syntax (this should be prevented by clap)");
+        let decoder = match ts.get_codec().decoder {
+            Some(decoder) => decoder,
+            None => exit_with_error(format_args!(
+                "decoding with the {} transfer syntax is not yet implemented",
+                transfer_syntax
+            )),
+        };
+
+        let mode = match args.decode_type.as_ref() {
+            Some(decode_type) => {
+                let type_ident = parse_qualified_identifier(&context, IdentKind::Type, decode_type);
+                let declared_type = match context.lookup_type(&type_ident) {
+                    Some(value) => value,
+                    None => exit_with_error(format_args!(
+                        "type '{}' could not be found in module '{}'",
+                        type_ident.name, type_ident.module
+                    )),
+                };
+
+                let resolved = match declared_type.ty.resolve(&context) {
+                    Ok(value) => value,
+                    Err(err) => exit_with_error(format_args!(
+                        "failed to resolve type: {}",
+                        err.kind.message()
+                    )),
+                };
+
+                DecodeMode::SpecificType {
+                    source_ident: Some(type_ident),
+                    component_name: None,
+                    resolved,
+                }
+            }
+            None => todo!("--decode without --decode-type"),
+        };
+
+        let decoded_values = match decoder(ts, &mode, &binary, &context) {
+            Ok(decoded_values) => decoded_values,
+            Err(err) => exit_with_error(format_args!("failed to decode value: {}", err)),
+        };
+        for decoded_value in decoded_values {
+            let str = get_asn1_value_str(&context, &decoded_value);
+            println!("{str}");
+        }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IdentKind {
+    Type,
+    Value,
+}
+
+fn parse_qualified_identifier(
+    context: &Context,
+    kind: IdentKind,
+    str_name: &str,
+) -> QualifiedIdentifier {
+    let dot_count = str_name.chars().filter(|ch| *ch == '.').count();
+    if dot_count == 0 {
+        match kind {
+            IdentKind::Type => {
+                exit_with_error(format_args!(
+                    "type '{}' is missing module name; use the format 'ModuleName.{}'",
+                    str_name, str_name
+                ));
+            }
+            IdentKind::Value => {
+                exit_with_error(format_args!(
+                    "value '{}' is missing module name; use the format 'ModuleName.{}'",
+                    str_name, str_name
+                ));
+            }
+        }
+    } else if dot_count > 1 {
+        match kind {
+            IdentKind::Type => exit_with_error(format_args!(
+                "type '{}' is malformed; use the format 'ModuleName.TypeName'",
+                str_name
+            )),
+            IdentKind::Value => exit_with_error(format_args!(
+                "value '{}' is malformed; use the format 'ModuleName.valueName'",
+                str_name
+            )),
+        }
+    }
+
+    let split = str_name.split(".").collect::<Vec<&str>>();
+    let module_name = split[0].trim();
+    let value_name = split[1].trim();
+
+    if module_name.is_empty() {
+        exit_with_error(format_args!("module name cannot be empty"));
+    }
+    if value_name.is_empty() {
+        exit_with_error(format_args!("value name cannot be empty"));
+    }
+
+    let module = match context.lookup_module_by_name(module_name) {
+        Some(module) => module.ident.clone(),
+        None => exit_with_error(format_args!("module '{}' could not be found", module_name)),
+    };
+
+    QualifiedIdentifier::new(module, value_name.to_string())
 }

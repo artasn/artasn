@@ -4,7 +4,17 @@ const SYNTAX_FILE: &str = "src/compiler/asn1.syntax";
 const GEN_FILE: &str = "src/compiler/asn1.gen.rs";
 
 fn main() {
-    println!("cargo:rerun-if-changed={}", SYNTAX_FILE);
+    if cfg!(feature = "parsegen-js-serialize") {
+        // force the build script to always run
+        // this is necessary because  parsegen-js-serialize
+        // causes parsegen to output TypeScript files,
+        // even when none of the Rust files in the crate have actually changed
+        // this behavior is generally gross (as all of parsegen is) and should be improved upon at some point
+        println!("cargo:rerun-if-changed=NULL");
+    } else {
+        println!("cargo:rerun-if-changed={}", SYNTAX_FILE);
+    }
+
     let mut syntax = String::with_capacity(16 * 1024);
     File::open(SYNTAX_FILE)
         .unwrap()

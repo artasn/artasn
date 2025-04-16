@@ -1,7 +1,7 @@
 use std::io;
 
 use num::bigint::Sign;
-use num::{BigInt, BigUint};
+use num::BigInt;
 use widestring::{Utf16String, Utf32String};
 
 use super::reader::{read_vlq, DerReader};
@@ -44,35 +44,33 @@ fn get_component_by_tag(
                         .component_type
                         .resolve(context)
                         .map_err(DecodeError::Parser)?;
-
-                    let tag_matches = type_eq_tlv(context, &component_type, &tlv_tag.element)
-                        .map_err(DecodeError::Parser)?
-                        .is_some();
-                    if !tag_matches {
-                        if component.optional || component.default_value.is_some() {
-                            continue;
-                        } else {
-                            let tag_str = resolved
-                                .get_possible_tags(context)
-                                .map_err(DecodeError::Parser)?
-                                .into_iter()
-                                .map(|(tag, _)| tag.to_string())
-                                .collect::<Vec<String>>()
-                                .join(" | ");
-                            return Err(DecodeError::Decoder {
-                                message: format!("SEQUENCE component at index {} is defined with tag '{}' but the encoded value has tag '{}'", component_index, tag_str, tlv_tag.element),
-                                pos: tlv_tag.pos,
-                            });
+                    let matching_tag = type_eq_tlv(context, &component_type, &tlv_tag.element)
+                        .map_err(DecodeError::Parser)?;
+                    match matching_tag {
+                        Some(matching_type) => {
+                            return Ok(Some(ComponentData {
+                                name: Some(component.name.element.clone()),
+                                tagged_type: matching_type.into(),
+                                index: component_index,
+                            }));
                         }
-                    }
-
-                    let data = ComponentData {
-                        name: Some(component.name.element.clone()),
-                        tagged_type: *component.component_type,
-                        index: component_index,
-                    };
-                    if tag_matches {
-                        return Ok(Some(data));
+                        None => {
+                            if component.optional || component.default_value.is_some() {
+                                continue;
+                            } else {
+                                let tag_str = component_type
+                                    .get_possible_tags(context)
+                                    .map_err(DecodeError::Parser)?
+                                    .into_iter()
+                                    .map(|(tag, _)| tag.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(" | ");
+                                return Err(DecodeError::Decoder {
+                                    message: format!("SEQUENCE component at index {} is defined with tag '{}' but the encoded value has tag '{}'", component_index, tag_str, tlv_tag.element),
+                                    pos: tlv_tag.pos,
+                                });
+                            }
+                        }
                     }
                 }
                 None
@@ -98,13 +96,13 @@ fn get_component_by_tag(
                         .alternative_type
                         .resolve(context)
                         .map_err(DecodeError::Parser)?;
-                    if type_eq_tlv(context, &alternative_type, &tlv_tag.element)
-                        .map_err(DecodeError::Parser)?
-                        .is_some()
+                    if let Some(matching_type) =
+                        type_eq_tlv(context, &alternative_type, &tlv_tag.element)
+                            .map_err(DecodeError::Parser)?
                     {
                         return Ok(Some(ComponentData {
                             name: Some(alternative.name.element.clone()),
-                            tagged_type: *alternative.alternative_type,
+                            tagged_type: matching_type.into(),
                             index: 0,
                         }));
                     }
@@ -127,11 +125,17 @@ fn type_eq_tlv(
     context: &Context,
     resolved_type: &ResolvedType,
     tlv_tag: &TlvTag,
-) -> Result<Option<BuiltinType>> {
+) -> Result<Option<ResolvedType>> {
     let tags = resolved_type.get_possible_tags(context)?;
     for (tag, ty) in tags {
         if tag.class == tlv_tag.class && tag.num == tlv_tag.num {
-            return Ok(Some(ty));
+            return Ok(Some(ResolvedType {
+                tag: Some(tag),
+                ty,
+                // TODO: include the constraints here,
+                // so that they can be used for verifying decoded values
+                constraints: None,
+            }));
         }
     }
     Ok(None)
@@ -201,13 +205,9 @@ fn ber_decode_universal(
             }
 
             let unused_bits = value[0];
-            if unused_bits != 0 {
-                todo!("unimplemented: BIT STRING unused bits");
-            }
+            let data = value[1..].to_vec();
 
-            let be_bits = &value[1..];
-
-            DecodedValueKind::BitString(BigUint::from_bytes_be(be_bits))
+            DecodedValueKind::BitString(BitStringValue { data, unused_bits })
         }
         TagType::OctetString => DecodedValueKind::OctetString(value.to_vec()),
         TagType::Null => {
@@ -381,12 +381,17 @@ fn ber_decode_tlv(
                 _ => match &mode {
                     DecodeMode::Contextless => DecodedValueKind::Raw(tlv.value.element.to_vec()),
                     DecodeMode::SpecificType { resolved, .. } => {
-                        if let Some(ty) = type_eq_tlv(context, resolved, &tlv.tag.element)
-                            .map_err(DecodeError::Parser)?
+                        if let Some(matching_type) =
+                            type_eq_tlv(context, resolved, &tlv.tag.element)
+                                .map_err(DecodeError::Parser)?
                         {
                             // we use ty.tag_type() here to get the UNIVERSAL tag type for the underlying builtin type, not the user-defined tag
-                            ber_decode_universal(syntax, &tlv, ty.tag_type().expect("tag_type"))
-                                .map_err(DecodeError::Io)?
+                            ber_decode_universal(
+                                syntax,
+                                &tlv,
+                                matching_type.ty.tag_type().expect("tag_type"),
+                            )
+                            .map_err(DecodeError::Io)?
                         } else {
                             let tag_str = resolved
                                 .get_possible_tags(context)

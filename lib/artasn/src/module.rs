@@ -104,7 +104,7 @@ impl QualifiedIdentifier {
 
 impl Display for QualifiedIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{} FROM {}", self.name, self.module))
+        f.write_fmt(format_args!("{}.{}", self.module.name, self.name))
     }
 }
 

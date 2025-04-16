@@ -196,6 +196,16 @@ impl ResolvedType {
     }
 }
 
+impl From<ResolvedType> for TaggedType {
+    fn from(resolved: ResolvedType) -> Self {
+        Self {
+            tag: resolved.tag,
+            ty: UntaggedType::BuiltinType(resolved.ty),
+            constraints: resolved.constraints,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TaggedType {
     pub tag: Option<Tag>,
@@ -232,13 +242,6 @@ impl TaggedType {
                     return Ok(ResolvedType {
                         tag: tag.cloned(),
                         ty: ty.clone(),
-                        // TODO: implement constraint intersection
-                        // for example, in the ASN.1 declaration:
-                        //   I1 ::= INTEGER (0..10)
-                        //   I2 ::= I1 (8..<MAX)
-                        // the only valid values for I2 are 8 and 9
-                        // this is equivalent to the definition:
-                        //   I ::= INTEGER (0..10) (8..<MAX)
                         constraints: {
                             let constraints = constraint_subsets
                                 .into_iter()

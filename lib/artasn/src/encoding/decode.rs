@@ -1,6 +1,6 @@
 use std::io;
 
-use num::{BigInt, BigUint};
+use num::BigInt;
 
 use super::*;
 use crate::{compiler::parser, module::QualifiedIdentifier, types::*, values::*};
@@ -65,7 +65,7 @@ pub enum DecodedValueKind {
     Raw(Vec<u8>),
     Boolean(bool),
     Integer(BigInt),
-    BitString(BigUint),
+    BitString(BitStringValue),
     OctetString(Vec<u8>),
     Null,
     ObjectIdentifier(Oid),
