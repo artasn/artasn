@@ -25,3 +25,6 @@ wasm-bindgen-test = "0.3.34"
 [lib]
 name = "libartasn"
 crate-type = ["cdylib", "staticlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

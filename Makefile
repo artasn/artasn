@@ -44,7 +44,7 @@ build-cli-deb: build-cli
 build-libweb-playground: .install-cargo .install-wasm .install-wasm-pack
 	cd web/libweb && \
 	PARSEGEN_TS_BINDINGS=../../web/asn1-extension-protocol/src/asn1-ast.d.ts \
-	  wasm-pack build $(MODE) --target web --no-pack -- --features code && \
+	  wasm-pack build $(MODE) --target web -- --features code && \
 	cd .. && \
 	rm -rf playground/src/wasm && \
 	cp -r libweb/pkg playground/src/wasm && \
@@ -56,7 +56,7 @@ build-libweb-playground: .install-cargo .install-wasm .install-wasm-pack
 build-libweb-vscode: .install-cargo .install-wasm .install-wasm-pack
 	cd web/libweb && \
 	PARSEGEN_TS_BINDINGS=../../web/asn1-extension-protocol/src/asn1-ast.d.ts \
-	  wasm-pack build $(MODE) --target nodejs --no-pack -- --features code && \
+	  wasm-pack build $(MODE) --target nodejs -- --features code && \
 	cd .. && \
 	cp libweb/pkg/libartasn.js libweb/pkg/libartasn.d.ts asn1-extension/src/desktop/wasm && \
 	mkdir -p asn1-extension/dist/desktop && \
