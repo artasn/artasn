@@ -442,6 +442,10 @@ json_compile_test!(
     "../../test-data/compile/ValueSizeIntersectionConstraintTest"
 );
 json_compile_test!(
+    test_value_set_types,
+    "../../test-data/compile/ValueSetTypeTest"
+);
+json_compile_test!(
     test_import_matching,
     "../../test-data/compile/import/",
     "MatchingImportTest",

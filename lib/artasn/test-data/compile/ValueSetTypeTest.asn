@@ -1,0 +1,32 @@
+ValueSetTypeTest DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Small INTEGER ::= { 1 | 2 | 3 }
+small-valid1   Small ::= 1
+small-valid2   Small ::= 3
+small-invalid1 Small ::= 0
+small-invalid2 Small ::= 4
+
+Groups INTEGER ::= { 1 | 2, ..., 3 }
+groups-valid1   Groups ::= 1
+groups-valid2   Groups ::= 3
+groups-invalid1 Groups ::= 4
+
+Ranged INTEGER (0..10) ::= { 5 | 15 }
+ranged-valid1   Ranged ::= 5
+ranged-invalid1 Ranged ::= 15
+
+seven INTEGER ::= 7
+Referenced INTEGER ::= { seven }
+referenced-valid1   Referenced ::= 7
+referenced-invalid1 Referenced ::= 8
+
+Strings IA5String ::= { "a" | "b" }
+strings-valid1   Strings ::= "a"
+strings-invalid1 Strings ::= "c"
+
+Derived Small ::= { 2 | 3 | 4 }
+derived-valid1   Derived ::= 2
+derived-invalid1 Derived ::= 1
+derived-invalid2 Derived ::= 4
+
+END

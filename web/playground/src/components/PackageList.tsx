@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Button, Checkbox, FormControlLabel, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, SvgIcon, TextField, Typography } from '@mui/material';
 import { Package, packageRegistry, Registry, Source } from '../registry';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
@@ -9,6 +9,10 @@ export interface PackageListProps {
     source?: Source;
     registry?: Registry;
     onClose: () => void;
+}
+
+interface IndexedPackage extends Package {
+    searchTarget: string;
 }
 
 const PackageList = ({ source, registry, onClose, ref, }: PackageListProps & React.RefAttributes<null>) => {
@@ -30,28 +34,40 @@ const PackageList = ({ source, registry, onClose, ref, }: PackageListProps & Rea
         return downloadedLookup;
     })());
 
-    let filteredPackages = registry;
-    if (downloadedOnly) {
-        filteredPackages = filteredPackages.filter(pkg => downloadedLookup.has(pkg.name));
-    }
-    if (packageFilter !== '') {
-        filteredPackages = filteredPackages.filter(pkg => pkg.name.includes(packageFilter) || pkg.title?.includes(packageFilter));
-    }
-    filteredPackages.sort((a, b) => {
-        const downloadedA = downloadedLookup.has(a.name);
-        const downloadedB = downloadedLookup.has(b.name);
-        if (downloadedA === downloadedB) { // if they are both downloaded or both not downloaded
-            return a.name.localeCompare(b.name);
-        }
-        if (downloadedA) {
-            return -1;
-        }
-        if (downloadedB) {
-            return 1;
-        }
+    const indexedRegistry = useMemo<IndexedPackage[]>(
+        () =>
+            (registry ?? []).map(pkg => ({
+                ...pkg,
+                searchTarget: `${pkg.name}\n${pkg.title ?? ''}`.toLowerCase(),
+            })),
+        [registry]
+    );
 
-        throw new Error('unreachable');
-    });
+    const filteredPackages = useMemo(() => {
+        let result = indexedRegistry;
+        if (downloadedOnly) {
+            result = result.filter(pkg => downloadedLookup.has(pkg.name));
+        }
+        if (packageFilter !== '') {
+            result = result.filter(pkg => pkg.searchTarget.includes(packageFilter));
+        }
+        result.sort((a, b) => {
+            const downloadedA = downloadedLookup.has(a.name);
+            const downloadedB = downloadedLookup.has(b.name);
+            if (downloadedA === downloadedB) { // if they are both downloaded or both not downloaded
+                return a.name.localeCompare(b.name);
+            }
+            if (downloadedA) {
+                return -1;
+            }
+            if (downloadedB) {
+                return 1;
+            }
+
+            throw new Error('unreachable');
+        });
+        return result;
+    }, [indexedRegistry, downloadedOnly, downloadedLookup, packageFilter]);
 
     const onDownloadStateChanged = (pkg: string, state: boolean) => {
         if (state) {
@@ -106,7 +122,7 @@ const PackageList = ({ source, registry, onClose, ref, }: PackageListProps & Rea
                         variant="outlined"
                         fullWidth
                         value={packageFilter}
-                        onChange={event => setPackageFilter(event.currentTarget.value)} />
+                        onChange={event => setPackageFilter(event.currentTarget.value.toLowerCase())} />
                 </Box>
                 <Box sx={{ marginTop: '10px', }}>
                     {filteredPackages!.length === 0 ? (

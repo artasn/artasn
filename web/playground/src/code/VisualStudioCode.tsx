@@ -39,7 +39,11 @@ export async function getExtensionHostIFrame(): Promise<HTMLIFrameElement> {
     });
 }
 
-const VisualStudioCode = () => {
+export interface VisualStudioCodeProps {
+    width: string;
+}
+
+const VisualStudioCode = ({ width }: VisualStudioCodeProps) => {
     useEffect(() => {
         // try to create the workbench every 50ms
         // because the VSCode JS files are loaded asynchronously,
@@ -80,7 +84,7 @@ const VisualStudioCode = () => {
                 position: 'fixed',
                 left: '0px',
                 top: '0px',
-                width: '50vw',
+                width,
                 height: '100vh',
             }}></div>
         </>

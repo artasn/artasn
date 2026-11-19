@@ -1,0 +1,20 @@
+--- a/ServiceAdministration.asn
++++ b/ServiceAdministration.asn
+@@ -53,7 +53,7 @@
+   familyReturn          [10] FamilyReturn                               OPTIONAL,
+   relaxation            [11] RelaxationPolicy                           OPTIONAL,
+   additionalControl     [12] SEQUENCE SIZE (1..MAX) OF AttributeType    OPTIONAL,
+-  allowedSubset         [13] AllowedSubset                              DEFAULT ''111''B,
++  allowedSubset         [13] AllowedSubset                              DEFAULT '111'B,
+   imposedSubset         [14] ImposedSubset                              OPTIONAL,
+   entryLimit            [15] EntryLimit                                 OPTIONAL,
+   ... }
+@@ -175,7 +175,7 @@
+   &familyReturn          FamilyReturn                    OPTIONAL,
+   &additionalControl     AttributeType                   OPTIONAL,
+   &relaxation            RelaxationPolicy                OPTIONAL,
+-  &allowedSubset         AllowedSubset                   DEFAULT ''111''B,
++  &allowedSubset         AllowedSubset                   DEFAULT '111'B,
+   &imposedSubset         ImposedSubset                   OPTIONAL,
+   &entryLimit            EntryLimit                      OPTIONAL,
+   &id                    INTEGER                         UNIQUE }

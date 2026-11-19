@@ -304,6 +304,9 @@ export type AstAssignment = { ast: 'Assignment'; } & ({
     variant: 'TypeAssignment';
     value: AstElement<AstTypeAssignment>;
 } | {
+    variant: 'ValueSetTypeAssignment';
+    value: AstElement<AstValueSetTypeAssignment>;
+} | {
     variant: 'ValueAssignment';
     value: AstElement<AstValueAssignment>;
 });
@@ -445,6 +448,11 @@ export interface AstContainedSubtype {
     item: AstElement<AstType>;
 }
 
+export interface AstExclusionsConstraint {
+    ast: 'ExclusionsConstraint';
+    constraint: AstElement<AstSubtypeElement>;
+}
+
 export type AstSubtypeElement = { ast: 'SubtypeElement'; } & ({
     variant: 'SubtypeElementGroup';
     value: AstElement<AstSubtypeElementGroup>;
@@ -475,6 +483,9 @@ export type AstSubtypeElement = { ast: 'SubtypeElement'; } & ({
 } | {
     variant: 'ContainedSubtype';
     value: AstElement<AstContainedSubtype>;
+} | {
+    variant: 'ExclusionsConstraint';
+    value: AstElement<AstExclusionsConstraint>;
 });
 
 export interface AstPatternConstraint {
@@ -1210,6 +1221,13 @@ export type AstObjectSetElement = { ast: 'ObjectSetElement'; } & ({
     value: AstElement<AstDefinedType>;
 });
 
+export interface AstValueSetTypeAssignment {
+    ast: 'ValueSetTypeAssignment';
+    name: AstElement<AstTypeReference>;
+    element_ty: AstElement<AstType>;
+    values: AstElement<AstValueSet>;
+}
+
 export interface AstValueSet {
     ast: 'ValueSet';
     item: AstElement<AstValueSetElementGroup>[];
@@ -1497,4 +1515,4 @@ export type AstObject = { ast: 'Object'; } & ({
     value: AstElement<AstBracedTokenStream>;
 });
 
-export type AstItem = Soi | Eoi | AstTypeReference | AstUppercaseReference | AstValueReference | AstStringLiteral | AstNumber | Keyword | Operator | AstBracedTokenStream | AstSyntaxTokenLiteral | AstProgram | AstModule | AstModuleHeader | AstModuleBody | AstModuleIdentifier | AstDefinitiveOidWithIri | AstDefinitiveOid | AstDefinitiveOidComponent | AstNamedNumber | AstNamedNumberList | AstTagDefault | AstTagDefaultKind | AstExtensibilityImplied | AstExports | AstExportsKind | AstImports | AstSymbolsFromModule | AstSelectionOption | AstSelectionOptionKind | AstAssignedIdentifier | AstGlobalModuleReference | AstOid | AstObjectIdentifierValue | AstObjectIdentifierComponent | AstDefinedValue | AstDefinedType | AstDefinedTypeModule | AstSymbolList | AstSymbol | AstParameterizedReference | AstReference | AstAssignment | AstParameterDeclList | AstParameterDecl | AstValueParameterDecl | AstTypeParameterDecl | AstTypeAssignment | AstTypeAssignmentSubject | AstConstraint | AstSubtypeConstraint | AstConstraintElement | AstConstraintOperator | AstSubtypeElementSet | AstSubtypeElement | AstPatternConstraint | AstTableConstraint | AstComponentReference | AstContentsConstraint | AstUserDefinedConstraint | AstUserDefinedConstraintParameter | AstSizeConstraint | AstRangeLowerBound | AstRangeLowerBoundValue | AstRangeUpperBound | AstRangeUpperBoundValue | AstInnerTypeConstraints | AstSingleTypeConstraint | AstMultipleTypeConstraints | AstTypeConstraintSpec | AstTypeConstraints | AstNamedConstraint | AstComponentConstraint | AstPresenceConstraint | AstAny | AstBoolean | AstInteger | AstBitString | AstOctetString | AstNull | AstObjectIdentifier | AstObjectDescriptor | AstExternal | AstReal | AstEnumerationItem | AstEnumerationItemNum | AstEnumerated | AstEmbeddedPDV | AstUTF8String | AstRelativeOid | AstTime | AstStructureKind | AstStructure | AstConstraintOrSizeConstraint | AstStructureOf | AstExtensible | AstStructureComponentGroup | AstStructureComponent | AstObjectClassFieldType | AstChoice | AstChoiceAlternative | AstNumericString | AstPrintableString | AstTeletexString | AstVideotexString | AstIA5String | AstUTCTime | AstGeneralizedTime | AstGraphicString | AstVisibleString | AstGeneralString | AstUniversalString | AstCharacterString | AstBMPString | AstDate | AstTimeOfDay | AstDateTime | AstDuration | AstInstanceOf | AstBuiltinType | AstClass | AstTag | AstTagKind | AstTaggedType | AstConstrainedType | AstParameterizedDefinedType | AstParameterList | AstParameter | AstUntaggedType | AstType | AstValueAssignment | AstObjectSetAssignment | AstObjectSetAssignmentSubject | AstObjectSetElementGroup | AstObjectSetElement | AstValueSet | AstValueSetElementGroup | AstNamedBitStringValue | AstStructureValue | AstStructureValueComponent | AstStructureOfValue | AstChoiceValue | AstOpenTypeValue | AstOpenTypeValueTypeReference | AstNegative | AstIntegerValue | AstDecimalValue | AstBooleanValue | AstSpecialRealValue | AstContainingValue | AstBuiltinValue | AstValue | AstIntegerValueReference | AstInformationObjectClass | AstObjectClassField | AstTypeField | AstSetField | AstValueField | AstValueFieldSubject | AstTypeFieldReference | AstValueFieldReference | AstFieldReference | AstSyntaxList | AstSyntaxListElement | AstSyntaxItem | AstObjectFieldReference | AstObject;
+export type AstItem = Soi | Eoi | AstTypeReference | AstUppercaseReference | AstValueReference | AstStringLiteral | AstNumber | Keyword | Operator | AstBracedTokenStream | AstSyntaxTokenLiteral | AstProgram | AstModule | AstModuleHeader | AstModuleBody | AstModuleIdentifier | AstDefinitiveOidWithIri | AstDefinitiveOid | AstDefinitiveOidComponent | AstNamedNumber | AstNamedNumberList | AstTagDefault | AstTagDefaultKind | AstExtensibilityImplied | AstExports | AstExportsKind | AstImports | AstSymbolsFromModule | AstSelectionOption | AstSelectionOptionKind | AstAssignedIdentifier | AstGlobalModuleReference | AstOid | AstObjectIdentifierValue | AstObjectIdentifierComponent | AstDefinedValue | AstDefinedType | AstDefinedTypeModule | AstSymbolList | AstSymbol | AstParameterizedReference | AstReference | AstAssignment | AstParameterDeclList | AstParameterDecl | AstValueParameterDecl | AstTypeParameterDecl | AstTypeAssignment | AstTypeAssignmentSubject | AstConstraint | AstSubtypeConstraint | AstConstraintElement | AstConstraintOperator | AstSubtypeElementSet | AstSubtypeElement | AstPatternConstraint | AstTableConstraint | AstComponentReference | AstContentsConstraint | AstUserDefinedConstraint | AstUserDefinedConstraintParameter | AstSizeConstraint | AstRangeLowerBound | AstRangeLowerBoundValue | AstRangeUpperBound | AstRangeUpperBoundValue | AstInnerTypeConstraints | AstSingleTypeConstraint | AstMultipleTypeConstraints | AstTypeConstraintSpec | AstTypeConstraints | AstNamedConstraint | AstComponentConstraint | AstPresenceConstraint | AstAny | AstBoolean | AstInteger | AstBitString | AstOctetString | AstNull | AstObjectIdentifier | AstObjectDescriptor | AstExternal | AstReal | AstEnumerationItem | AstEnumerationItemNum | AstEnumerated | AstEmbeddedPDV | AstUTF8String | AstRelativeOid | AstTime | AstStructureKind | AstStructure | AstConstraintOrSizeConstraint | AstStructureOf | AstExtensible | AstStructureComponentGroup | AstStructureComponent | AstObjectClassFieldType | AstChoice | AstChoiceAlternative | AstNumericString | AstPrintableString | AstTeletexString | AstVideotexString | AstIA5String | AstUTCTime | AstGeneralizedTime | AstGraphicString | AstVisibleString | AstGeneralString | AstUniversalString | AstCharacterString | AstBMPString | AstDate | AstTimeOfDay | AstDateTime | AstDuration | AstInstanceOf | AstBuiltinType | AstClass | AstTag | AstTagKind | AstTaggedType | AstConstrainedType | AstParameterizedDefinedType | AstParameterList | AstParameter | AstUntaggedType | AstType | AstValueAssignment | AstObjectSetAssignment | AstObjectSetAssignmentSubject | AstObjectSetElementGroup | AstObjectSetElement | AstValueSetTypeAssignment | AstValueSet | AstValueSetElementGroup | AstNamedBitStringValue | AstStructureValue | AstStructureValueComponent | AstStructureOfValue | AstChoiceValue | AstOpenTypeValue | AstOpenTypeValueTypeReference | AstNegative | AstIntegerValue | AstDecimalValue | AstBooleanValue | AstSpecialRealValue | AstContainingValue | AstBuiltinValue | AstValue | AstIntegerValueReference | AstInformationObjectClass | AstObjectClassField | AstTypeField | AstSetField | AstValueField | AstValueFieldSubject | AstTypeFieldReference | AstValueFieldReference | AstFieldReference | AstSyntaxList | AstSyntaxListElement | AstSyntaxItem | AstObjectFieldReference | AstObject;

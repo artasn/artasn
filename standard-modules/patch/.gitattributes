@@ -1,0 +1,2 @@
+# patches must apply byte-for-byte (some modules have CRLF line endings), so never normalize them
+*.patch -text

@@ -997,3 +997,18 @@ pub fn parse_type_assignment(
         | AstTypeAssignmentSubject::InformationObjectClass(_) => Ok(None),
     }
 }
+
+/// Parses the type of a value set type assignment (`T E ::= { ... }`).
+///
+/// Per X.680 §16.8, the value set type `T` is a subtype of `E`, constrained to the
+/// values in the value set. This only parses `E`; the value set itself is applied as a
+/// constraint by `constraints::parse_value_set_type_assignment_constraint`.
+pub fn parse_value_set_type_assignment(
+    parser: &AstParser<'_>,
+    value_set_assignment: &AstElement<AstValueSetTypeAssignment>,
+) -> Result<(QualifiedIdentifier, DeclaredType)> {
+    let name = value_set_assignment.element.name.element.0.clone();
+    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+    let ty = parse_type(parser, &value_set_assignment.element.element_ty, &[])?;
+    Ok((ident.clone(), DeclaredType { name: ident, ty }))
+}

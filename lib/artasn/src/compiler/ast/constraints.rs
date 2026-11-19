@@ -421,6 +421,16 @@ fn parse_subtype_element(
             let str = pattern.element.0.as_ref().map(|lit| lit.data.clone());
             SubtypeElement::Pattern(str)
         }
+        AstSubtypeElement::ExclusionsConstraint(exclusions) => {
+            let parsed = parse_subtype_element(
+                parser,
+                &exclusions.element.constraint,
+                constrained_type,
+                parameters,
+                ctx,
+            )?;
+            SubtypeElement::Exclusions(Box::new(exclusions.as_ref().map(|_| parsed)))
+        }
     })
 }
 
@@ -1211,6 +1221,127 @@ pub fn parse_type_assignment_constraint(
         }
         _ => Ok(None),
     }
+}
+
+/// Converts the value set of a value set type assignment (`T E ::= { ... }`) into an
+/// equivalent constraint on `E`, i.e. `T ::= E (...)`.
+///
+/// Within the value set, values separated by `|` form a union, and comma-separated groups
+/// follow the same rules as the element sets of a constraint (e.g. `{ 1 | 2, ..., 3 }`).
+fn parse_value_set(
+    parser: &AstParser<'_>,
+    ast_value_set: &AstElement<AstValueSet>,
+    constrained_type: &ResolvedType,
+) -> Result<Constraint> {
+    let mut element_sets = Vec::with_capacity(ast_value_set.element.0.len());
+    let mut is_extension = false;
+    let mut last_was_extensible = None;
+    for group in &ast_value_set.element.0 {
+        match &group.element {
+            AstValueSetElementGroup::Extensible(ast) => {
+                if last_was_extensible.is_none() {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "extensibility marker must appear after the base set of values"
+                                .to_string(),
+                        ),
+                        loc: ast.loc,
+                    });
+                }
+                if is_extension {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "extensibility marker can only appear once in a value set".to_string(),
+                        ),
+                        loc: ast.loc,
+                    });
+                }
+                is_extension = true;
+                last_was_extensible = Some(true);
+            }
+            AstValueSetElementGroup::ValueSetElements(elements) => {
+                if last_was_extensible == Some(false) {
+                    return Err(Error {
+                        kind: ErrorKind::Ast(
+                            "expecting set operator ('|'), but found operator ','".to_string(),
+                        ),
+                        loc: elements.loc,
+                    });
+                }
+
+                let mut tree: Option<ConstraintTree> = None;
+                for ast_value in &elements.element.0 {
+                    let value = match resolve_named_number(constrained_type, ast_value)? {
+                        Some(named_number) => named_number,
+                        None => values::parse_value(
+                            parser,
+                            ParseValueAssignmentStage::Normal,
+                            ast_value,
+                            constrained_type,
+                        )?,
+                    };
+                    let element = ConstraintTree::Element(AstElement::new(
+                        SubtypeElement::SingleValue(value),
+                        ast_value.loc,
+                    ));
+                    tree = Some(match tree {
+                        None => element,
+                        Some(lhs) => ConstraintTree::BinaryExpr {
+                            lhs: Box::new(lhs),
+                            op: AstElement::new(ConstraintTreeOperator::Union, ast_value.loc),
+                            rhs: Box::new(element),
+                        },
+                    });
+                }
+
+                element_sets.push(SubtypeElementSet {
+                    tree: tree.expect("value set group must contain at least one value"),
+                    is_extension,
+                });
+                last_was_extensible = Some(false);
+            }
+        }
+    }
+
+    Ok(Constraint {
+        element_sets,
+        is_extensible: is_extension,
+        loc: ast_value_set.loc,
+    })
+}
+
+/// Parses the constraints of a value set type assignment (`T E ::= { ... }`): any
+/// constraints applied to `E` itself, followed by the value set as a serial constraint.
+pub fn parse_value_set_type_assignment_constraint(
+    parser: &AstParser<'_>,
+    value_set_assignment: &AstElement<AstValueSetTypeAssignment>,
+) -> Result<(QualifiedIdentifier, PendingConstraint)> {
+    let name = value_set_assignment.element.name.element.0.clone();
+    let ident = QualifiedIdentifier::new(parser.module.clone(), name);
+    let constrained_type = parser
+        .context
+        .lookup_type(&ident)
+        .expect("lookup_type")
+        .ty
+        .resolve(parser.context)?;
+
+    let mut pending = parse_type_constraint(
+        parser,
+        &value_set_assignment.element.element_ty,
+        &constrained_type,
+        &[],
+    )?;
+    let value_set = parse_value_set(
+        parser,
+        &value_set_assignment.element.values,
+        &constrained_type,
+    )?;
+    pending
+        .constraints
+        .get_or_insert_with(Vec::new)
+        .push(value_set);
+
+    Ok((ident, pending))
 }
 
 pub fn apply_pending_constraint(

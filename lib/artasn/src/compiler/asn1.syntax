@@ -328,7 +328,7 @@ rule ParameterizedReference {
 
 variant Reference = TypeReference | ValueReference | error { "expecting a typereference or a valuereference" };
 
-variant Assignment = ObjectSetAssignment | TypeAssignment | ValueAssignment | error { "expecting a type, value, or information object set assignment" };
+variant Assignment = ObjectSetAssignment | TypeAssignment | ValueSetTypeAssignment | ValueAssignment | error { "expecting an assignment" };
 
 rule ParameterDeclList {
     captures {
@@ -452,7 +452,14 @@ variant SubtypeElement = SubtypeElementGroup {
     group = SubtypeElementSet
     operator )
     return group
-} | UserDefinedConstraint | PatternConstraint | ContentsConstraint | InnerTypeConstraints | SizeConstraint | TableConstraint | ValueRangeConstraint {
+} |
+UserDefinedConstraint |
+PatternConstraint |
+ContentsConstraint |
+InnerTypeConstraints |
+SizeConstraint |
+TableConstraint |
+ValueRangeConstraint {
     captures {
         lower = RangeLowerBound
         upper = RangeUpperBound
@@ -476,6 +483,14 @@ variant SubtypeElement = SubtypeElementGroup {
     }
     ty = Type
     return ty
+} | ExclusionsConstraint {
+    captures {
+        constraint = boxed SubtypeElement
+    }
+    keyword ALL
+    persist
+    keyword EXCEPT
+    constraint = SubtypeElement
 } | error { "expecting a constraint" };
 
 rule PatternConstraint {
@@ -1201,6 +1216,19 @@ variant ObjectSetElementGroup = Extensible | ObjectSetElements {
 } | error { "expecting objects or '...'" };
 
 variant ObjectSetElement = ObjectFieldReference | Object | DefinedType | error { "expecting object or object set" };
+
+rule ValueSetTypeAssignment {
+    captures {
+        name = TypeReference
+        element_ty = Type
+        values = ValueSet
+    }
+    name = TypeReference
+    element_ty = Type
+    operator ::=
+    persist
+    values = ValueSet
+}
 
 rule ValueSet {
     captures {

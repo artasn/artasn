@@ -381,6 +381,7 @@ pub enum ConstraintSpecItem {
     Table(TableConstraint),
     UserDefined,
     Pattern(AstElement<String>),
+    Exclusions(Vec<ConstraintSpecItem>),
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -421,6 +422,7 @@ impl ConstraintSpecItem {
             Self::Table(_) => "reference table",
             Self::UserDefined => "user defined",
             Self::Pattern(_) => "pattern",
+            Self::Exclusions(_) => "exclusions",
         }
     }
 }
@@ -477,6 +479,79 @@ impl ConstraintTree {
                 }
                 _ => false,
             },
+        })
+    }
+
+    fn resolve_element(
+        &self,
+        context: &Context,
+        parent_bounds: (Option<&BigInt>, Option<&BigInt>),
+        constrained_type: &BuiltinType,
+        element: &AstElement<SubtypeElement>,
+    ) -> Result<Vec<ConstraintSpecItem>> {
+        Ok(match &element.element {
+            SubtypeElement::SingleValue(single_value) => {
+                let value = single_value.resolve(context)?;
+                vec![ConstraintSpecItem::Value(AstElement::new(
+                    ValueConstraint::SingleValue(value),
+                    single_value.loc,
+                ))]
+            }
+            SubtypeElement::ValueRange(range) => {
+                let range = range.resolve(context, parent_bounds)?;
+                vec![ConstraintSpecItem::Value(AstElement::new(
+                    ValueConstraint::Range(range),
+                    element.loc,
+                ))]
+            }
+            SubtypeElement::ContainedSubtype(subtype) => {
+                let subtype = subtype.resolve(context)?;
+                match &subtype.constraints {
+                    Some(constraints) => {
+                        let constraint =
+                            Constraint::resolve_subsets(context, constraints, constrained_type)?;
+
+                        // only inherit the base constraint of a contained subtype;
+                        // i.e. do not inherit the extensions
+                        // see X.680 clause I.4.3.5 for details
+                        constraint.specs[0].items.clone()
+                    }
+                    None => vec![ConstraintSpecItem::Value(AstElement::new(
+                        ValueConstraint::Range(ResolvedValueRange {
+                            lower: Bound::Unbounded,
+                            upper: Bound::Unbounded,
+                        }),
+                        element.loc,
+                    ))],
+                }
+            }
+            SubtypeElement::Size(size) => {
+                let size_constraint = size.resolve(
+                    context,
+                    &BuiltinType::universal(TagType::Integer),
+                    parent_bounds,
+                )?;
+                vec![ConstraintSpecItem::Size(size_constraint)]
+            }
+            SubtypeElement::InnerType(inner_type) => {
+                vec![ConstraintSpecItem::InnerType(inner_type.clone())]
+            }
+            SubtypeElement::Contents(contents) => {
+                vec![ConstraintSpecItem::Contents(contents.clone())]
+            }
+            SubtypeElement::Table(table) => vec![ConstraintSpecItem::Table(table.clone())],
+            SubtypeElement::UserDefined => vec![ConstraintSpecItem::UserDefined],
+            SubtypeElement::Pattern(pattern) => {
+                vec![ConstraintSpecItem::Pattern(pattern.clone())]
+            }
+            SubtypeElement::Exclusions(exclusions) => {
+                vec![ConstraintSpecItem::Exclusions(self.resolve_element(
+                    context,
+                    parent_bounds,
+                    constrained_type,
+                    exclusions.as_ref(),
+                )?)]
+            }
         })
     }
 
@@ -549,6 +624,9 @@ impl ConstraintTree {
                 SubtypeElement::UserDefined => vec![ConstraintSpecItem::UserDefined],
                 SubtypeElement::Pattern(pattern) => {
                     vec![ConstraintSpecItem::Pattern(pattern.clone())]
+                }
+                SubtypeElement::Exclusions(exclusions) => {
+                    self.resolve_element(context, parent_bounds, constrained_type, exclusions)?
                 }
             },
         })
@@ -1236,6 +1314,7 @@ pub enum SubtypeElement {
     Table(TableConstraint),
     UserDefined,
     Pattern(AstElement<String>),
+    Exclusions(Box<AstElement<SubtypeElement>>),
 }
 
 #[derive(Debug, Clone)]

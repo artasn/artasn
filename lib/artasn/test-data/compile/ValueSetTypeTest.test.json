@@ -1,0 +1,10 @@
+[
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:6",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:7",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:12",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:16",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:21",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:25",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:29",
+    "compile error: value violates constraints of type at ValueSetTypeTest.asn:30"
+]

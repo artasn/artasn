@@ -43,10 +43,10 @@ pub extern "C" fn get_module_dependencies(
     //         .join(" "),
     // )
     // .unwrap();
-    let mut tokens = TokenStream::new(module_source);
+    let mut tokens = TokenStream::from_string(module_source, true);
 
     let context = ParseContext::new(&mut tokens);
-    SOI::parse(ParseContext::new(context.tokens));
+    Soi::parse(ParseContext::new(context.tokens));
     match AstModuleHeader::parse(context) {
         ParseResult::Ok(header) => {
             let module = match get_module(&header.element.name, header.element.oid.as_ref().map(|oid| match &oid.element {

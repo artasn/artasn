@@ -1,0 +1,11 @@
+--- a/PKIX1-PSS-OAEP-Algorithms-2009.asn
++++ b/PKIX1-PSS-OAEP-Algorithms-2009.asn
+@@ -172,7 +172,7 @@
+ --   Constants
+ -- =============
+ EncodingParameters ::= OCTET STRING(SIZE(0..MAX))
+-nullOctetString  EncodingParameters  ::=  ''''H
++nullOctetString  EncodingParameters  ::=  ''H
+ nullParameters NULL  ::=  NULL
+ -- =========================
+ --   Algorithm Identifiers

@@ -1,0 +1,11 @@
+--- a/ETS-ElectronicSignatureFormats-ExplicitSyntax88.asn
++++ b/ETS-ElectronicSignatureFormats-ExplicitSyntax88.asn
+@@ -34,7 +34,7 @@
+ -- Profile: RFC 3280
+ 
+    Certificate, AlgorithmIdentifier, CertificateList, Name,
+-   DirectoryString, Attribute, BMPString, UTF8String
++   DirectoryString, Attribute
+       FROM PKIX1Explicit88
+       {iso(1) identified-organization(3) dod(6) internet(1)
+       security(5) mechanisms(5) pkix(7) id-mod(0) id-pkix1-explicit(18)}

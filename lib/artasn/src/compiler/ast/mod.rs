@@ -8,6 +8,8 @@ pub(crate) mod util;
 pub(crate) mod values;
 pub(crate) mod verify;
 
+pub use object_id::name_and_oid_to_module_ident;
+
 use class::ObjectClassAssignmentParseMode;
 use types::TypeAssignmentParseMode;
 use values::{ParseValueAssignmentStage, ParsedValueAssignment};
@@ -272,17 +274,21 @@ pub fn register_all_modules(
 
         let mut declarations = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
-            match &assignment.element {
+            let name = match &assignment.element {
                 AstAssignment::TypeAssignment(assignment) => {
-                    declarations.push(assignment.element.name.element.0.clone())
+                    assignment.element.name.element.0.clone()
                 }
                 AstAssignment::ValueAssignment(assignment) => {
-                    declarations.push(assignment.element.name.element.0.clone())
+                    assignment.element.name.element.0.clone()
+                }
+                AstAssignment::ValueSetTypeAssignment(assignment) => {
+                    assignment.element.name.element.0.clone()
                 }
                 AstAssignment::ObjectSetAssignment(assignment) => {
-                    declarations.push(assignment.element.name.element.0.clone())
+                    assignment.element.name.element.0.clone()
                 }
-            }
+            };
+            declarations.push(name);
         }
 
         vec![Ok(ModuleHeader {
@@ -428,16 +434,25 @@ pub fn register_all_types(
     match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
-            if let AstAssignment::TypeAssignment(type_assignment) = &assignment.element {
-                match types::parse_type_assignment(
-                    &parser,
-                    type_assignment,
-                    &TypeAssignmentParseMode::Normal,
-                ) {
-                    Ok(Some(decl)) => results.push(Ok(decl)),
-                    Err(err) => results.push(Err(err)),
-                    _ => (),
+            match &assignment.element {
+                AstAssignment::TypeAssignment(type_assignment) => {
+                    match types::parse_type_assignment(
+                        &parser,
+                        type_assignment,
+                        &TypeAssignmentParseMode::Normal,
+                    ) {
+                        Ok(Some(decl)) => results.push(Ok(decl)),
+                        Err(err) => results.push(Err(err)),
+                        _ => (),
+                    }
                 }
+                AstAssignment::ValueSetTypeAssignment(value_set_assignment) => {
+                    results.push(types::parse_value_set_type_assignment(
+                        &parser,
+                        value_set_assignment,
+                    ));
+                }
+                _ => (),
             }
         }
         results
@@ -572,12 +587,22 @@ pub fn register_all_constraints(
     match run_parser(context, compiler, program, |parser| {
         let mut results = Vec::new();
         for assignment in &parser.ast_module.element.body.element.0 {
-            if let AstAssignment::TypeAssignment(ref type_assignment) = assignment.element {
-                match constraints::parse_type_assignment_constraint(&parser, type_assignment) {
-                    Ok(Some(decl)) => results.push(Ok(decl)),
-                    Err(err) => results.push(Err(err)),
-                    _ => (),
+            match &assignment.element {
+                AstAssignment::TypeAssignment(type_assignment) => {
+                    match constraints::parse_type_assignment_constraint(&parser, type_assignment)
+                    {
+                        Ok(Some(decl)) => results.push(Ok(decl)),
+                        Err(err) => results.push(Err(err)),
+                        _ => (),
+                    }
                 }
+                AstAssignment::ValueSetTypeAssignment(value_set_assignment) => {
+                    results.push(constraints::parse_value_set_type_assignment_constraint(
+                        &parser,
+                        value_set_assignment,
+                    ));
+                }
+                _ => (),
             }
         }
         results

@@ -1,3 +1,4 @@
+import argparse
 import gzip
 import hashlib
 import json
@@ -23,8 +24,6 @@ ietf_skip_modules = set([
     'FourBSD-ISODE.asn',
     # IMPORTS section doesn't end with a semicolon
     'DPI20-MIB.asn',
-    # missing comma at end of line 62
-    'CMSECCAlgs-2009-88.asn',
     # IMPORTS section doesn't end with a semicolon
     'POSTSCRIPT-MAPPINGS.asn',
     # missing FROM before 'PKIX1Explicit-2009'
@@ -71,6 +70,7 @@ def get_all_dependencies(dir: str) -> List[dict]:
                 continue
             file = os.path.join(root, file)
             with open(file, 'r') as f:
+                print(file) 
                 module_source = f.read()
                 # TODO: make modules imported with oid by valuereference as having unknown version
                 # or, even better, resolve the actual version
@@ -267,56 +267,80 @@ def save_registry(registry_dir: str, registry: List[dict]) -> bytes:
         return hash.digest()
 
 def main():
+    parser = argparse.ArgumentParser(description='generate ArtASN package registry from downloaded modules')
+    parser.add_argument(
+        '--ietf',
+        action='store_true',
+        help='Include IETF modules',
+    )
+    parser.add_argument(
+        '--itu-t',
+        action='store_true',
+        help='Include ITU-T modules',
+    )
+    args = parser.parse_args()
+
+    if not args.ietf and not args.itu_t:
+        print('must specify at least one registry; run --help for details')
+        exit(0)
+
     data_dir = make_data_dir('package-registry')
     registry_dir = os.path.join(data_dir, 'registry')
 
     if not os.path.exists(registry_dir):
         os.mkdir(registry_dir)
 
-    ietf_dir = os.path.join(registry_dir, 'IETF')
-    if not os.path.exists(ietf_dir):
-        os.mkdir(ietf_dir)
-    ietf_registry = create_ietf_registry(ietf_dir)
+    registries = []
+    if args.ietf:
+        ietf_dir = os.path.join(registry_dir, 'IETF')
+        if not os.path.exists(ietf_dir):
+            os.mkdir(ietf_dir)
+        ietf_registry = create_ietf_registry(ietf_dir)
+        registries.append(('IETF', ietf_registry))
 
-    itu_t_dir = os.path.join(registry_dir, 'ITU-T')
-    if not os.path.exists(itu_t_dir):
-        os.mkdir(itu_t_dir)
-    itu_t_registry = create_itu_t_registry(itu_t_dir)
+    if args.itu_t:
+        itu_t_dir = os.path.join(registry_dir, 'ITU-T')
+        if not os.path.exists(itu_t_dir):
+            os.mkdir(itu_t_dir)
+        itu_t_registry = create_itu_t_registry(itu_t_dir)
+        registries.append(('ITU-T', itu_t_registry))
 
-    insert_package_dependencies([('IETF', ietf_registry), ('ITU-T', itu_t_registry)])
-
-    ietf_hash = save_registry(ietf_dir, ietf_registry)
-    itu_t_hash = save_registry(itu_t_dir, itu_t_registry)
+    insert_package_dependencies(registries)
 
     hash = hashlib.sha256()
-    hash.update(ietf_hash)
-    hash.update(itu_t_hash)
+    sources = []
+    if args.ietf:
+        ietf_hash = save_registry(ietf_dir, ietf_registry)
+        hash.update(ietf_hash)
+        sources.append({
+            'hash': ietf_hash.hex(),
+            'name': 'IETF',
+            'fullName': 'Internet Engineering Task Force',
+            'desc': 'IETF is responsible for the technical standards (called RFCs) that make up the Internet protocol suite, such as PKIX for public-key infrastructure, PKCS for public-key cryptography, and many others.',
+            'registry': {
+                'raw': 'registry/IETF/registry.json',
+                'gzip': 'registry/IETF/registry.json.gz',
+            },
+        })
+    if args.itu_t:
+        itu_t_hash = save_registry(itu_t_dir, itu_t_registry)
+        hash.update(itu_t_hash)
+        sources.append({  
+            'hash': itu_t_hash.hex(),
+            'name': 'ITU-T',
+            'fullName': 'International Telecommunication Union Telecommunication Standardization Sector',
+            'desc': 'ITU-T is responsible for coordinating standards such as X.509 for cybersecurity, H.264 for video compression, and many others.',
+            'registry': {
+                'raw': 'registry/ITU-T/registry.json',
+                'gzip': 'registry/ITU-T/registry.json.gz'
+            },
+        })
+
     registry_hash = hash.hexdigest()
 
     sources = {
         'hash': registry_hash,
-        'sources': [
-            {
-                'hash': ietf_hash.hex(),
-                'name': 'IETF',
-                'fullName': 'Internet Engineering Task Force',
-                'desc': 'IETF is responsible for the technical standards (called RFCs) that make up the Internet protocol suite, such as PKIX for public-key infrastructure, PKCS for public-key cryptography, and many others.',
-                'registry': {
-                    'raw': 'registry/IETF/registry.json',
-                    'gzip': 'registry/IETF/registry.json.gz',
-                },
-            },
-            {  
-                'hash': itu_t_hash.hex(),
-                'name': 'ITU-T',
-                'fullName': 'International Telecommunication Union Telecommunication Standardization Sector',
-                'desc': 'ITU-T is responsible for coordinating standards such as X.509 for cybersecurity, H.264 for video compression, and many others.',
-                'registry': {
-                    'raw': 'registry/ITU-T/registry.json',
-                    'gzip': 'registry/ITU-T/registry.json.gz'
-                },
-            }
-        ],
+        'sources': sources,
     }
 
     with open(os.path.join(data_dir, 'hash.txt'), 'w') as f:

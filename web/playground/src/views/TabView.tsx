@@ -26,7 +26,12 @@ function TabPanel(props: PanelProps) {
     );
 }
 
-const TabView = () => {
+export interface TabViewProps {
+    left: string;
+    width: string;
+}
+
+const TabView = ({ left, width }: TabViewProps) => {
     const [value, setValue] = React.useState(0);
 
     const handleChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -36,9 +41,9 @@ const TabView = () => {
     return (
         <Box style={{
             position: 'fixed',
-            left: '50vw',
+            left,
             top: '0px',
-            width: '50vw',
+            width,
             height: '100vh',
             padding: '10px',
         }}>

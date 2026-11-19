@@ -8,21 +8,15 @@ import signal
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
-from module_extractor import extract_modules, MODULE_REGEX_BASE, NAME_REGEX
+from module_extractor import extract_modules, NAME_REGEX
+from patches import apply_patches
 from requests import Session
 from requests_futures.sessions import FuturesSession
-from typing import List
+from typing import List, Tuple
 from util import make_data_dir, execute_chunked_task
 
 USE_FUTURES_SESSION = True
 SESSION = FuturesSession(executor=ThreadPoolExecutor(max_workers=os.cpu_count())) if USE_FUTURES_SESSION else Session()
-
-FAST_MODULE_REGEX = re.compile(MODULE_REGEX_BASE, re.S)
-END_MODULE_REGEX = re.compile(r'.+\bEND\b', re.S)
-
-MACRO_STATE_DEFINITION = 0
-MACRO_STATE_BEGIN = 1
-MACRO_STATE_END = 2
 
 parser = lxml.etree.HTMLParser()
 XML_NS = 'https://www.rfc-editor.org/rfc-index'
@@ -79,63 +73,63 @@ def extract_modules_from_rfc(url: str) -> List[str]:
     
     print(f'downloaded {url}')
     
-    text = res.text
-    doc = lxml.html.fromstring(text, parser=parser)
+    return extract_modules_from_html(url, res.text)
 
-    print(f'parsed {url}')
+def element_text(element) -> str:
+    # all text inside the element, including the text of nested elements like <a> and <span>
+    return ''.join(element.itertext())
 
-    # replace links with their inner text
-    for link in doc.xpath('//pre[@class="newpage"]//a'):
-        text = link.text
-        previous = link.getprevious()
-        if previous is not None:
-            previous.tail = ((previous.tail or '') + text + (link.tail or '')).rstrip('\n')
-            # previous.tail = text
-            link.getparent().remove(link)
+def drop_element(element):
+    # remove an element and its contents, keeping the text that follows it
+    parent = element.getparent()
+    tail = element.tail or ''
+    previous = element.getprevious()
+    if previous is not None:
+        previous.tail = (previous.tail or '') + tail
+    else:
+        parent.text = (parent.text or '') + tail
+    parent.remove(element)
 
-    # newer RFCs have a different HTML format
-    new_format_code = doc.xpath('//div[@id="asn1-module"]/section/div/pre/text()')
-    if new_format_code:
-        code = new_format_code[0].lstrip()
-        code_start = re.search(FAST_MODULE_REGEX, code)
-        code_end = re.search(END_MODULE_REGEX, code) # END_MODULE_REGEX picks the last END, such that all MACRO definitions are included
-        if code_start is not None:
-            code_start = code_start.start()
-        else:
-            print(f'failed to match MODULE_REGEX for FAST doc {url}')
-            os.kill(os.getpid(), signal.SIGKILL)
-        if code_end is not None:
-            code_end = code_end.end()
-        else:
-            print(f'failed to match END_MODULE_REGEX for FAST doc {url}')
-            os.kill(os.getpid(), signal.SIGKILL)
-        return [code[code_start:code_end] + '\n']
+def extract_modules_from_html(url: str, html: str) -> List[str]:
+    # Note: RFCs converted from plain text are served as an HTML *fragment* (no <html> or <body>),
+    # so all XPath queries must be relative (//) rather than anchored at /html/body.
+    doc = lxml.html.fromstring(html, parser=parser)
 
-    text_nodes: List[str] = doc.xpath('/html/body/pre[@class="newpage"]/text()')
-    full_text = '\n'.join(map(lambda text_node: text_node.strip('\n'), text_nodes))
+    # Older RFCs (converted from plain text) are a sequence of <pre class="newpage"> elements,
+    # one per page, each with a page header/footer in <span class="grey">.
+    pages = doc.xpath('//pre[contains(concat(" ", normalize-space(@class), " "), " newpage ")]')
+    if pages:
+        texts = []
+        for page in pages:
+            # drop page headers/footers, but keep the text that follows them
+            for header in page.xpath('.//span[contains(concat(" ", normalize-space(@class), " "), " grey ")]'):
+                drop_element(header)
+            texts.append(element_text(page).strip('\n'))
+        full_text = '\n'.join(texts)
+    else:
+        # Newer RFCs (v3 XML format) put code in <div class="sourcecode"><pre>...</pre></div>
+        # (or artwork blocks); the ASN.1 module(s) may be split across several of these.
+        blocks = doc.xpath('//pre')
+        full_text = '\n'.join(element_text(block).strip('\n') for block in blocks)
+
     return extract_modules(url, full_text)
 
-def download_doc_modules(data_dir: str, url: str) -> List[str]:
-    modules = extract_modules_from_rfc(url)
-    if len(modules) > 0:
-        module_names = []
-        for module in modules:
-            match = re.match(NAME_REGEX, module)
-            if match is None:
-                with open('/tmp/failed.asn', 'w') as f:
-                    f.write(module)
-                    print('NO MATCH. see /tmp/failed.asn for details')
-                    os.kill(os.getpid(), signal.SIGKILL)
-            module_name = match.group().strip()
+def rfc_number(doc_id: str) -> int:
+    # RFC numbers are assigned sequentially, so a higher number means a newer document
+    return int(doc_id[3:])
 
-            with open(os.path.join(data_dir, f'{module_name}.asn'), 'w') as f:
+def get_doc_modules(url: str) -> List[Tuple[str, str]]:
+    # returns a list of (module name, module text)
+    doc_modules = []
+    for module in extract_modules_from_rfc(url):
+        match = re.match(NAME_REGEX, module)
+        if match is None:
+            with open('/tmp/failed.asn', 'w') as f:
                 f.write(module)
-
-            module_names.append(module_name)
-
-        return module_names
-    else:
-        return []
+                print('NO MATCH. see /tmp/failed.asn for details')
+                os.kill(os.getpid(), signal.SIGKILL)
+        doc_modules.append((match.group().strip(), module))
+    return doc_modules
 
 mutex = threading.Lock()
 
@@ -151,22 +145,34 @@ def download_all_modules(data_dir: str, downloads_json_path: str, downloads: dic
         if doc['doc_id'] in ('RFC1024', 'RFC1224'):
             continue
 
-        module_names = download_doc_modules(data_dir, doc['url'])
-        if len(module_names) > 0:
-            for module_name in module_names:
+        doc_modules = get_doc_modules(doc['url'])
+        if len(doc_modules) == 0:
+            print(f'Found no ASN.1 definitions from {doc["doc_id"]}')
+
+        with mutex:
+            for module_name, module in doc_modules:
+                # The same module is often defined in multiple RFCs (e.g. PKIXCMP in RFC2510, RFC4210, and RFC9480),
+                # and the older versions are sometimes erroneous. Only keep the version from the newest RFC.
+                # Docs are processed concurrently and in no particular order, so this must be checked under the mutex.
+                existing = next((m for m in downloads['modules'] if m['module_name'] == module_name), None)
+                if existing is not None and rfc_number(existing['doc_id']) > rfc_number(doc['doc_id']):
+                    print(f'Skipping {module_name}.asn from {doc["doc_id"]}; newer version exists in {existing["doc_id"]}')
+                    continue
+                if existing is not None:
+                    downloads['modules'].remove(existing)
+
+                with open(os.path.join(data_dir, f'{module_name}.asn'), 'w') as f:
+                    f.write(module)
+
                 print(f'Downloaded {module_name}.asn from {doc["doc_id"]}')
                 downloads['modules'].append({
                     'doc_id': doc['doc_id'],
                     'module_name': module_name,
                 })
-        else:
-            print(f'Found no ASN.1 definitions from {doc["doc_id"]}')
 
-        downloads['docs'].append(doc['doc_id'])
-
-        with mutex:
+            downloads['docs'].append(doc['doc_id'])
+            downloads['docs'].sort()
             with open(downloads_json_path, 'w') as f:
-                downloads['docs'].sort()
                 json.dump(downloads, f)
 
 def main():
@@ -194,6 +200,8 @@ def main():
         }
 
     execute_chunked_task(docs, lambda chunk: download_all_modules(modules_dir, downloads_json_path, downloads, chunk))
+
+    apply_patches('IETF', modules_dir)
 
 if __name__ == '__main__':
     main()
